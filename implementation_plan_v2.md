@@ -31,3 +31,10 @@ Seorang *Head Barista* bertanggung jawab atas operasional bar, ketersediaan baha
 3. **Mengunci Fitur Tertentu**: Memberikan peringatan "Akses Ditolak" jika role yang salah mencoba mengakses fitur terlarang.
 
 Apakah Anda setuju dengan pembagian hak akses ini dan ingin saya mulai mengerjakan implementasinya (mulai dari menyimpan `role` saat Login hingga mengatur kunci navigasi)? Atau ada fitur khusus lain yang ingin Anda berikan ke role HEADBAR?
+
+
+
+Manajemen Shift (Buka/Tutup Kasir):
+Fitur pencatatan modal awal (Open Shift) dan pencocokan uang di laci kasir saat tutup (Close Shift) beserta laporannya.
+Split Bill & Multiple Payment:
+Kemampuan untuk membagi tagihan menjadi beberapa struk atau membayar 1 struk dengan 2 metode (contoh: separuh tunai, separuh QRIS).

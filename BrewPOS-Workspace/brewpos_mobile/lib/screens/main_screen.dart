@@ -10,6 +10,7 @@ import 'history_screen.dart';
 import 'report_screen.dart';
 import 'inventory_screen.dart';
 import 'login_screen.dart';
+import 'opname_screen.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});
@@ -21,20 +22,15 @@ class MainScreen extends ConsumerStatefulWidget {
 class _MainScreenState extends ConsumerState<MainScreen> {
   int _selectedIndex = 0;
 
-  List<Widget> _getScreens(bool isCashier) {
-    if (isCashier) {
-      return const [
-        PosScreen(),
-        HistoryScreen(),
-        InventoryScreen(),
-      ];
-    }
-    return const [
-      PosScreen(),
-      HistoryScreen(),
-      ReportScreen(),
-      InventoryScreen(),
+  List<Widget> _getScreens(bool isCashier, bool hideReport) {
+    List<Widget> screens = [
+      const PosScreen(),
+      const HistoryScreen(),
     ];
+    if (!hideReport) screens.add(const ReportScreen());
+    screens.add(const InventoryScreen());
+    if (!isCashier) screens.add(const OpnameScreen());
+    return screens;
   }
 
   Future<void> _syncOfflineTransactions() async {
@@ -120,9 +116,37 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider);
     final bool isCashier = user?.role == 'CASHIER';
+    final bool isHeadbar = user?.role == 'HEADBAR';
+    final bool hideReport = isCashier || isHeadbar;
     final isTablet = MediaQuery.of(context).size.width >= 600;
     
-    final screens = _getScreens(isCashier);
+    final screens = _getScreens(isCashier, hideReport);
+    
+    List<NavigationRailDestination> railDestinations = [
+      const NavigationRailDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: Text('POS')),
+      const NavigationRailDestination(icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history), label: Text('Riwayat')),
+    ];
+    if (!hideReport) railDestinations.add(const NavigationRailDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: Text('Laporan')));
+    railDestinations.add(const NavigationRailDestination(icon: Icon(Icons.inventory_2_outlined), selectedIcon: Icon(Icons.inventory_2), label: Text('Stok')));
+    if (!isCashier) railDestinations.add(const NavigationRailDestination(icon: Icon(Icons.fact_check_outlined), selectedIcon: Icon(Icons.fact_check), label: Text('Opname')));
+
+    int syncIdx = railDestinations.length;
+    railDestinations.add(const NavigationRailDestination(icon: Icon(Icons.sync_outlined), selectedIcon: Icon(Icons.sync), label: Text('Sinkron')));
+    
+    int logoutIdx = railDestinations.length;
+    railDestinations.add(const NavigationRailDestination(icon: Icon(Icons.logout, color: Colors.red), label: Text('Keluar', style: TextStyle(color: Colors.red))));
+
+    List<BottomNavigationBarItem> bottomItems = [
+      const BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'POS'),
+      const BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Riwayat'),
+    ];
+    if (!hideReport) bottomItems.add(const BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Laporan'));
+    bottomItems.add(const BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Stok'));
+    if (!isCashier) bottomItems.add(const BottomNavigationBarItem(icon: Icon(Icons.fact_check), label: 'Opname'));
+    
+    int moreIdx = bottomItems.length;
+    bottomItems.add(const BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: 'Lainnya'));
+
     final maxScreenIndex = screens.length - 1;
 
     if (isTablet) {
@@ -132,8 +156,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             NavigationRail(
               selectedIndex: _selectedIndex > maxScreenIndex ? null : _selectedIndex,
               onDestinationSelected: (idx) {
-                int syncIdx = isCashier ? 3 : 4;
-                int logoutIdx = isCashier ? 4 : 5;
                 if (idx == logoutIdx) {
                   _logout();
                 } else if (idx == syncIdx) {
@@ -149,14 +171,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
               unselectedIconTheme: const IconThemeData(color: Colors.grey),
               selectedLabelTextStyle: TextStyle(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold, fontSize: 12),
               unselectedLabelTextStyle: TextStyle(color: Colors.grey[500], fontSize: 12),
-              destinations: [
-                const NavigationRailDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: Text('POS')),
-                const NavigationRailDestination(icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history), label: Text('Riwayat')),
-                if (!isCashier) const NavigationRailDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: Text('Laporan')),
-                const NavigationRailDestination(icon: Icon(Icons.inventory_2_outlined), selectedIcon: Icon(Icons.inventory_2), label: Text('Stok')),
-                const NavigationRailDestination(icon: Icon(Icons.sync_outlined), selectedIcon: Icon(Icons.sync), label: Text('Sinkron')),
-                const NavigationRailDestination(icon: Icon(Icons.logout, color: Colors.red), label: Text('Keluar', style: TextStyle(color: Colors.red))),
-              ],
+              destinations: railDestinations,
             ),
             Expanded(child: screens[_selectedIndex > maxScreenIndex ? 0 : _selectedIndex]),
           ],
@@ -169,7 +184,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex > maxScreenIndex ? 0 : _selectedIndex,
         onTap: (idx) {
-          int moreIdx = isCashier ? 3 : 4;
           if (idx == moreIdx) {
             _showMoreMenu();
           } else {
@@ -179,13 +193,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
         type: BottomNavigationBarType.fixed,
         selectedItemColor: Theme.of(context).primaryColor,
         unselectedItemColor: Colors.grey,
-        items: [
-          const BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'POS'),
-          const BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Riwayat'),
-          if (!isCashier) const BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Laporan'),
-          const BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Stok'),
-          const BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: 'Lainnya'),
-        ],
+        items: bottomItems,
       ),
     );
   }

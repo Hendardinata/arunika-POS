@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
@@ -59,13 +60,25 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     }
   }
 
-  Future<void> _addItem(String name, int stock, String unit) async {
+  Future<void> _addItem(String name, int stock, String unit, XFile? image) async {
     try {
-      final res = await http.post(
-        Uri.parse('http://127.0.0.1:3001/api/inventory'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'name': name, 'stock': stock, 'unit': unit}),
-      );
+      var request = http.MultipartRequest('POST', Uri.parse('http://127.0.0.1:3001/api/inventory'));
+      request.fields['name'] = name;
+      request.fields['stock'] = stock.toString();
+      request.fields['unit'] = unit;
+
+      if (image != null) {
+        final bytes = await image.readAsBytes();
+        request.files.add(http.MultipartFile.fromBytes(
+          'image',
+          bytes,
+          filename: image.name,
+        ));
+      }
+
+      final streamedResponse = await request.send();
+      final res = await http.Response.fromStream(streamedResponse);
+
       if (res.statusCode == 201) {
         _fetchInventory();
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Barang berhasil ditambahkan', style: TextStyle(color: Colors.white)), backgroundColor: Colors.green));
@@ -225,82 +238,123 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     final nameCtrl = TextEditingController();
     final stockCtrl = TextEditingController(text: '0');
     final unitCtrl = TextEditingController(text: 'pcs');
+    XFile? selectedImage;
+    final ImagePicker picker = ImagePicker();
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Barang Baru', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22)),
-        content: SizedBox(
-          width: 400,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtrl, 
-                decoration: InputDecoration(
-                  labelText: 'Nama Barang',
-                  filled: true,
-                  fillColor: Colors.grey[50],
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey[200]!)),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Theme.of(context).primaryColor, width: 2)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                )
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateSB) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: const Text('Barang Baru', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22)),
+            content: SizedBox(
+              width: 400,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    InkWell(
+                      onTap: () async {
+                        final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+                        if (image != null) {
+                          setStateSB(() {
+                            selectedImage = image;
+                          });
+                        }
+                      },
+                      child: Container(
+                        height: 120,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.grey[300]!, style: BorderStyle.solid),
+                        ),
+                        child: selectedImage == null
+                            ? Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.add_a_photo, color: Colors.grey[400], size: 32),
+                                  const SizedBox(height: 8),
+                                  Text('Pilih Foto Barang', style: TextStyle(color: Colors.grey[500])),
+                                ],
+                              )
+                            : ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: Image.network(selectedImage!.path, fit: BoxFit.cover, errorBuilder: (c,e,s) => const Center(child: Text('Foto dipilih'))),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: nameCtrl, 
+                      decoration: InputDecoration(
+                        labelText: 'Nama Barang',
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey[200]!)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Theme.of(context).primaryColor, width: 2)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      )
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: stockCtrl, 
+                      keyboardType: TextInputType.number, 
+                      decoration: InputDecoration(
+                        labelText: 'Stok Awal',
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey[200]!)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Theme.of(context).primaryColor, width: 2)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      )
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: unitCtrl, 
+                      decoration: InputDecoration(
+                        labelText: 'Satuan (misal: pcs, kg, cup)',
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey[200]!)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Theme.of(context).primaryColor, width: 2)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      )
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: stockCtrl, 
-                keyboardType: TextInputType.number, 
-                decoration: InputDecoration(
-                  labelText: 'Stok Awal',
-                  filled: true,
-                  fillColor: Colors.grey[50],
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey[200]!)),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Theme.of(context).primaryColor, width: 2)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                )
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: unitCtrl, 
-                decoration: InputDecoration(
-                  labelText: 'Satuan (misal: pcs, kg, cup)',
-                  filled: true,
-                  fillColor: Colors.grey[50],
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey[200]!)),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Theme.of(context).primaryColor, width: 2)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                )
-              ),
-            ],
-          ),
-        ),
-        actionsPadding: const EdgeInsets.only(bottom: 24, right: 24, left: 24),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx), 
-            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))),
-            child: const Text('Batal', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey))
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (nameCtrl.text.trim().isEmpty) return;
-              Navigator.pop(ctx);
-              _addItem(nameCtrl.text.trim(), int.tryParse(stockCtrl.text) ?? 0, unitCtrl.text.trim());
-            },
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-              elevation: 0,
-              backgroundColor: Theme.of(context).primaryColor,
-              foregroundColor: Colors.white,
             ),
-            child: const Text('Simpan Data', style: TextStyle(fontWeight: FontWeight.bold)),
-          )
-        ],
+            actionsPadding: const EdgeInsets.only(bottom: 24, right: 24, left: 24),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx), 
+                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))),
+                child: const Text('Batal', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey))
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  if (nameCtrl.text.trim().isEmpty) return;
+                  Navigator.pop(ctx);
+                  _addItem(nameCtrl.text.trim(), int.tryParse(stockCtrl.text) ?? 0, unitCtrl.text.trim(), selectedImage);
+                },
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                  elevation: 0,
+                  backgroundColor: Theme.of(context).primaryColor,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Simpan Data', style: TextStyle(fontWeight: FontWeight.bold)),
+              )
+            ],
+          );
+        }
       ),
     );
   }
@@ -445,12 +499,20 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                                 children: [
                                   // Icon Box
                                   Container(
-                                    padding: const EdgeInsets.all(16),
+                                    width: 60,
+                                    height: 60,
                                     decoration: BoxDecoration(
                                       color: Theme.of(context).primaryColor.withOpacity(0.08),
                                       borderRadius: BorderRadius.circular(16),
                                     ),
-                                    child: Icon(Icons.inventory_2_outlined, color: Theme.of(context).primaryColor, size: 28),
+                                    clipBehavior: Clip.antiAlias,
+                                    child: (item['imageUrl'] != null && item['imageUrl'].toString().isNotEmpty)
+                                      ? Image.network(
+                                          'http://127.0.0.1:3001${item['imageUrl']}', 
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (c,e,s) => Icon(Icons.inventory_2_outlined, color: Theme.of(context).primaryColor, size: 28),
+                                        )
+                                      : Icon(Icons.inventory_2_outlined, color: Theme.of(context).primaryColor, size: 28),
                                   ),
                                   const SizedBox(width: 20),
                                   

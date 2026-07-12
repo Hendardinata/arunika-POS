@@ -1,7 +1,24 @@
 import { Router } from 'express';
 import { prisma } from '../db';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
 const router = Router();
+
+// Setup Multer for Image Upload
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, '../../public/uploads');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, 'inventory-' + uniqueSuffix + path.extname(file.originalname));
+  },
+});
+const upload = multer({ storage });
 
 // GET all inventory items
 router.get('/', async (req, res) => {
@@ -14,11 +31,21 @@ router.get('/', async (req, res) => {
 });
 
 // POST new inventory item
-router.post('/', async (req, res) => {
+router.post('/', upload.single('image'), async (req, res) => {
   try {
     const { name, stock, unit } = req.body;
+    let imageUrl = null;
+    if (req.file) {
+      imageUrl = `/uploads/${req.file.filename}`;
+    }
+
     const item = await prisma.inventoryItem.create({
-      data: { name, stock: parseInt(stock) || 0, unit: unit || 'pcs' },
+      data: { 
+        name, 
+        stock: parseInt(stock) || 0, 
+        unit: unit || 'pcs',
+        imageUrl
+      },
     });
     // Create initial log
     if (item.stock > 0) {
@@ -29,6 +56,31 @@ router.post('/', async (req, res) => {
     res.status(201).json(item);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create inventory item' });
+  }
+});
+
+// PUT edit inventory item (name, unit, image)
+router.put('/:id', upload.single('image'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, unit } = req.body;
+
+    const existing = await prisma.inventoryItem.findUnique({ where: { id: parseInt(id) } });
+    if (!existing) return res.status(404).json({ error: 'Item not found' });
+
+    let imageUrl = existing.imageUrl;
+    if (req.file) {
+      imageUrl = `/uploads/${req.file.filename}`;
+      // Optional: Delete old image here if exists
+    }
+
+    const item = await prisma.inventoryItem.update({
+      where: { id: parseInt(id) },
+      data: { name, unit, imageUrl },
+    });
+    res.json(item);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update inventory item' });
   }
 });
 
@@ -58,6 +110,119 @@ router.put('/:id/adjust', async (req, res) => {
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: 'Failed to adjust inventory stock' });
+  }
+});
+
+// GET /opname/today
+router.get('/opname/today', async (req, res) => {
+  try {
+    const opname = await prisma.dailyOpname.findFirst({
+      where: { status: 'OPEN' },
+      include: { items: { include: { inventoryItem: true } } },
+      orderBy: { createdAt: 'desc' }
+    });
+    
+    if (opname) {
+      return res.json({ status: 'OPEN', opname });
+    }
+
+    const inventory = await prisma.inventoryItem.findMany();
+    res.json({ status: 'NOT_OPEN', inventory });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch opname status' });
+  }
+});
+
+// POST /opname/open
+router.post('/opname/open', async (req, res) => {
+  try {
+    const { items } = req.body;
+    
+    const existing = await prisma.dailyOpname.findFirst({ where: { status: 'OPEN' } });
+    if (existing) return res.status(400).json({ error: 'Opname already open' });
+
+    const opname = await prisma.dailyOpname.create({
+      data: {
+        status: 'OPEN',
+        items: {
+          create: items.map((i: any) => ({
+            inventoryItemId: i.inventoryItemId,
+            openingStock: i.openingStock,
+            morningNotes: i.morningNotes,
+          }))
+        }
+      },
+      include: { items: true }
+    });
+
+    for (const i of items) {
+      await prisma.inventoryItem.update({
+        where: { id: i.inventoryItemId },
+        data: { stock: i.openingStock }
+      });
+    }
+
+    res.status(201).json(opname);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to open opname' });
+  }
+});
+
+// POST /opname/close
+router.post('/opname/close', async (req, res) => {
+  try {
+    const { opnameId, items } = req.body;
+    
+    const opname = await prisma.dailyOpname.findUnique({ where: { id: opnameId }, include: { items: true } });
+    if (!opname || opname.status === 'CLOSED') {
+      return res.status(400).json({ error: 'Invalid or already closed opname' });
+    }
+
+    for (const i of items) {
+      const opItem = opname.items.find((oi: any) => oi.inventoryItemId === i.inventoryItemId);
+      if (opItem) {
+        const used = opItem.openingStock - i.closingStock;
+        await prisma.dailyOpnameItem.update({
+          where: { id: opItem.id },
+          data: {
+            closingStock: i.closingStock,
+            used: used,
+            nightNotes: i.nightNotes
+          }
+        });
+
+        await prisma.inventoryItem.update({
+          where: { id: i.inventoryItemId },
+          data: { stock: i.closingStock }
+        });
+      }
+    }
+
+    const updatedOpname = await prisma.dailyOpname.update({
+      where: { id: opnameId },
+      data: { status: 'CLOSED' },
+      include: { items: { include: { inventoryItem: true } } }
+    });
+
+    res.json(updatedOpname);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to close opname' });
+  }
+});
+
+// GET /opname/history
+router.get('/opname/history', async (req, res) => {
+  try {
+    const history = await prisma.dailyOpname.findMany({
+      where: { status: 'CLOSED' },
+      include: { items: { include: { inventoryItem: true } } },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(history);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch opname history' });
   }
 });
 

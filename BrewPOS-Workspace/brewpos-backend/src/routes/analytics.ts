@@ -92,4 +92,46 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.get('/reports', async (req, res) => {
+  try {
+    const { days } = req.query;
+    let dateFilter = {};
+    
+    if (days && days !== 'all') {
+      const daysInt = parseInt(days as string);
+      if (!isNaN(daysInt)) {
+        const targetDate = new Date();
+        if (daysInt === 1) {
+          targetDate.setHours(0, 0, 0, 0); // Start of today
+        } else {
+          targetDate.setDate(targetDate.getDate() - daysInt);
+        }
+        dateFilter = {
+          createdAt: {
+            gte: targetDate
+          }
+        };
+      }
+    }
+
+    const transactions = await prisma.transaction.findMany({
+      where: dateFilter,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        customer: true,
+        items: {
+          include: {
+            menu: true
+          }
+        }
+      }
+    });
+
+    res.json(transactions);
+  } catch (error) {
+    console.error('Error fetching reports:', error);
+    res.status(500).json({ error: 'Failed to fetch reports' });
+  }
+});
+
 export default router;
