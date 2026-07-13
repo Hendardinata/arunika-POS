@@ -189,11 +189,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     final cart = ref.watch(cartProvider);
     final cartNotifier = ref.read(cartProvider.notifier);
     final finalTotal = cartNotifier.totalAmount;
-    final tax = (finalTotal * 0.1).round(); 
-    final grandTotal = finalTotal + tax;
     
     return Container(
-      width: isPhone ? double.infinity : 380,
+      width: isPhone ? double.infinity : 300,
       decoration: BoxDecoration(
         color: Colors.white,
         border: isPhone ? null : Border(left: BorderSide(color: Colors.grey[200]!, width: 1)),
@@ -219,40 +217,46 @@ class _PosScreenState extends ConsumerState<PosScreen> {
             const SizedBox(height: 16),
             // Customer Information (Compact to match design)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Informasi Pelanggan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   // Search Field
                   Container(
-                    height: 50,
+                    height: 44,
                     decoration: BoxDecoration(
+                      color: Colors.grey[50],
                       border: Border.all(color: Colors.grey[300]!),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Row(
                       children: [
+                        const SizedBox(width: 12),
+                        Icon(Icons.person_outline, color: Colors.grey[500], size: 20),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: TextField(
                             controller: _nicknameController,
+                            style: const TextStyle(fontSize: 14),
                             decoration: InputDecoration(
-                              hintText: 'Nickname',
-                              hintStyle: TextStyle(color: Colors.grey[400]),
+                              hintText: 'Cari Pelanggan',
+                              hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
                               border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                              isDense: true,
                             ),
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.search, color: Colors.grey),
+                          icon: const Icon(Icons.search, color: Colors.grey, size: 20),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
                           onPressed: _isLoadingCustomer ? null : _searchCustomer,
-                        )
+                        ),
+                        const SizedBox(width: 8),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 8),
                   
                   // Register Button if not found
                   if (_isCustomerNotFound)
@@ -271,15 +275,15 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                       },
                       child: Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        margin: const EdgeInsets.only(top: 8),
                         decoration: BoxDecoration(
                           color: Theme.of(context).primaryColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Theme.of(context).primaryColor.withOpacity(0.2)!),
                         ),
                         child: Center(
-                          child: Text('+ Tambahkan Nickname', style: TextStyle(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold)),
+                          child: Text('+ Tambahkan Baru', style: TextStyle(color: Theme.of(context).primaryColor, fontSize: 13, fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ),
@@ -287,10 +291,11 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                   // Compact Profile Display if exists
                   if (_customerProfile != null)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).primaryColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
+                        color: Theme.of(context).primaryColor.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Theme.of(context).primaryColor.withOpacity(0.2)!),
                       ),
                       child: Column(
@@ -298,43 +303,42 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                           Row(
                             children: [
                               CircleAvatar(
-                                radius: 16,
+                                radius: 14,
                                 backgroundColor: Theme.of(context).primaryColor,
-                                child: Text(_nicknameController.text.substring(0,1).toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                child: Text(_nicknameController.text.isNotEmpty ? _nicknameController.text.substring(0,1).toUpperCase() : 'U', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Lv.${_customerProfile!['level']} • ${_customerProfile!['points']} Pts', style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).primaryColor.withOpacity(0.9), fontSize: 13)),
-                                  ],
-                                ),
+                                child: Text('${_customerProfile!['nickname']} • ${_customerProfile!['points']} Pts', style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).primaryColor, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
                               ),
                               if (_customerProfile!['points'] >= 50)
                                 InkWell(
                                   onTap: () => _doLuckySpin(_customerProfile!['id']),
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(color: Theme.of(context).primaryColor, borderRadius: BorderRadius.circular(8)),
-                                    child: const Text('Spin!', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                    decoration: BoxDecoration(color: Theme.of(context).primaryColor, borderRadius: BorderRadius.circular(6)),
+                                    child: const Text('Spin!', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                                   ),
                                 )
                             ],
                           ),
                           if (_availableRewards.isNotEmpty && _customerProfile!['points'] > 0) ...[
-                            const SizedBox(height: 8),
-                            DropdownButton<Map<String, dynamic>>(
-                              isExpanded: true,
-                              isDense: true,
-                              value: _selectedReward,
-                              hint: Text('Tukar Reward...', style: TextStyle(fontSize: 12, color: Theme.of(context).primaryColor.withOpacity(0.8))),
-                              underline: const SizedBox(),
-                              items: [
-                                const DropdownMenuItem<Map<String, dynamic>>(value: null, child: Text('Tidak pakai reward', style: TextStyle(fontSize: 12))),
-                                ..._availableRewards.where((r) => r['pointsRequired'] <= _customerProfile!['points']).map((r) => DropdownMenuItem<Map<String, dynamic>>(value: r, child: Text('${r['name']} (-${r['pointsRequired']})', style: const TextStyle(fontSize: 12))))
-                              ],
-                              onChanged: (val) => setState(() => _selectedReward = val),
+                            const SizedBox(height: 6),
+                            SizedBox(
+                              height: 24,
+                              child: DropdownButton<Map<String, dynamic>>(
+                                isExpanded: true,
+                                isDense: true,
+                                value: _selectedReward,
+                                hint: Text('Tukar Reward...', style: TextStyle(fontSize: 12, color: Theme.of(context).primaryColor.withOpacity(0.8))),
+                                underline: const SizedBox(),
+                                iconSize: 16,
+                                items: [
+                                  const DropdownMenuItem<Map<String, dynamic>>(value: null, child: Text('Tidak pakai reward', style: TextStyle(fontSize: 12))),
+                                  ..._availableRewards.where((r) => r['pointsRequired'] <= _customerProfile!['points']).map((r) => DropdownMenuItem<Map<String, dynamic>>(value: r, child: Text('${r['name']} (-${r['pointsRequired']})', style: const TextStyle(fontSize: 12))))
+                                ],
+                                onChanged: (val) => setState(() => _selectedReward = val),
+                              ),
                             ),
                           ]
                         ],
@@ -344,7 +348,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                   const SizedBox(height: 12),
                   // Table Select (now functional and always visible)
                   Container(
-                    height: 50,
+                    height: 44,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.grey[300]!),
@@ -363,21 +367,6 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                       ),
                     ),
                   ),
-                  
-                  if (_customerProfile == null) ...[
-                    const SizedBox(height: 8),
-                    // Add note button
-                    Container(
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).primaryColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                      child: Center(
-                        child: Text('Tambah catatan', style: TextStyle(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  ]
                 ],
               ),
             ),
@@ -495,30 +484,11 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Subtotal', style: TextStyle(color: Colors.grey, fontSize: 14)),
-                      Text('Rp ${formatRp(finalTotal)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      const Text('Total', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                      Text('Rp ${formatRp(finalTotal)}', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Theme.of(context).primaryColor)),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Pajak (10%)', style: TextStyle(color: Colors.grey, fontSize: 14)),
-                      Text('Rp ${formatRp(tax)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    ],
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Divider(height: 1, color: Color(0xFFEEEEEE)),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Total', style: TextStyle(fontSize: 18, color: Colors.grey)),
-                      Text('Rp ${formatRp(grandTotal)}', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Theme.of(context).primaryColor)),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 18),
                   SizedBox(
                     width: double.infinity,
                     height: 56,
@@ -529,8 +499,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         elevation: 0,
                       ),
-                      onPressed: cart.isEmpty ? null : () => _handleCheckout(grandTotal),
-                      child: const Text('Bayar', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      onPressed: cart.isEmpty ? null : () => _handleCheckout(finalTotal),
+                      child: const Text('Bayar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],
@@ -883,7 +853,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFA), // Lighter background
       appBar: isTablet ? null : AppBar(
-        title: Text(settings.storeName, style: const TextStyle(fontWeight: FontWeight.bold)),
+        title: const SizedBox(), // Hidden to match custom header below
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         elevation: 0,
@@ -919,94 +889,99 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Top Header: Title & ChoiceChips
+                  // Custom Header matching the provided layout
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      if (isTablet) ...[
-                        if (settings.storeLogo != null && settings.storeLogo!.isNotEmpty) ...[
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.memory(
-                              base64Decode(settings.storeLogo!.split(',').last),
-                              height: 32,
-                              width: 32,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                        ],
-                        Text(settings.storeName, style: TextStyle(fontSize: 22, color: Theme.of(context).primaryColor, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
-                        const SizedBox(width: 32),
-                      ],
-                      // Search Bar (Compact)
                       Expanded(
-                        flex: 2,
+                        flex: 1,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              () {
+                                final now = DateTime.now();
+                                final months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                                return '${months[now.month - 1]} ${now.day}, ${now.year}';
+                              }(),
+                              style: TextStyle(fontSize: 14, color: Colors.grey[600], fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              settings.storeName, 
+                              style: const TextStyle(fontSize: 22, color: Colors.black87, fontWeight: FontWeight.w900, letterSpacing: -0.5),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      // Search Bar
+                      Expanded(
+                        flex: 1,
                         child: Container(
-                          height: 50,
+                          height: 45, // Slightly thinner to match design
                           decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            borderRadius: BorderRadius.circular(16),
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
                             border: Border.all(color: Colors.grey[200]!)
                           ),
                           child: TextField(
                             controller: _searchController,
                             onChanged: (val) => setState(() {}),
                             decoration: InputDecoration(
-                              hintText: 'Mau pesan apa hari ini?',
-                              hintStyle: TextStyle(color: Colors.grey[400]),
-                              prefixIcon: Icon(Icons.search_rounded, color: Colors.grey[400]),
+                              hintText: 'Search Here',
+                              hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                              prefixIcon: Icon(Icons.search_rounded, color: Colors.grey[400], size: 20),
+                              suffixIcon: Icon(Icons.filter_alt_outlined, color: Colors.grey[500], size: 20), // Filter icon as in design
                               border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                             ),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 24),
-                      // Category Filter (Right side)
-                      Expanded(
-                        flex: 3,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: categories.map((cat) {
-                              final isSelected = _selectedCategory == cat;
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 12.0),
-                                child: InkWell(
-                                  onTap: () => setState(() => _selectedCategory = cat),
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 200),
-                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                    decoration: BoxDecoration(
-                                      color: isSelected ? Theme.of(context).primaryColor : Colors.white,
-                                      borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(color: isSelected ? Theme.of(context).primaryColor : Colors.grey[200]!),
-                                      boxShadow: isSelected ? [BoxShadow(color: Theme.of(context).primaryColor.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))] : [],
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        if (cat == 'Favorit') ...[
-                                          Icon(Icons.star_rounded, color: isSelected ? Colors.white : Colors.amber, size: 16),
-                                          const SizedBox(width: 6),
-                                        ],
-                                        Text(
-                                          cat, 
-                                          style: TextStyle(
-                                            color: isSelected ? Colors.white : Colors.grey[600],
-                                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                                          )
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                      ),
                     ],
+                  ),
+                  const SizedBox(height: 24),
+                  // "Cari Menu Terbaik" Section
+                  const Text(
+                    'Cari Menu Terbaik', 
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)
+                  ),
+                  const SizedBox(height: 12),
+                  // Category Filter (Pill shapes)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: categories.map((cat) {
+                        final isSelected = _selectedCategory == cat;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 12.0),
+                          child: InkWell(
+                            onTap: () => setState(() => _selectedCategory = cat),
+                            borderRadius: BorderRadius.circular(8),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isSelected ? Theme.of(context).primaryColor : Colors.grey[200],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                cat, 
+                                style: TextStyle(
+                                  color: isSelected ? Colors.white : Colors.black87,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                  fontSize: 14,
+                                )
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
                   ),
                   const SizedBox(height: 24),
                   
@@ -1107,7 +1082,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           // Checkout Panel Slide-in Slot
           if (isTablet)
             SizedBox(
-              width: _isCartExpanded ? 380 : 0,
+              width: _isCartExpanded ? 300 : 0,
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
@@ -1116,8 +1091,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                     curve: Curves.easeOutCubic,
                     top: 0,
                     bottom: 0,
-                    right: _isCartExpanded ? 0 : -380,
-                    width: 380,
+                    right: _isCartExpanded ? 0 : -300,
+                    width: 300,
                     child: Material(
                       elevation: 16,
                       color: Colors.white,

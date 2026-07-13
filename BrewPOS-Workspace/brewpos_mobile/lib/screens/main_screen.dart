@@ -5,12 +5,14 @@ import 'package:http/http.dart' as http;
 import '../database/db_helper.dart';
 import '../providers/cart_provider.dart';
 import '../providers/auth_provider.dart';
+import 'dashboard_screen.dart';
 import 'pos_screen.dart';
 import 'history_screen.dart';
 import 'report_screen.dart';
 import 'inventory_screen.dart';
 import 'login_screen.dart';
 import 'opname_screen.dart';
+import '../providers/settings_provider.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});
@@ -24,6 +26,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
   List<Widget> _getScreens(bool isCashier, bool hideReport) {
     List<Widget> screens = [
+      const DashboardScreen(),
       const PosScreen(),
       const HistoryScreen(),
     ];
@@ -112,9 +115,118 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     );
   }
 
+  Widget _buildSidebarItem(String title, IconData icon, IconData activeIcon, bool isSelected, VoidCallback onTap, {bool isDestructive = false}) {
+    final primaryColor = Theme.of(context).primaryColor;
+    final bgColor = const Color(0xFFFAFAFA);
+
+    if (!isSelected) {
+      return InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          height: 60,
+          child: Row(
+            children: [
+              const SizedBox(width: 24),
+              Icon(icon, color: isDestructive ? Colors.red[300] : Colors.white70, size: 22),
+              const SizedBox(width: 12),
+              Text(
+                title, 
+                style: TextStyle(
+                  color: isDestructive ? Colors.red[300] : Colors.white70, 
+                  fontWeight: FontWeight.w500, 
+                  fontSize: 14
+                )
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return InkWell(
+      onTap: onTap,
+      child: SizedBox(
+        height: 56,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            if (isSelected)
+              Positioned(
+                top: -24,
+                bottom: -24,
+                right: 0,
+                left: 8,
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: Container(height: 24, color: Colors.transparent)),
+                        Container(
+                          width: 24, height: 24, color: bgColor,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: primaryColor,
+                              borderRadius: const BorderRadius.only(bottomRight: Radius.circular(24)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: bgColor,
+                          borderRadius: const BorderRadius.horizontal(left: Radius.circular(28)),
+                        ),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Expanded(child: Container(height: 24, color: Colors.transparent)),
+                        Container(
+                          width: 24, height: 24, color: bgColor,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: primaryColor,
+                              borderRadius: const BorderRadius.only(topRight: Radius.circular(24)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 24),
+                child: Row(
+                  children: [
+                    Icon(isSelected ? activeIcon : icon, color: isSelected ? primaryColor : (isDestructive ? Colors.red[300] : const Color(0xFFC8E6C9)), size: 22),
+                    const SizedBox(width: 12),
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: isSelected ? primaryColor : (isDestructive ? Colors.red[300] : Colors.white),
+                        fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider);
+    final settings = ref.watch(settingsProvider);
     final bool isCashier = user?.role == 'CASHIER';
     final bool isHeadbar = user?.role == 'HEADBAR';
     final bool hideReport = isCashier || isHeadbar;
@@ -123,7 +235,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     final screens = _getScreens(isCashier, hideReport);
     
     List<NavigationRailDestination> railDestinations = [
-      const NavigationRailDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: Text('POS')),
+      const NavigationRailDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: Text('Beranda')),
+      const NavigationRailDestination(icon: Icon(Icons.point_of_sale_outlined), selectedIcon: Icon(Icons.point_of_sale), label: Text('POS')),
       const NavigationRailDestination(icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history), label: Text('Riwayat')),
     ];
     if (!hideReport) railDestinations.add(const NavigationRailDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: Text('Laporan')));
@@ -137,7 +250,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     railDestinations.add(const NavigationRailDestination(icon: Icon(Icons.logout, color: Colors.red), label: Text('Keluar', style: TextStyle(color: Colors.red))));
 
     List<BottomNavigationBarItem> bottomItems = [
-      const BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'POS'),
+      const BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Beranda'),
+      const BottomNavigationBarItem(icon: Icon(Icons.point_of_sale), label: 'POS'),
       const BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Riwayat'),
     ];
     if (!hideReport) bottomItems.add(const BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Laporan'));
@@ -151,29 +265,52 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
     if (isTablet) {
       return Scaffold(
+        backgroundColor: const Color(0xFFFAFAFA),
         body: Row(
           children: [
-            NavigationRail(
-              selectedIndex: _selectedIndex > maxScreenIndex ? null : _selectedIndex,
-              onDestinationSelected: (idx) {
-                if (idx == logoutIdx) {
-                  _logout();
-                } else if (idx == syncIdx) {
-                  _syncOfflineTransactions();
-                } else {
-                  setState(() => _selectedIndex = idx);
-                }
-              },
-              labelType: NavigationRailLabelType.all,
-              backgroundColor: Colors.white,
-              indicatorColor: Theme.of(context).primaryColor,
-              selectedIconTheme: const IconThemeData(color: Colors.white),
-              unselectedIconTheme: const IconThemeData(color: Colors.grey),
-              selectedLabelTextStyle: TextStyle(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold, fontSize: 12),
-              unselectedLabelTextStyle: TextStyle(color: Colors.grey[500], fontSize: 12),
-              destinations: railDestinations,
+            Container(
+              width: 145, // Narrower width, fitting text + padding
+              color: Theme.of(context).primaryColor,
+              child: Column(
+                children: [
+                  const SizedBox(height: 40),
+                  if (settings.storeLogo != null && settings.storeLogo!.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.memory(
+                        base64Decode(settings.storeLogo!.split(',').last),
+                        height: 48,
+                        width: 48,
+                        fit: BoxFit.cover,
+                      ),
+                    )
+                  else
+                    const Icon(Icons.storefront_rounded, color: Colors.white, size: 44),
+                  const SizedBox(height: 32),
+                  Expanded(
+                    child: ListView(
+                      padding: EdgeInsets.zero,
+                      children: [
+                        _buildSidebarItem('Beranda', Icons.dashboard_outlined, Icons.dashboard, _selectedIndex == 0, () => setState(() => _selectedIndex = 0)),
+                        _buildSidebarItem('POS', Icons.point_of_sale_outlined, Icons.point_of_sale, _selectedIndex == 1, () => setState(() => _selectedIndex = 1)),
+                        _buildSidebarItem('Riwayat', Icons.history_outlined, Icons.history, _selectedIndex == 2, () => setState(() => _selectedIndex = 2)),
+                        if (!hideReport) _buildSidebarItem('Laporan', Icons.bar_chart_outlined, Icons.bar_chart, _selectedIndex == 3, () => setState(() => _selectedIndex = 3)),
+                        _buildSidebarItem('Stok', Icons.inventory_2_outlined, Icons.inventory_2, _selectedIndex == (hideReport ? 3 : 4), () => setState(() => _selectedIndex = (hideReport ? 3 : 4))),
+                        if (!isCashier) _buildSidebarItem('Opname', Icons.fact_check_outlined, Icons.fact_check, _selectedIndex == (hideReport ? 4 : 5), () => setState(() => _selectedIndex = (hideReport ? 4 : 5))),
+                      ],
+                    ),
+                  ),
+                  const Divider(color: Colors.white24, height: 1, indent: 24, endIndent: 24),
+                  const SizedBox(height: 12),
+                  _buildSidebarItem('Sinkron', Icons.sync_outlined, Icons.sync, false, _syncOfflineTransactions),
+                  _buildSidebarItem('Keluar', Icons.logout, Icons.logout, false, _logout, isDestructive: true),
+                  const SizedBox(height: 24),
+                ],
+              ),
             ),
-            Expanded(child: screens[_selectedIndex > maxScreenIndex ? 0 : _selectedIndex]),
+            Expanded(
+              child: screens[_selectedIndex > maxScreenIndex ? 0 : _selectedIndex],
+            ),
           ],
         ),
       );
