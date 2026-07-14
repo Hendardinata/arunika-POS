@@ -9,11 +9,12 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  username  String   @unique
+  id        Int       @id @default(autoincrement())
+  username  String    @unique
   password  String
-  role      String   @default("CASHIER") // ADMIN, HEADBAR, or CASHIER
-  createdAt DateTime @default(now())
+  role      String    @default("CASHIER") // ADMIN, HEADBAR, or CASHIER
+  createdAt DateTime  @default(now())
+  expenses  Expense[]
 }
 
 model SystemSettings {
@@ -176,4 +177,25 @@ model InventoryLog {
   type      String        // "IN" or "OUT"
   notes     String?
   createdAt DateTime      @default(now())
+}
+
+model ExpenseCategory {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique // cth: "Bahan Pokok", "Operasional", "Lain-lain"
+  description String?
+  expenses    Expense[]
+}
+
+model Expense {
+  id          Int             @id @default(autoincrement())
+  amount      Int             // Nominal uang keluar
+  date        DateTime        @default(now())
+  notes       String?         // Catatan/keterangan pengeluaran
+  category    ExpenseCategory @relation(fields: [categoryId], references: [id])
+  categoryId  Int
+  recordedBy  User            @relation(fields: [userId], references: [id])
+  userId      Int             // User/Kasir yang mencatat
+  receiptUrl  String?         // Opsional jika ada foto bukti nota
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 }

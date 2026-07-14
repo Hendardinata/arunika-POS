@@ -33,6 +33,20 @@ router.get('/', async (req, res) => {
       where: dateFilter,
       _sum: { totalAmount: true },
     });
+
+    let expenseAggregation = { _sum: { amount: 0 } };
+    try {
+      expenseAggregation = await (prisma as any).expense.aggregate({
+        where: dateFilter,
+        _sum: { amount: true },
+      });
+    } catch (e) {
+      // Ignored if expense table is not yet migrated/generated
+    }
+    
+    const totalRevenue = revenueAggregation._sum.totalAmount || 0;
+    const totalExpenses = expenseAggregation._sum?.amount || 0;
+    const netProfit = totalRevenue - totalExpenses;
     
     const totalCustomers = await prisma.customer.count();
 
@@ -79,7 +93,9 @@ router.get('/', async (req, res) => {
       .slice(0, 5);
 
     res.json({
-      totalRevenue: revenueAggregation._sum.totalAmount || 0,
+      totalRevenue: totalRevenue,
+      totalExpenses: totalExpenses,
+      netProfit: netProfit,
       totalOrders: totalTransactions,
       totalCustomers: totalCustomers,
       topCustomers,
