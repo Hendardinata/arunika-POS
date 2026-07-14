@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   const { key, value, description } = req.body;
 
-  if (!key || !value) {
+  if (!key || value === undefined) {
     res.status(400).json({ error: 'Key and value are required' });
     return;
   }

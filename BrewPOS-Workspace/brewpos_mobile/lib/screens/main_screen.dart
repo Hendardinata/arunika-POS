@@ -277,11 +277,22 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                   if (settings.storeLogo != null && settings.storeLogo!.isNotEmpty)
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.memory(
-                        base64Decode(settings.storeLogo!.split(',').last),
+                      child: SizedBox(
                         height: 48,
                         width: 48,
-                        fit: BoxFit.cover,
+                        child: Builder(
+                          builder: (context) {
+                            try {
+                              final base64Str = settings.storeLogo!.split(',').last;
+                              return Image.memory(
+                                base64Decode(base64.normalize(base64Str)),
+                                fit: BoxFit.cover,
+                              );
+                            } catch (e) {
+                              return const Icon(Icons.store, color: Colors.white, size: 24);
+                            }
+                          }
+                        ),
                       ),
                     )
                   else

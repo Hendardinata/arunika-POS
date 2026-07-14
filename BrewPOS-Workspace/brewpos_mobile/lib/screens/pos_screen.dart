@@ -559,25 +559,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                     const SizedBox(height: 24),
                     
                     // Bill Summary (Clean text style matching the image)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Sub Total', style: TextStyle(fontSize: 15, color: Colors.grey[500], fontWeight: FontWeight.w600)),
-                        Text('Rp ${formatRp((finalTotal / 1.1).round())}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Tax (10%)', style: TextStyle(fontSize: 15, color: Colors.grey[500], fontWeight: FontWeight.w600)),
-                        Text('Rp ${formatRp(finalTotal - (finalTotal / 1.1).round())}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 20),
-                      child: Divider(color: Color(0xFFEEEEEE), height: 1),
-                    ),
+
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [

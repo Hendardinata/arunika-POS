@@ -58,6 +58,9 @@ model Customer {
 
 model Transaction {
   id           Int               @id @default(autoincrement())
+  subTotal     Int               @default(0)
+  taxAmount    Int               @default(0)
+  parkingFee   Int               @default(0)
   totalAmount  Int
   pointsEarned Int
   paymentMethod String           @default("CASH")

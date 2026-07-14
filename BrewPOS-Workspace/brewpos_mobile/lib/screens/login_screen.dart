@@ -117,8 +117,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: Center(
-                    child: ref.watch(settingsProvider).storeLogo != null
-                        ? Image.memory(base64Decode(ref.watch(settingsProvider).storeLogo!.split(',').last), height: 40)
+                    child: ref.watch(settingsProvider).storeLogo != null && ref.watch(settingsProvider).storeLogo!.contains(',')
+                        ? Builder(
+                            builder: (context) {
+                              try {
+                                final base64Str = ref.watch(settingsProvider).storeLogo!.split(',').last;
+                                return Image.memory(base64Decode(base64.normalize(base64Str)), height: 40);
+                              } catch (e) {
+                                return Icon(Icons.coffee_rounded, size: 40, color: Theme.of(context).primaryColor);
+                              }
+                            }
+                          )
                         : Icon(Icons.coffee_rounded, size: 40, color: Theme.of(context).primaryColor),
                   ),
                 ),

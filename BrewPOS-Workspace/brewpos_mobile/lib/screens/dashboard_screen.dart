@@ -111,10 +111,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ],
                       ),
                       clipBehavior: Clip.antiAlias,
-                      child: Image.memory(
-                        base64Decode(settings.storeLogo!.split(',').last),
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Icon(Icons.store_rounded, size: 28, color: Theme.of(context).primaryColor),
+                      child: Builder(
+                        builder: (context) {
+                          try {
+                            final base64Str = settings.storeLogo!.split(',').last;
+                            return Image.memory(
+                              base64Decode(base64.normalize(base64Str)),
+                              fit: BoxFit.cover,
+                            );
+                          } catch (e) {
+                            return const Icon(Icons.store, color: Colors.grey, size: 20);
+                          }
+                        }
                       ),
                     )
                   else

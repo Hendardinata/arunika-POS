@@ -118,10 +118,26 @@ router.post('/', async (req, res) => {
       },
     });
 
+    // Ambil pengaturan pajak dan parkir
+    const taxSetting = await prisma.systemSettings.findUnique({ where: { key: 'TAX_PERCENTAGE' } });
+    const parkingSetting = await prisma.systemSettings.findUnique({ where: { key: 'PARKING_FEE' } });
+    const taxPercentage = taxSetting ? parseFloat(taxSetting.value) || 11 : 11;
+    const configuredParkingFee = parkingSetting ? parseInt(parkingSetting.value) || 2000 : 2000;
+
+    // Hitung alokasi pajak dan parkir (Opsi B: Harga final sudah termasuk)
+    const parkingFee = totalAmount > configuredParkingFee ? configuredParkingFee : 0;
+    const amountWithoutParking = totalAmount - parkingFee;
+    const taxMultiplier = 1 + (taxPercentage / 100);
+    const subTotal = Math.round(amountWithoutParking / taxMultiplier);
+    const taxAmount = amountWithoutParking - subTotal;
+
     // Simpan Transaksi beserta Items
     const transaction = await prisma.transaction.create({
       data: {
         totalAmount,
+        subTotal,
+        taxAmount,
+        parkingFee,
         pointsEarned,
         paymentMethod,
         customerId: customer.id,
@@ -164,6 +180,17 @@ router.post('/sync', async (req, res) => {
     }
 
     const results = [];
+    
+    // Ambil pengaturan umum (sekali saja untuk semua transaksi dalam batch)
+    const taxSetting = await prisma.systemSettings.findUnique({ where: { key: 'TAX_PERCENTAGE' } });
+    const parkingSetting = await prisma.systemSettings.findUnique({ where: { key: 'PARKING_FEE' } });
+    const expirationSetting = await prisma.systemSettings.findUnique({ where: { key: 'POINT_EXPIRATION_DAYS' } });
+    
+    const taxPercentage = taxSetting ? parseFloat(taxSetting.value) || 11 : 11;
+    const configuredParkingFee = parkingSetting ? parseInt(parkingSetting.value) || 2000 : 2000;
+    const expirationDays = expirationSetting ? parseInt(expirationSetting.value) || 90 : 90;
+    const taxMultiplier = 1 + (taxPercentage / 100);
+
     for (const tx of transactions) {
       const { nickname, totalAmount, items, rewardId, paymentMethod = "CASH", createdAt } = tx;
 
@@ -194,8 +221,6 @@ router.post('/sync', async (req, res) => {
       const newLevel = Math.floor(newXp / 100) + 1;
 
       const txDate = createdAt ? new Date(createdAt) : new Date();
-      const expirationSetting = await prisma.systemSettings.findUnique({ where: { key: 'POINT_EXPIRATION_DAYS' } });
-      const expirationDays = expirationSetting ? parseInt(expirationSetting.value) || 90 : 90;
       const expiryDate = new Date(txDate);
       expiryDate.setDate(txDate.getDate() + expirationDays);
 
@@ -228,9 +253,18 @@ router.post('/sync', async (req, res) => {
         },
       });
 
+      // Hitung alokasi pajak dan parkir
+      const parkingFee = totalAmount > configuredParkingFee ? configuredParkingFee : 0;
+      const amountWithoutParking = totalAmount - parkingFee;
+      const subTotal = Math.round(amountWithoutParking / taxMultiplier);
+      const taxAmount = amountWithoutParking - subTotal;
+
       const transaction = await prisma.transaction.create({
         data: {
           totalAmount,
+          subTotal,
+          taxAmount,
+          parkingFee,
           pointsEarned,
           paymentMethod,
           customerId: customer.id,
