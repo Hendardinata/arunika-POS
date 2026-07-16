@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../providers/settings_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/shift_provider.dart';
+import '../models/shift.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -15,6 +17,7 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   bool _isLoading = true;
   Map<String, dynamic>? _analyticsData;
+  final TextEditingController _cashController = TextEditingController();
 
   @override
   void initState() {
@@ -62,6 +65,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     final settings = ref.watch(settingsProvider);
     final user = ref.watch(authProvider);
+    final shiftState = ref.watch(shiftProvider);
     final isCashier = user?.role == 'CASHIER';
     final isTablet = MediaQuery.of(context).size.width >= 600;
 
@@ -161,6 +165,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ],
                     ),
                     
+                const SizedBox(height: 32),
+              ] else ...[
+                _buildShiftSection(shiftState),
                 const SizedBox(height: 32),
               ],
               
@@ -282,6 +289,114 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildShiftSection(AsyncValue<Shift?> shiftState) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 15, offset: const Offset(0, 8))
+        ],
+        border: Border.all(color: Colors.grey[100]!),
+      ),
+      child: shiftState.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(child: Text('Error loading shift: $err')),
+        data: (shift) {
+          if (shift == null || shift.status == 'CLOSED') {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Shift Saat Ini', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+                const SizedBox(height: 16),
+                const Text('Anda belum membuka shift. Silakan buka shift terlebih dahulu untuk mulai melayani transaksi.', style: TextStyle(color: Colors.grey)),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      try {
+                        await ref.read(shiftProvider.notifier).openShift(0);
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Shift berhasil dibuka!')));
+                      } catch (e) {
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).primaryColor,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Buka Shift', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                  ),
+                ),
+              ],
+            );
+          } else {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Shift Saat Ini (Berjalan)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(color: Colors.green[100], borderRadius: BorderRadius.circular(20)),
+                      child: Text('SHIFT ${shift.type == 'MORNING' ? 'PAGI' : 'MALAM'}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green[800])),
+                    )
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Waktu Mulai:', style: TextStyle(color: Colors.grey)),
+                    Text(shift.startTime.toLocal().toString().split('.')[0], style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                if (shift.expectedEndingCash != null) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Total Pendapatan Shift Ini:', style: TextStyle(color: Colors.grey)),
+                      Text('Rp ${_formatRp(shift.expectedEndingCash)}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      try {
+                        await ref.read(shiftProvider.notifier).closeShift(0);
+                        ref.read(shiftProvider.notifier).fetchCurrentShift();
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Shift berhasil ditutup!')));
+                      } catch (e) {
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Tutup Shift', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                  ),
+                ),
+              ],
+            );
+          }
+        },
       ),
     );
   }

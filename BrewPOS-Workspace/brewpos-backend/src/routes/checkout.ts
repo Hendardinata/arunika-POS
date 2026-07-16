@@ -27,7 +27,7 @@ router.get('/history', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { nickname, totalAmount, items, rewardId, paymentMethod = "CASH" } = req.body;
+    const { nickname, totalAmount, items, rewardId, paymentMethod = "CASH", shiftId } = req.body;
 
     if (!nickname) {
       return res.status(400).json({ error: 'Nickname is required' });
@@ -141,6 +141,7 @@ router.post('/', async (req, res) => {
         pointsEarned,
         paymentMethod,
         customerId: customer.id,
+        shiftId: shiftId ? parseInt(shiftId) : undefined,
         items: items && items.length > 0 ? {
           create: items.map((item: any) => ({
             menuId: item.menuId,
@@ -192,7 +193,7 @@ router.post('/sync', async (req, res) => {
     const taxMultiplier = 1 + (taxPercentage / 100);
 
     for (const tx of transactions) {
-      const { nickname, totalAmount, items, rewardId, paymentMethod = "CASH", createdAt } = tx;
+      const { nickname, totalAmount, items, rewardId, paymentMethod = "CASH", shiftId, createdAt } = tx;
 
       if (!nickname) continue;
 
@@ -268,6 +269,7 @@ router.post('/sync', async (req, res) => {
           pointsEarned,
           paymentMethod,
           customerId: customer.id,
+          shiftId: shiftId ? parseInt(shiftId) : undefined,
           createdAt: createdAt ? new Date(createdAt) : undefined,
           items: items && items.length > 0 ? {
             create: items.map((item: any) => ({

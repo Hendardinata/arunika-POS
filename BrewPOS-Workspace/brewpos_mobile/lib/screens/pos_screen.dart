@@ -6,6 +6,8 @@ import 'package:http/http.dart' as http;
 import '../providers/menu_provider.dart';
 import '../providers/cart_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/shift_provider.dart';
+import '../models/shift.dart';
 import '../database/db_helper.dart';
 import '../models/menu.dart';
 import 'receipt_dialog.dart';
@@ -36,6 +38,15 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   
   String _selectedCategory = 'Semua';
   bool _isCartExpanded = false;
+  final ValueNotifier<int> _uiRebuilder = ValueNotifier<int>(0);
+
+  @override
+  void setState(VoidCallback fn) {
+    if (mounted) {
+      super.setState(fn);
+      _uiRebuilder.value++;
+    }
+  }
 
   @override
   void initState() {
@@ -62,12 +73,14 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   void dispose() {
     _nicknameController.dispose();
     _searchController.dispose();
+    _uiRebuilder.dispose();
     super.dispose();
   }
 
   Future<void> _fetchRewards() async {
     try {
       final res = await http.get(Uri.parse('http://127.0.0.1:3001/api/gamification/rewards'));
+      if (!mounted) return;
       if (res.statusCode == 200) {
         setState(() {
           _availableRewards = json.decode(res.body);
@@ -86,15 +99,17 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     
     try {
       final res = await http.get(Uri.parse('http://127.0.0.1:3001/api/customers/search?nickname=$nickname'));
+      if (!mounted) return;
       if (res.statusCode == 200) {
         setState(() { _customerProfile = json.decode(res.body); });
       } else {
         setState(() { _isCustomerNotFound = true; });
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
-      setState(() { _isLoadingCustomer = false; });
+      if (mounted) setState(() { _isLoadingCustomer = false; });
     }
   }
 
@@ -105,6 +120,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'customerId': customerId}),
       );
+      if (!mounted) return;
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         setState(() {
@@ -185,7 +201,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     );
   }
 
-  Widget _buildCheckoutPanel(bool isPhone) {
+  Widget _buildCheckoutPanel(BuildContext context, bool isPhone, WidgetRef ref) {
     final cart = ref.watch(cartProvider);
     final cartNotifier = ref.read(cartProvider.notifier);
     final finalTotal = cartNotifier.totalAmount;
@@ -722,6 +738,16 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     );
 
     if (result != null && result['confirm'] == true) {
+      final shiftState = ref.read(shiftProvider);
+      final shift = shiftState.value;
+
+      if (shift == null || shift.status != 'OPEN') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Anda harus membuka Shift terlebih dahulu di menu Beranda!')));
+        }
+        return;
+      }
+
       final method = result['method'];
       final payload = {
         'nickname': _customerProfile != null ? _customerProfile!['nickname'] : 'Guest',
@@ -729,6 +755,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         'totalAmount': finalTotal,
         'rewardId': _selectedReward?['id'],
         'paymentMethod': method,
+        'shiftId': shift.id,
         'items': cart.map((i) => {'menuId': i.menu.id, 'quantity': i.quantity, 'price': i.menu.price}).toList(),
         'createdAt': DateTime.now().toIso8601String(),
       };
@@ -739,6 +766,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           headers: {'Content-Type': 'application/json'},
           body: json.encode(payload),
         );
+        if (!mounted) return;
 
         if (res.statusCode == 201) {
           final data = json.decode(res.body);
@@ -845,9 +873,18 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               context: context, 
               isScrollControlled: true,
               backgroundColor: Colors.transparent,
-              builder: (ctx) => FractionallySizedBox(
-                heightFactor: 0.85,
-                child: _buildCheckoutPanel(true),
+              builder: (ctx) => ValueListenableBuilder<int>(
+                valueListenable: _uiRebuilder,
+                builder: (context, _, __) {
+                  return Consumer(
+                    builder: (context, ref, child) {
+                      return FractionallySizedBox(
+                        heightFactor: 0.85,
+                        child: _buildCheckoutPanel(context, true, ref),
+                      );
+                    }
+                  );
+                }
               ),
             );
           }),
@@ -1002,7 +1039,28 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                                       highlightColor: Theme.of(context).primaryColor.withOpacity(0.05),
                                       onTap: () {
                                         cartNotifier.addToCart(menu);
-                                        if (isTablet) setState(() => _isCartExpanded = true);
+                                        if (isTablet) {
+                                          setState(() => _isCartExpanded = true);
+                                        } else {
+                                          showModalBottomSheet(
+                                            context: context, 
+                                            isScrollControlled: true,
+                                            backgroundColor: Colors.transparent,
+                                            builder: (ctx) => ValueListenableBuilder<int>(
+                                              valueListenable: _uiRebuilder,
+                                              builder: (context, _, __) {
+                                                return Consumer(
+                                                  builder: (context, ref, child) {
+                                                    return FractionallySizedBox(
+                                                      heightFactor: 0.85,
+                                                      child: _buildCheckoutPanel(context, true, ref),
+                                                    );
+                                                  }
+                                                );
+                                              }
+                                            ),
+                                          );
+                                        }
                                       },
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1078,7 +1136,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                     child: Material(
                       elevation: 16,
                       color: Colors.white,
-                      child: _buildCheckoutPanel(false),
+                      child: _buildCheckoutPanel(context, false, ref),
                     ),
                   ),
                 ],

@@ -12,6 +12,7 @@ import gamificationRoutes from './routes/gamification';
 import inventoryRoutes from './routes/inventory';
 import expensesRoutes from './routes/expenses';
 import recipeRoutes from './routes/recipe';
+import shiftRoutes from './routes/shift';
 import './cron';
 
 dotenv.config();
@@ -37,6 +38,7 @@ app.use('/api/gamification', gamificationRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/expenses', expensesRoutes);
 app.use('/api/recipes', recipeRoutes);
+app.use('/api/shift', shiftRoutes);
 
 app.get('/', (req, res) => {
   res.send('BrewPOS API is running');

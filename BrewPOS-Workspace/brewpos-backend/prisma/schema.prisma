@@ -10,12 +10,14 @@ datasource db {
 }
 
 model User {
-  id        Int       @id @default(autoincrement())
-  username  String    @unique
-  password  String
-  role      String    @default("CASHIER") // ADMIN, HEADBAR, or CASHIER
-  createdAt DateTime  @default(now())
-  expenses  Expense[]
+  id            Int       @id @default(autoincrement())
+  username      String    @unique
+  password      String
+  role          String    @default("CASHIER") // ADMIN, HEADBAR, or CASHIER
+  assignedShift String?   // "MORNING" or "NIGHT"
+  createdAt     DateTime  @default(now())
+  expenses      Expense[]
+  shifts        Shift[]
 }
 
 model SystemSettings {
@@ -60,17 +62,19 @@ model Customer {
 }
 
 model Transaction {
-  id           Int               @id @default(autoincrement())
-  subTotal     Int               @default(0)
-  taxAmount    Int               @default(0)
-  parkingFee   Int               @default(0)
-  totalAmount  Int
-  pointsEarned Int
-  paymentMethod String           @default("CASH")
-  customer     Customer          @relation(fields: [customerId], references: [id])
-  customerId   Int
-  items        TransactionItem[]
-  createdAt    DateTime          @default(now())
+  id            Int               @id @default(autoincrement())
+  subTotal      Int               @default(0)
+  taxAmount     Int               @default(0)
+  parkingFee    Int               @default(0)
+  totalAmount   Int
+  pointsEarned  Int
+  paymentMethod String            @default("CASH")
+  customer      Customer          @relation(fields: [customerId], references: [id])
+  customerId    Int
+  shift         Shift?            @relation(fields: [shiftId], references: [id])
+  shiftId       Int?
+  items         TransactionItem[]
+  createdAt     DateTime          @default(now())
 }
 
 model TransactionItem {
@@ -202,3 +206,18 @@ model Expense {
   updatedAt   DateTime        @updatedAt
 }
 
+model Shift {
+  id                 Int           @id @default(autoincrement())
+  type               String        // "MORNING" or "NIGHT"
+  startTime          DateTime      @default(now())
+  endTime            DateTime?
+  status             String        @default("OPEN") // OPEN, CLOSED
+  startingCash       Int           @default(0)
+  endingCash         Int?
+  expectedEndingCash Int?
+  user               User          @relation(fields: [userId], references: [id])
+  userId             Int
+  transactions       Transaction[]
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+}

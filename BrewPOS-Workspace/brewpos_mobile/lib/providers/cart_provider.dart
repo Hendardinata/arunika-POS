@@ -11,7 +11,8 @@ class CartNotifier extends Notifier<List<CartItem>> {
     final existingIndex = state.indexWhere((item) => item.menu.id == menu.id);
     if (existingIndex >= 0) {
       final newState = [...state];
-      newState[existingIndex].quantity += 1;
+      final oldItem = newState[existingIndex];
+      newState[existingIndex] = CartItem(menu: oldItem.menu, quantity: oldItem.quantity + 1);
       state = newState;
     } else {
       state = [...state, CartItem(menu: menu)];
@@ -23,7 +24,8 @@ class CartNotifier extends Notifier<List<CartItem>> {
     if (existingIndex >= 0) {
       if (state[existingIndex].quantity > 1) {
         final newState = [...state];
-        newState[existingIndex].quantity -= 1;
+        final oldItem = newState[existingIndex];
+        newState[existingIndex] = CartItem(menu: oldItem.menu, quantity: oldItem.quantity - 1);
         state = newState;
       } else {
         removeFromCart(menu);

@@ -27,7 +27,7 @@ router.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role },
+      { id: user.id, username: user.username, role: user.role, assignedShift: user.assignedShift },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -38,7 +38,8 @@ router.post('/login', async (req, res) => {
       user: {
         id: user.id,
         username: user.username,
-        role: user.role
+        role: user.role,
+        assignedShift: user.assignedShift
       }
     });
   } catch (error) {
@@ -78,7 +79,7 @@ router.post('/setup', async (req, res) => {
 router.get('/users', async (req, res) => {
   try {
     const users = await prisma.user.findMany({
-      select: { id: true, username: true, role: true, createdAt: true }
+      select: { id: true, username: true, role: true, assignedShift: true, createdAt: true }
     });
     res.json(users);
   } catch (error) {
@@ -88,7 +89,7 @@ router.get('/users', async (req, res) => {
 
 // Create a new user (Admin/Management)
 router.post('/users', async (req, res) => {
-  const { username, password, role } = req.body;
+  const { username, password, role, assignedShift } = req.body;
   if (!username || !password) {
     res.status(400).json({ error: 'Username and password are required' });
     return;
@@ -108,9 +109,10 @@ router.post('/users', async (req, res) => {
       data: {
         username,
         password: hashedPassword,
-        role: role || 'CASHIER'
+        role: role || 'CASHIER',
+        assignedShift: assignedShift || null
       },
-      select: { id: true, username: true, role: true, createdAt: true }
+      select: { id: true, username: true, role: true, assignedShift: true, createdAt: true }
     });
     
     res.status(201).json(user);
@@ -119,12 +121,82 @@ router.post('/users', async (req, res) => {
   }
 });
 
+// Update a user (Admin/Management)
+router.put('/users/:id', async (req, res) => {
+  const { username, password, role, assignedShift } = req.body;
+  const id = parseInt(req.params.id);
+  
+  try {
+    const existingUser = await prisma.user.findUnique({ where: { id } });
+    if (!existingUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const updateData: any = { role, assignedShift: assignedShift || null };
+    if (username && username !== existingUser.username) {
+      const usernameExists = await prisma.user.findUnique({ where: { username } });
+      if (usernameExists) {
+        return res.status(400).json({ error: 'Username already exists' });
+      }
+      updateData.username = username;
+    }
+    
+    if (password && password.trim() !== '') {
+      const salt = await bcrypt.genSalt(10);
+      updateData.password = await bcrypt.hash(password, salt);
+    }
+    
+    const user = await prisma.user.update({
+      where: { id },
+      data: updateData,
+      select: { id: true, username: true, role: true, assignedShift: true, createdAt: true }
+    });
+    
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update user' });
+  }
+});
+
 // Delete a user
 router.delete('/users/:id', async (req, res) => {
   try {
-    await prisma.user.delete({ where: { id: parseInt(req.params.id) } });
+    const id = parseInt(req.params.id);
+    
+    // Check if user is owner, don't allow deleting the only owner
+    const userToDelete = await prisma.user.findUnique({ where: { id } });
+    if (!userToDelete) return res.status(404).json({ error: 'User not found' });
+    
+    const ownerCount = await prisma.user.count({ where: { role: 'OWNER' } });
+    if (userToDelete.role === 'OWNER' && ownerCount <= 1) {
+      return res.status(400).json({ error: 'Cannot delete the only owner account' });
+    }
+
+    // Find another admin or owner to reassign records
+    const fallbackUser = await prisma.user.findFirst({
+      where: { role: { in: ['OWNER', 'ADMIN'] }, id: { not: id } }
+    });
+
+    if (fallbackUser) {
+      // Reassign expenses and shifts to prevent deletion of financial history
+      await prisma.expense.updateMany({ where: { userId: id }, data: { userId: fallbackUser.id } });
+      await prisma.shift.updateMany({ where: { userId: id }, data: { userId: fallbackUser.id } });
+    } else {
+      // If no fallback user, delete them (edge case)
+      await prisma.expense.deleteMany({ where: { userId: id } });
+      
+      // Before deleting shift, unlink transactions
+      const shifts = await prisma.shift.findMany({ where: { userId: id } });
+      for (const shift of shifts) {
+        await prisma.transaction.updateMany({ where: { shiftId: shift.id }, data: { shiftId: null } });
+      }
+      await prisma.shift.deleteMany({ where: { userId: id } });
+    }
+
+    await prisma.user.delete({ where: { id } });
     res.json({ message: 'User deleted' });
   } catch (error) {
+    console.error('Failed to delete user:', error);
     res.status(500).json({ error: 'Failed to delete user' });
   }
 });
