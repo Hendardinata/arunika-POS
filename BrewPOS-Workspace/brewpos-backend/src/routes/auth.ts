@@ -61,13 +61,13 @@ router.post('/setup', async (req, res) => {
 
     const user = await prisma.user.create({
       data: {
-        username: 'kasir',
+        username: 'admin',
         password: hashedPassword,
-        role: 'CASHIER'
+        role: 'OWNER'
       }
     });
 
-    res.status(201).json({ message: 'Initial user kasir created successfully' });
+    res.status(201).json({ message: 'Initial user admin created successfully' });
   } catch (error) {
     console.error('Setup error:', error);
     res.status(500).json({ error: 'Internal server error' });
