@@ -210,6 +210,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       width: isPhone ? double.infinity : 300,
       decoration: BoxDecoration(
         color: Colors.white,
+        borderRadius: isPhone ? const BorderRadius.vertical(top: Radius.circular(28)) : null,
         border: isPhone ? null : Border(left: BorderSide(color: Colors.grey[200]!, width: 1)),
       ),
       child: SafeArea(
@@ -422,23 +423,23 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                             color: Theme.of(context).primaryColor.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          clipBehavior: Clip.antiAlias,
-                          child: (item.menu.imageUrl != null && item.menu.imageUrl!.isNotEmpty)
-                              ? Image.network(
-                                  'http://127.0.0.1:3001${item.menu.imageUrl}',
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (ctx, err, stack) => Icon(
+                            clipBehavior: Clip.antiAlias,
+                            child: (item.menu.imageUrl != null && item.menu.imageUrl!.isNotEmpty)
+                                ? Image.network(
+                                    'http://127.0.0.1:3001${item.menu.imageUrl}',
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (ctx, err, stack) => Icon(
+                                      item.menu.categoryName == 'Minuman' ? Icons.local_cafe_rounded : Icons.fastfood_rounded, 
+                                      color: Theme.of(context).primaryColor, 
+                                      size: 24
+                                    ),
+                                  )
+                                : Icon(
                                     item.menu.categoryName == 'Minuman' ? Icons.local_cafe_rounded : Icons.fastfood_rounded, 
                                     color: Theme.of(context).primaryColor, 
                                     size: 24
                                   ),
-                                )
-                              : Icon(
-                                  item.menu.categoryName == 'Minuman' ? Icons.local_cafe_rounded : Icons.fastfood_rounded, 
-                                  color: Theme.of(context).primaryColor, 
-                                  size: 24
-                                ),
-                        ),
+                          ),
                         const SizedBox(width: 16),
                         Expanded(
                           child: Column(
@@ -861,35 +862,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA), // Lighter background
-      appBar: isTablet ? null : AppBar(
-        title: const SizedBox(), // Hidden to match custom header below
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
-        elevation: 0,
-        actions: [
-          IconButton(icon: const Icon(Icons.shopping_cart), onPressed: () {
-            showModalBottomSheet(
-              context: context, 
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              builder: (ctx) => ValueListenableBuilder<int>(
-                valueListenable: _uiRebuilder,
-                builder: (context, _, __) {
-                  return Consumer(
-                    builder: (context, ref, child) {
-                      return FractionallySizedBox(
-                        heightFactor: 0.85,
-                        child: _buildCheckoutPanel(context, true, ref),
-                      );
-                    }
-                  );
-                }
-              ),
-            );
-          }),
-        ],
-      ),
+      backgroundColor: const Color(0xFFFAFAFA),
       floatingActionButton: (isTablet && !_isCartExpanded)
           ? FloatingActionButton.extended(
               backgroundColor: Theme.of(context).primaryColor,
@@ -898,71 +871,181 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               label: Text('Pesanan (${ref.watch(cartProvider).length})', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             )
           : null,
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Main Menu Grid Area
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Custom Header matching the provided layout
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        flex: 1,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              () {
-                                final now = DateTime.now();
-                                final months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                                return '${months[now.month - 1]} ${now.day}, ${now.year}';
-                              }(),
-                              style: TextStyle(fontSize: 14, color: Colors.grey[600], fontWeight: FontWeight.w600),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              settings.storeName, 
-                              style: const TextStyle(fontSize: 22, color: Colors.black87, fontWeight: FontWeight.w900, letterSpacing: -0.5),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      // Search Bar
-                      Expanded(
-                        flex: 1,
-                        child: Container(
-                          height: 45, // Slightly thinner to match design
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.grey[200]!)
-                          ),
-                          child: TextField(
-                            controller: _searchController,
-                            onChanged: (val) => setState(() {}),
-                            decoration: InputDecoration(
-                              hintText: 'Search Here',
-                              hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-                              prefixIcon: Icon(Icons.search_rounded, color: Colors.grey[400], size: 20),
-                              suffixIcon: Icon(Icons.filter_alt_outlined, color: Colors.grey[500], size: 20), // Filter icon as in design
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      body: SafeArea(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Main Menu Grid Area
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Custom Header matching the provided layout
+                    if (isTablet)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            flex: 1,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  () {
+                                    final now = DateTime.now();
+                                    final months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                                    return '${months[now.month - 1]} ${now.day}, ${now.year}';
+                                  }(),
+                                  style: TextStyle(fontSize: 14, color: Colors.grey[600], fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  settings.storeName, 
+                                  style: const TextStyle(fontSize: 24, color: Colors.black87, fontWeight: FontWeight.w900, letterSpacing: -0.5),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
                             ),
                           ),
-                        ),
+                          const SizedBox(width: 16),
+                          // Search Bar
+                          Expanded(
+                            flex: 1,
+                            child: Container(
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.grey[200]!)
+                              ),
+                              child: TextField(
+                                controller: _searchController,
+                                onChanged: (val) => setState(() {}),
+                                decoration: InputDecoration(
+                                  hintText: 'Cari Menu...',
+                                  hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                                  prefixIcon: Icon(Icons.search_rounded, color: Colors.grey[400], size: 22),
+                                  border: InputBorder.none,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      () {
+                                        final now = DateTime.now();
+                                        final months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                                        return '${months[now.month - 1]} ${now.day}, ${now.year}';
+                                      }(),
+                                      style: TextStyle(fontSize: 13, color: Colors.grey[500], fontWeight: FontWeight.w600),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      settings.storeName, 
+                                      style: const TextStyle(fontSize: 24, color: Colors.black87, fontWeight: FontWeight.w900, letterSpacing: -0.5),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              // Mobile Cart Icon
+                              Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  InkWell(
+                                    onTap: () {
+                                      showModalBottomSheet(
+                                        context: context, 
+                                        isScrollControlled: true,
+                                        backgroundColor: Colors.transparent,
+                                        builder: (ctx) => ValueListenableBuilder<int>(
+                                          valueListenable: _uiRebuilder,
+                                          builder: (context, _, __) {
+                                            return Consumer(
+                                              builder: (context, ref, child) {
+                                                return FractionallySizedBox(
+                                                  heightFactor: 0.9,
+                                                  child: _buildCheckoutPanel(context, true, ref),
+                                                );
+                                              }
+                                            );
+                                          }
+                                        ),
+                                      );
+                                    },
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(16),
+                                        boxShadow: [
+                                          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))
+                                        ]
+                                      ),
+                                      child: Icon(Icons.shopping_bag_outlined, color: Theme.of(context).primaryColor, size: 24),
+                                    ),
+                                  ),
+                                  if (ref.watch(cartProvider).isNotEmpty)
+                                    Positioned(
+                                      top: -6,
+                                      right: -6,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: const BoxDecoration(
+                                          color: Colors.redAccent,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Text(
+                                          '${ref.watch(cartProvider).length}',
+                                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              )
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.grey[200]!)
+                            ),
+                            child: TextField(
+                              controller: _searchController,
+                              onChanged: (val) => setState(() {}),
+                              decoration: InputDecoration(
+                                hintText: 'Cari Menu...',
+                                hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                                prefixIcon: Icon(Icons.search_rounded, color: Colors.grey[400], size: 22),
+                                border: InputBorder.none,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
                   const SizedBox(height: 24),
                   // "Cari Menu Terbaik" Section
                   const Text(
@@ -1144,6 +1227,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
             ),
         ],
       ),
-    );
+    ),
+  );
 }
 }

@@ -84,34 +84,85 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   }
 
   void _showMoreMenu() {
+    final user = ref.read(authProvider);
+    final bool isCashier = user?.role == 'CASHIER';
+    final bool isHeadbar = user?.role == 'HEADBAR';
+    final bool hideReport = isCashier || isHeadbar;
+
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
       builder: (ctx) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.sync),
-                title: const Text('Sinkronisasi Offline'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _syncOfflineTransactions();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.logout, color: Colors.red),
-                title: const Text('Keluar', style: TextStyle(color: Colors.red)),
-                onTap: () {
-                  Navigator.pop(context);
-                  _logout();
-                },
-              ),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(left: 16, bottom: 20),
+                  child: Text('Menu Lainnya', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                ),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 20,
+                  alignment: WrapAlignment.start,
+                  children: [
+                    if (!hideReport)
+                      _buildMoreMenuItem(
+                        Icons.bar_chart, 'Laporan', Colors.blue, 
+                        () { Navigator.pop(context); setState(() => _selectedIndex = 3); }
+                      ),
+                    _buildMoreMenuItem(
+                      Icons.inventory_2, 'Stok', Colors.orange, 
+                        () { Navigator.pop(context); setState(() => _selectedIndex = hideReport ? 3 : 4); }
+                    ),
+                    if (!isCashier)
+                      _buildMoreMenuItem(
+                        Icons.fact_check, 'Opname', Colors.teal, 
+                        () { Navigator.pop(context); setState(() => _selectedIndex = hideReport ? 4 : 5); }
+                      ),
+                    _buildMoreMenuItem(
+                      Icons.sync, 'Sinkron', Colors.indigo, 
+                      () { Navigator.pop(context); _syncOfflineTransactions(); }
+                    ),
+                    _buildMoreMenuItem(
+                      Icons.logout, 'Keluar', Colors.red, 
+                      () { Navigator.pop(context); _logout(); }
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         );
       }
+    );
+  }
+
+  Widget _buildMoreMenuItem(IconData icon, String label, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: SizedBox(
+        width: 80,
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 28),
+            ),
+            const SizedBox(height: 8),
+            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700), textAlign: TextAlign.center),
+          ],
+        ),
+      ),
     );
   }
 
@@ -249,17 +300,18 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     int logoutIdx = railDestinations.length;
     railDestinations.add(const NavigationRailDestination(icon: Icon(Icons.logout, color: Colors.red), label: Text('Keluar', style: TextStyle(color: Colors.red))));
 
-    List<BottomNavigationBarItem> bottomItems = [
-      const BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Beranda'),
-      const BottomNavigationBarItem(icon: Icon(Icons.point_of_sale), label: 'POS'),
-      const BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Riwayat'),
+    int moreIdx = 3;
+    List<NavigationDestination> mobileDestinations = [
+      const NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Beranda'),
+      const NavigationDestination(icon: Icon(Icons.point_of_sale_outlined), selectedIcon: Icon(Icons.point_of_sale), label: 'POS'),
+      const NavigationDestination(icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history), label: 'Riwayat'),
+      const NavigationDestination(icon: Icon(Icons.apps_rounded), selectedIcon: Icon(Icons.apps), label: 'Lainnya'),
     ];
-    if (!hideReport) bottomItems.add(const BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Laporan'));
-    bottomItems.add(const BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Stok'));
-    if (!isCashier) bottomItems.add(const BottomNavigationBarItem(icon: Icon(Icons.fact_check), label: 'Opname'));
-    
-    int moreIdx = bottomItems.length;
-    bottomItems.add(const BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: 'Lainnya'));
+
+    int currentBottomIdx = _selectedIndex;
+    if (currentBottomIdx > 2) {
+      currentBottomIdx = 3;
+    }
 
     final maxScreenIndex = screens.length - 1;
 
@@ -328,20 +380,55 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     }
 
     return Scaffold(
+      extendBody: false,
+      backgroundColor: const Color(0xFFFAFAFA),
       body: screens[_selectedIndex > maxScreenIndex ? 0 : _selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex > maxScreenIndex ? 0 : _selectedIndex,
-        onTap: (idx) {
-          if (idx == moreIdx) {
-            _showMoreMenu();
-          } else {
-            setState(() => _selectedIndex = idx);
-          }
-        },
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: Theme.of(context).primaryColor,
-        unselectedItemColor: Colors.grey,
-        items: bottomItems,
+      bottomNavigationBar: Container(
+        margin: const EdgeInsets.only(left: 16, right: 16, bottom: 20),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(32),
+          boxShadow: [
+            BoxShadow(
+              color: Theme.of(context).primaryColor.withOpacity(0.2),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            )
+          ]
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(32),
+          child: NavigationBarTheme(
+            data: NavigationBarThemeData(
+              indicatorColor: Theme.of(context).primaryColor.withOpacity(0.15),
+              labelTextStyle: MaterialStateProperty.resolveWith((states) {
+                if (states.contains(MaterialState.selected)) {
+                  return TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Theme.of(context).primaryColor);
+                }
+                return TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade600);
+              }),
+              iconTheme: MaterialStateProperty.resolveWith((states) {
+                if (states.contains(MaterialState.selected)) {
+                  return IconThemeData(color: Theme.of(context).primaryColor);
+                }
+                return IconThemeData(color: Colors.grey.shade600);
+              }),
+            ),
+            child: NavigationBar(
+              height: 65,
+              selectedIndex: currentBottomIdx,
+              onDestinationSelected: (idx) {
+                if (idx == moreIdx) {
+                  _showMoreMenu();
+                } else {
+                  setState(() => _selectedIndex = idx);
+                }
+              },
+              backgroundColor: Colors.white,
+              surfaceTintColor: Colors.transparent,
+              destinations: mobileDestinations,
+            ),
+          ),
+        ),
       ),
     );
   }
