@@ -162,8 +162,9 @@ class _OpnameScreenState extends State<OpnameScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           _buildMiniStat('Awal', item['openingStock']),
+                          _buildMiniStat('Tambah', '+${item['addedStock'] ?? 0}', customColor: Colors.green[700]),
                           _buildMiniStat('Akhir', item['closingStock']),
-                          _buildMiniStat('Terpakai', item['used'], isHighlight: true),
+                          _buildMiniStat('Pakai', item['used'], isHighlight: true),
                         ],
                       )
                     ],
@@ -195,12 +196,12 @@ class _OpnameScreenState extends State<OpnameScreen> {
     );
   }
 
-  Widget _buildMiniStat(String label, dynamic value, {bool isHighlight = false}) {
+  Widget _buildMiniStat(String label, dynamic value, {bool isHighlight = false, Color? customColor}) {
     return Column(
       children: [
         Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
         const SizedBox(height: 4),
-        Text('$value', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: isHighlight ? Theme.of(context).primaryColor : Colors.black87)),
+        Text('$value', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: customColor ?? (isHighlight ? Theme.of(context).primaryColor : Colors.black87))),
       ],
     );
   }
@@ -211,6 +212,7 @@ class _OpnameScreenState extends State<OpnameScreen> {
     int defaultStock = isOpening ? item['stock'] : item['inventoryItem']['stock'];
     String unit = isOpening ? item['unit'] : item['inventoryItem']['unit'];
     String? imageUrl = isOpening ? item['imageUrl'] : item['inventoryItem']['imageUrl'];
+    int addedStock = (!isOpening && item['addedStock'] != null) ? item['addedStock'] : 0;
 
     return Container(
       decoration: BoxDecoration(
@@ -258,6 +260,11 @@ class _OpnameScreenState extends State<OpnameScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  if (!isOpening && addedStock > 0)
+                    Text(
+                      'Ditambah Siang: +$addedStock $unit',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green),
+                    ),
                   SizedBox(
                     height: 42,
                     child: TextFormField(
@@ -423,6 +430,13 @@ class _OpnameScreenState extends State<OpnameScreen> {
         elevation: 0,
         scrolledUnderElevation: 0,
         iconTheme: const IconThemeData(color: Colors.black87),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _fetchOpnameData,
+            tooltip: 'Segarkan',
+          )
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
@@ -489,15 +503,34 @@ class _OpnameScreenState extends State<OpnameScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => setState(() => _status = 'CLOSING'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red[600],
-                padding: const EdgeInsets.all(20),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                elevation: 0,
-              ),
-              child: const Text('Tutup Stok Hari Ini (Malam)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            Builder(
+              builder: (ctx) {
+                bool isConfirmed = _currentOpname!['isStockConfirmed'] == true;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ElevatedButton(
+                      onPressed: isConfirmed ? () => setState(() => _status = 'CLOSING') : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isConfirmed ? Colors.red[600] : Colors.grey[400],
+                        padding: const EdgeInsets.all(20),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                        elevation: 0,
+                      ),
+                      child: const Text('Tutup Stok Hari Ini (Malam)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    ),
+                    if (!isConfirmed)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 12),
+                        child: Text(
+                          'Harap Konfirmasi Stok di menu Stok terlebih dahulu.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      )
+                  ],
+                );
+              }
             )
           ],
         ),

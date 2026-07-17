@@ -123,6 +123,18 @@ router.get('/opname/today', async (req, res) => {
     });
     
     if (opname) {
+      // Dynamically compute addedStock for UI display before closing
+      for (let opItem of opname.items) {
+        const logs = await prisma.inventoryLog.aggregate({
+          where: {
+            itemId: opItem.inventoryItemId,
+            type: 'IN',
+            createdAt: { gte: opname.createdAt }
+          },
+          _sum: { quantity: true }
+        });
+        (opItem as any).addedStock = logs._sum.quantity || 0;
+      }
       return res.json({ status: 'OPEN', opname });
     }
 
@@ -169,6 +181,50 @@ router.post('/opname/open', async (req, res) => {
   }
 });
 
+// POST /opname/confirm-stock
+router.post('/opname/confirm-stock', async (req, res) => {
+  try {
+    const opname = await prisma.dailyOpname.findFirst({
+      where: { status: 'OPEN' }
+    });
+    if (!opname) {
+      return res.status(400).json({ error: 'No open opname found' });
+    }
+
+    const updatedOpname = await prisma.dailyOpname.update({
+      where: { id: opname.id },
+      data: { isStockConfirmed: true }
+    });
+
+    res.json(updatedOpname);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to confirm stock' });
+  }
+});
+
+// POST /opname/cancel-confirm-stock
+router.post('/opname/cancel-confirm-stock', async (req, res) => {
+  try {
+    const opname = await prisma.dailyOpname.findFirst({
+      where: { status: 'OPEN' }
+    });
+    if (!opname) {
+      return res.status(400).json({ error: 'No open opname found' });
+    }
+
+    const updatedOpname = await prisma.dailyOpname.update({
+      where: { id: opname.id },
+      data: { isStockConfirmed: false }
+    });
+
+    res.json(updatedOpname);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to cancel confirm stock' });
+  }
+});
+
 // POST /opname/close
 router.post('/opname/close', async (req, res) => {
   try {
@@ -182,11 +238,23 @@ router.post('/opname/close', async (req, res) => {
     for (const i of items) {
       const opItem = opname.items.find((oi: any) => oi.inventoryItemId === i.inventoryItemId);
       if (opItem) {
-        const used = opItem.openingStock - i.closingStock;
+        // Find added stock during this opname period
+        const logs = await prisma.inventoryLog.aggregate({
+          where: {
+            itemId: i.inventoryItemId,
+            type: 'IN',
+            createdAt: { gte: opname.createdAt }
+          },
+          _sum: { quantity: true }
+        });
+        const addedStock = logs._sum.quantity || 0;
+        const used = (opItem.openingStock + addedStock) - i.closingStock;
+
         await prisma.dailyOpnameItem.update({
           where: { id: opItem.id },
           data: {
             closingStock: i.closingStock,
+            addedStock: addedStock,
             used: used,
             nightNotes: i.nightNotes
           }

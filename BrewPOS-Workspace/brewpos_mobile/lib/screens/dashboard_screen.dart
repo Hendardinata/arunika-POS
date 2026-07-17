@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:convert';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 import '../providers/settings_provider.dart';
 import '../providers/auth_provider.dart';
@@ -18,11 +19,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   bool _isLoading = true;
   Map<String, dynamic>? _analyticsData;
   final TextEditingController _cashController = TextEditingController();
+  Timer? _shiftCheckTimer;
 
   @override
   void initState() {
     super.initState();
     _fetchAnalytics();
+    _shiftCheckTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _shiftCheckTimer?.cancel();
+    _cashController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchAnalytics() async {
@@ -68,6 +80,33 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final shiftState = ref.watch(shiftProvider);
     final isCashier = user?.role == 'CASHIER';
     final isTablet = MediaQuery.of(context).size.width >= 600;
+
+    bool shouldShowShiftWarning = false;
+    
+    if (isCashier && shiftState.value != null && shiftState.value!.status == 'OPEN') {
+      final shiftType = shiftState.value!.type;
+      final endTimeStr = shiftType == 'MORNING' ? settings.shiftMorningEnd : settings.shiftNightEnd;
+      try {
+        final parts = endTimeStr.split(':');
+        final endHour = int.parse(parts[0]);
+        final endMin = int.parse(parts[1]);
+        
+        final now = DateTime.now();
+        var expectedEnd = DateTime(now.year, now.month, now.day, endHour, endMin);
+        
+        if (expectedEnd.isBefore(shiftState.value!.startTime)) {
+          expectedEnd = expectedEnd.add(const Duration(days: 1));
+        }
+        
+        final finalToleranceEnd = expectedEnd.add(const Duration(hours: 1));
+
+        if (now.isAfter(finalToleranceEnd)) {
+          shouldShowShiftWarning = true;
+        }
+      } catch (e) {
+        debugPrint('Error parsing shift end time: $e');
+      }
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -138,6 +177,47 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ],
               ),
               const SizedBox(height: 32),
+
+              if (shouldShowShiftWarning) ...[
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.only(bottom: 24),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.orange.shade200),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.orange.withOpacity(0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      )
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800, size: 32),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Waktu Shift Berakhir!',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.orange.shade900),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Waktu shift Anda beserta toleransinya (1 jam) telah habis. Silakan lakukan Tutup/Pindah Shift.',
+                              style: TextStyle(fontSize: 13, color: Colors.orange.shade800),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
 
               if (!isCashier) ...[
                 // Summary Cards section
