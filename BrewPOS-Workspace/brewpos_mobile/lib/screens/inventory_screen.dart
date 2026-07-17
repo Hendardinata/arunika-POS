@@ -98,13 +98,25 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     }
   }
 
-  Future<void> _adjustStock(int id, int quantity, String type, String notes) async {
+  Future<void> _adjustStock(int id, int quantity, String type, String notes, XFile? receiptImage) async {
     try {
-      final res = await http.put(
-        Uri.parse('http://127.0.0.1:3001/api/inventory/$id/adjust'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'quantity': quantity, 'type': type, 'notes': notes}),
-      );
+      var request = http.MultipartRequest('PUT', Uri.parse('http://127.0.0.1:3001/api/inventory/$id/adjust'));
+      request.fields['quantity'] = quantity.toString();
+      request.fields['type'] = type;
+      request.fields['notes'] = notes;
+
+      if (receiptImage != null) {
+        final bytes = await receiptImage.readAsBytes();
+        request.files.add(http.MultipartFile.fromBytes(
+          'receipt',
+          bytes,
+          filename: receiptImage.name,
+        ));
+      }
+
+      final streamedResponse = await request.send();
+      final res = await http.Response.fromStream(streamedResponse);
+
       if (res.statusCode == 200) {
         _fetchInventory();
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Stok berhasil diupdate', style: TextStyle(color: Colors.white)), backgroundColor: Colors.green));
@@ -150,6 +162,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     int qty = 1;
     String type = 'IN';
     final TextEditingController noteCtrl = TextEditingController();
+    XFile? receiptImage;
+    final ImagePicker picker = ImagePicker();
 
     showDialog(
       context: context,
@@ -259,6 +273,39 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                     ),
                   ),
+                  if (type == 'IN' && _opnameStatus == 'OPEN') ...[
+                    const SizedBox(height: 16),
+                    InkWell(
+                      onTap: () async {
+                        final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+                        if (image != null) {
+                          setStateSB(() => receiptImage = image);
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          border: Border.all(color: Colors.grey[300]!, style: BorderStyle.solid),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.camera_alt, color: Colors.grey[600]),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                receiptImage != null ? 'Foto Nota/Barang dipilih' : 'Upload Foto Nota / Bukti',
+                                style: TextStyle(color: receiptImage != null ? Colors.green : Colors.grey[600], fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            if (receiptImage != null)
+                              const Icon(Icons.check_circle, color: Colors.green),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -271,8 +318,12 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
               ),
               ElevatedButton(
                 onPressed: () {
+                  if (type == 'IN' && _opnameStatus == 'OPEN' && receiptImage == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Harap lampirkan foto nota/bukti barang!')));
+                    return;
+                  }
                   Navigator.pop(ctx);
-                  _adjustStock(item['id'], qty, type, noteCtrl.text);
+                  _adjustStock(item['id'], qty, type, noteCtrl.text, receiptImage);
                 },
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),

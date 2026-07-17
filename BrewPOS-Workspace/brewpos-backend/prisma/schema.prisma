@@ -184,6 +184,7 @@ model InventoryLog {
   quantity  Int
   type      String        // "IN" or "OUT"
   notes     String?
+  receiptUrl String?
   createdAt DateTime      @default(now())
 }
 

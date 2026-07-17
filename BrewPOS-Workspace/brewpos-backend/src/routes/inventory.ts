@@ -85,7 +85,7 @@ router.put('/:id', upload.single('image'), async (req, res) => {
 });
 
 // PUT update stock (adjust in/out)
-router.put('/:id/adjust', async (req, res) => {
+router.put('/:id/adjust', upload.single('receipt'), async (req, res) => {
   try {
     const { id } = req.params;
     const { quantity, type, notes } = req.body; // type: "IN" or "OUT", quantity is absolute positive
@@ -98,13 +98,18 @@ router.put('/:id/adjust', async (req, res) => {
 
     const newStock = type === 'IN' ? item.stock + q : item.stock - q;
     
+    let receiptUrl = null;
+    if (req.file) {
+      receiptUrl = `/uploads/${req.file.filename}`;
+    }
+    
     const updated = await prisma.inventoryItem.update({
       where: { id: parseInt(id) },
       data: { stock: newStock }
     });
 
     await prisma.inventoryLog.create({
-      data: { itemId: parseInt(id), quantity: q, type, notes }
+      data: { itemId: parseInt(id), quantity: q, type, notes, receiptUrl }
     });
 
     res.json(updated);

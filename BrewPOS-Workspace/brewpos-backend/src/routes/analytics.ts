@@ -5,10 +5,21 @@ const router = Router();
 
 router.get('/', async (req, res) => {
   try {
-    const { days } = req.query;
+    const { days, startDate, endDate } = req.query;
     let dateFilter = {};
     
-    if (days) {
+    if (startDate && endDate) {
+      const start = new Date(startDate as string);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(endDate as string);
+      end.setHours(23, 59, 59, 999);
+      dateFilter = {
+        createdAt: {
+          gte: start,
+          lte: end
+        }
+      };
+    } else if (days && days !== 'all') {
       const daysInt = parseInt(days as string);
       if (!isNaN(daysInt)) {
         const targetDate = new Date();
@@ -110,10 +121,21 @@ router.get('/', async (req, res) => {
 
 router.get('/reports', async (req, res) => {
   try {
-    const { days } = req.query;
+    const { days, startDate, endDate } = req.query;
     let dateFilter = {};
     
-    if (days && days !== 'all') {
+    if (startDate && endDate) {
+      const start = new Date(startDate as string);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(endDate as string);
+      end.setHours(23, 59, 59, 999);
+      dateFilter = {
+        createdAt: {
+          gte: start,
+          lte: end
+        }
+      };
+    } else if (days && days !== 'all') {
       const daysInt = parseInt(days as string);
       if (!isNaN(daysInt)) {
         const targetDate = new Date();

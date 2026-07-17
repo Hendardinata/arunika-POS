@@ -34,7 +34,6 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   bool _isCustomerNotFound = false;
   List<dynamic> _availableRewards = [];
   Map<String, dynamic>? _selectedReward;
-  String? _selectedTable;
   
   String _selectedCategory = 'Semua';
   bool _isCartExpanded = false;
@@ -362,28 +361,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                       ),
                     ),
                   
-                  const SizedBox(height: 12),
-                  // Table Select (now functional and always visible)
-                  Container(
-                    height: 44,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey[300]!),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        isExpanded: true,
-                        value: _selectedTable,
-                        hint: Text('Pilih Meja / Takeaway', style: TextStyle(color: Colors.grey[400])),
-                        icon: const Icon(Icons.chevron_right, color: Colors.grey),
-                        items: ['Takeaway', 'Meja 1', 'Meja 2', 'Meja 3', 'Meja 4', 'Meja 5', 'Meja 6', 'Meja 7', 'Meja 8']
-                            .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                            .toList(),
-                        onChanged: (val) => setState(() => _selectedTable = val),
-                      ),
-                    ),
-                  ),
+
                 ],
               ),
             ),
@@ -533,10 +511,6 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     final cart = ref.read(cartProvider);
     final cartNotifier = ref.read(cartProvider.notifier);
     final nickname = _nicknameController.text.trim();
-    if (_selectedTable == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pilih meja atau Takeaway terlebih dahulu!')));
-      return;
-    }
     
     String selectedPaymentMethod = 'CASH';
     final paymentDisplayMap = {'CASH': 'TUNAI', 'QRIS': 'QRIS', 'CARD': 'KARTU'};
@@ -752,7 +726,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       final method = result['method'];
       final payload = {
         'nickname': _customerProfile != null ? _customerProfile!['nickname'] : 'Guest',
-        'table': _selectedTable,
+        'table': 'Takeaway',
         'totalAmount': finalTotal,
         'rewardId': _selectedReward?['id'],
         'paymentMethod': method,
