@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>☕ BrewPOS</h1>
+  <h1>☕ Arunika-POS</h1>
   <p><strong>Every Cup Has A Story.</strong></p>
   <p>Modern Point of Sales (POS) with integrated CRM, Loyalty Programs, and Gamification for Coffee Shops.</p>
 
@@ -11,9 +11,9 @@
 
 <br/>
 
-## 📖 Tentang BrewPOS
+## 📖 Tentang Arunika-POS
 
-BrewPOS bukan sekadar aplikasi kasir (POS) biasa. Sebagian besar aplikasi POS berhenti pada titik di mana pelanggan selesai membayar, sehingga tidak ada interaksi lanjutan. BrewPOS memecahkan masalah ini dengan membangun **hubungan jangka panjang dengan pelanggan**. 
+Arunika-POS bukan sekadar aplikasi kasir (POS) biasa. Sebagian besar aplikasi POS berhenti pada titik di mana pelanggan selesai membayar, sehingga tidak ada interaksi lanjutan. Arunika-POS memecahkan masalah ini dengan membangun **hubungan jangka panjang dengan pelanggan**. 
 
 Kami menggabungkan fitur **POS, Customer Relationship Management (CRM), Program Loyalitas, dan Gamifikasi** dalam satu ekosistem. Setiap pesanan menjadi sebuah petualangan (*Coffee Journey*) yang memberikan poin, membuka *badges* (pencapaian), dan misi harian untuk menarik pelanggan datang kembali.
 
@@ -38,11 +38,12 @@ Kami menggabungkan fitur **POS, Customer Relationship Management (CRM), Program 
 Proyek ini dibangun menggunakan struktur Workspace (Multi-repository / Monorepo style) yang terdiri dari:
 
 ```text
-BrewPOS-Workspace/
-├── brewpos-backend/   # REST API backend (Node.js, TypeScript, Prisma)
-├── brewpos-web/       # Dashboard Admin berbasis Web
-└── brewpos_mobile/    # Aplikasi Kasir Mobile / Tablet (Flutter)
+Arunika-POS-Workspace/
+├── arunika-pos-backend/   # REST API backend (Node.js, TypeScript, Prisma)
+├── arunika-pos-web/       # Dashboard Admin berbasis Web
+└── arunika_pos_mobile/    # Aplikasi Kasir Mobile / Tablet (Flutter)
 ```
+*(Catatan: Jika folder lokal Anda masih bernama `BrewPOS-Workspace` dsb., Anda bisa menyesuaikan path saat instalasi di bawah)*
 
 ---
 
@@ -60,21 +61,21 @@ Sebelum menjalankan proyek ini, pastikan Anda telah menginstal perangkat lunak b
 ## 🛠️ Cara Instalasi & Penggunaan
 
 ### 1. Setup Database (PostgreSQL)
-Buat database baru di PostgreSQL Anda (misalnya dengan nama `brewpos_db`). Pastikan Anda mengingat `username` dan `password` database Anda.
+Buat database baru di PostgreSQL Anda (misalnya dengan nama `arunika_pos_db`). Pastikan Anda mengingat `username` dan `password` database Anda.
 
-### 2. Setup Backend (`brewpos-backend`)
+### 2. Setup Backend (`arunika-pos-backend`)
 Backend bertugas sebagai pusat data dan API untuk aplikasi Mobile maupun Web.
 
 ```bash
-# Masuk ke direktori backend
-cd BrewPOS-Workspace/brewpos-backend
+# Masuk ke direktori backend (Sesuaikan dengan nama folder Anda)
+cd Arunika-POS-Workspace/arunika-pos-backend
 
 # Instalasi dependensi
 npm install
 
 # Konfigurasi Environment Variables
 # Copy file .env.example menjadi .env (atau buat file .env baru) dan sesuaikan:
-# DATABASE_URL="postgresql://user:password@localhost:5432/brewpos_db"
+# DATABASE_URL="postgresql://user:password@localhost:5432/arunika_pos_db"
 
 # Jalankan migrasi Prisma ke Database
 npx prisma db push
@@ -84,12 +85,12 @@ npx prisma db push
 npm run dev
 ```
 
-### 3. Setup Web Dashboard (`brewpos-web`)
+### 3. Setup Web Dashboard (`arunika-pos-web`)
 Dashboard digunakan oleh Owner untuk memantau analitik dan mengatur produk/menu.
 
 ```bash
 # Buka terminal baru, masuk ke direktori web
-cd BrewPOS-Workspace/brewpos-web
+cd Arunika-POS-Workspace/arunika-pos-web
 
 # Instalasi dependensi
 npm install
@@ -98,12 +99,12 @@ npm install
 npm run dev
 ```
 
-### 4. Setup Mobile POS (`brewpos_mobile`)
+### 4. Setup Mobile POS (`arunika_pos_mobile`)
 Aplikasi yang digunakan oleh kasir/barista di Coffee Shop (Tablet/Smartphone).
 
 ```bash
 # Buka terminal baru, masuk ke direktori mobile
-cd BrewPOS-Workspace/brewpos_mobile
+cd Arunika-POS-Workspace/arunika_pos_mobile
 
 # Ambil semua dependensi Flutter
 flutter pub get
