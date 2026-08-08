@@ -142,6 +142,5 @@ Jika Anda ingin berkontribusi:
 
 ---
 
-<div align="center">
-  <p>Dibuat dengan ❤️ untuk kemajuan UMKM Kopi.</p>
-</div>
+Proyek ini dibuat untuk keperluan manajemen studio internal dan portofolio pembelajaran. 
+*Made with ❤️ for tattoo art by [Hendardinata_](https://github.com/Hendardinata).*
