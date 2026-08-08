@@ -142,5 +142,7 @@ Jika Anda ingin berkontribusi:
 
 ---
 
+## 📄 Lisensi
 Proyek ini dibuat untuk keperluan manajemen studio internal dan portofolio pembelajaran. 
 *Made with ❤️ for tattoo art by [Hendardinata_](https://github.com/Hendardinata).*
+
