@@ -57,7 +57,14 @@ router.get('/', async (req, res) => {
     
     const totalRevenue = revenueAggregation._sum.totalAmount || 0;
     const totalExpenses = expenseAggregation._sum?.amount || 0;
-    const netProfit = totalRevenue - totalExpenses;
+    
+    const allTransactionsForHPP = await prisma.transaction.findMany({
+      where: dateFilter,
+      include: { items: true }
+    });
+    const totalHPP = allTransactionsForHPP.reduce((sum, tx) => sum + tx.items.reduce((itemSum, item) => itemSum + ((item.hpp || 0) * item.quantity), 0), 0);
+    
+    const netProfit = totalRevenue - totalHPP - totalExpenses;
     
     const totalCustomers = await prisma.customer.count();
 
@@ -77,10 +84,30 @@ router.get('/', async (req, res) => {
     const salesByDate: Record<string, number> = {};
     const menuPopularity: Record<string, {name: string, count: number}> = {};
 
+    // Pre-populate dates for time series
+    let numDays = 7;
+    if (days === '1') numDays = 2; // Need at least 2 points for AreaChart
+    else if (days && days !== 'all' && !isNaN(parseInt(days as string))) {
+      numDays = parseInt(days as string);
+      if (numDays < 2) numDays = 2;
+    }
+
+    if (days !== 'all') {
+      for (let i = numDays - 1; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toLocaleDateString('id-ID', { month: 'short', day: 'numeric' });
+        salesByDate[dateStr] = 0;
+      }
+    }
+
     recentTransactions.forEach(tx => {
       // Sales chart
       const dateStr = new Date(tx.createdAt).toLocaleDateString('id-ID', { month: 'short', day: 'numeric' });
-      salesByDate[dateStr] = (salesByDate[dateStr] || 0) + tx.totalAmount;
+      if (salesByDate[dateStr] === undefined) {
+         salesByDate[dateStr] = 0;
+      }
+      salesByDate[dateStr] += tx.totalAmount;
 
       // Menu popularity
       tx.items.forEach(item => {
@@ -92,11 +119,23 @@ router.get('/', async (req, res) => {
       });
     });
 
+    // For 'all', ensure we have at least 2 points if there's only 1
+    if (days === 'all' && Object.keys(salesByDate).length === 1) {
+       const onlyDate = Object.keys(salesByDate)[0];
+       salesByDate['Sebelumnya'] = 0;
+    }
+
     // Format chart data
-    const chartData = Object.keys(salesByDate).map(date => ({
+    let chartData = Object.keys(salesByDate).map(date => ({
       date,
       revenue: salesByDate[date],
-    })).reverse(); // Supaya urut dari yang terlama ke terbaru (karena iterasi mundur di object keys tergantung urutan insert)
+    }));
+    
+    // Sort chronologically (assuming keys were inserted chronologically or we just rely on JS object insertion order which is preserved here)
+    if (days === 'all' && chartData.length > 0 && chartData[chartData.length-1].date === 'Sebelumnya') {
+       const last = chartData.pop();
+       if (last) chartData.unshift(last); // move 'Sebelumnya' to the start
+    }
 
     // Format top menus
     const popularMenus = Object.values(menuPopularity)
@@ -110,7 +149,7 @@ router.get('/', async (req, res) => {
       totalOrders: totalTransactions,
       totalCustomers: totalCustomers,
       topCustomers,
-      chartData: chartData.length > 0 ? chartData.reverse() : [], // membalik ulang agar sesuai chronological
+      chartData: chartData,
       popularMenus
     });
   } catch (error) {

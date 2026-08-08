@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import '../models/shift.dart';
 import 'auth_provider.dart';
 
-const String apiUrl = 'http://127.0.0.1:3001/api';
+const String apiUrl = 'http://100.77.229.76:3001/api';
 
 class ShiftNotifier extends Notifier<AsyncValue<Shift?>> {
   @override

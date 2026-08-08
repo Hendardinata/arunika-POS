@@ -28,7 +28,7 @@ class _OpnameScreenState extends State<OpnameScreen> {
   Future<void> _fetchOpnameData() async {
     setState(() => _isLoading = true);
     try {
-      final res = await http.get(Uri.parse('http://127.0.0.1:3001/api/inventory/opname/today'));
+      final res = await http.get(Uri.parse('http://100.77.229.76:3001/api/inventory/opname/today'));
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         setState(() {
@@ -75,7 +75,7 @@ class _OpnameScreenState extends State<OpnameScreen> {
       }
 
       final res = await http.post(
-        Uri.parse('http://127.0.0.1:3001/api/inventory/opname/open'),
+        Uri.parse('http://100.77.229.76:3001/api/inventory/opname/open'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'items': payloadItems}),
       );
@@ -107,7 +107,7 @@ class _OpnameScreenState extends State<OpnameScreen> {
       }
 
       final res = await http.post(
-        Uri.parse('http://127.0.0.1:3001/api/inventory/opname/close'),
+        Uri.parse('http://100.77.229.76:3001/api/inventory/opname/close'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'opnameId': _currentOpname!['id'],
@@ -237,7 +237,7 @@ class _OpnameScreenState extends State<OpnameScreen> {
                 ? ClipRRect(
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                     child: Image.network(
-                      'http://127.0.0.1:3001$imageUrl',
+                      'http://100.77.229.76:3001$imageUrl',
                       fit: BoxFit.cover,
                       errorBuilder: (c,e,s) => _buildFallbackImage(),
                     ),

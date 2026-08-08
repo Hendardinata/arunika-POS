@@ -35,7 +35,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     try {
       final res = await http.post(
-        Uri.parse('http://127.0.0.1:3001/api/auth/login'),
+        Uri.parse('http://100.77.229.76:3001/api/auth/login'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'username': username,

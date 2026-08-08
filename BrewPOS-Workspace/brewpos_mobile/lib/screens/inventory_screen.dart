@@ -32,8 +32,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   Future<void> _fetchInventory() async {
     setState(() => _isLoading = true);
     try {
-      final res = await http.get(Uri.parse('http://127.0.0.1:3001/api/inventory'));
-      final opnameRes = await http.get(Uri.parse('http://127.0.0.1:3001/api/inventory/opname/today'));
+      final res = await http.get(Uri.parse('http://100.77.229.76:3001/api/inventory'));
+      final opnameRes = await http.get(Uri.parse('http://100.77.229.76:3001/api/inventory/opname/today'));
       
       if (res.statusCode == 200) {
         setState(() {
@@ -61,7 +61,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   Future<void> _confirmStock() async {
     setState(() => _isLoading = true);
     try {
-      final res = await http.post(Uri.parse('http://127.0.0.1:3001/api/inventory/opname/confirm-stock'));
+      final res = await http.post(Uri.parse('http://100.77.229.76:3001/api/inventory/opname/confirm-stock'));
       if (res.statusCode == 200) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Data stok telah dikonfirmasi! Anda kini bisa Menutup Stok di menu Opname.', style: TextStyle(color: Colors.white)), backgroundColor: Colors.green));
@@ -81,7 +81,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   Future<void> _cancelConfirmStock() async {
     setState(() => _isLoading = true);
     try {
-      final res = await http.post(Uri.parse('http://127.0.0.1:3001/api/inventory/opname/cancel-confirm-stock'));
+      final res = await http.post(Uri.parse('http://100.77.229.76:3001/api/inventory/opname/cancel-confirm-stock'));
       if (res.statusCode == 200) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Konfirmasi stok dibatalkan. Anda kini bisa merubah data stok kembali.', style: TextStyle(color: Colors.white)), backgroundColor: Colors.orange));
@@ -100,7 +100,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
 
   Future<void> _adjustStock(int id, int quantity, String type, String notes, XFile? receiptImage) async {
     try {
-      var request = http.MultipartRequest('PUT', Uri.parse('http://127.0.0.1:3001/api/inventory/$id/adjust'));
+      var request = http.MultipartRequest('PUT', Uri.parse('http://100.77.229.76:3001/api/inventory/$id/adjust'));
       request.fields['quantity'] = quantity.toString();
       request.fields['type'] = type;
       request.fields['notes'] = notes;
@@ -130,7 +130,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
 
   Future<void> _addItem(String name, int stock, String unit, XFile? image) async {
     try {
-      var request = http.MultipartRequest('POST', Uri.parse('http://127.0.0.1:3001/api/inventory'));
+      var request = http.MultipartRequest('POST', Uri.parse('http://100.77.229.76:3001/api/inventory'));
       request.fields['name'] = name;
       request.fields['stock'] = stock.toString();
       request.fields['unit'] = unit;
@@ -693,7 +693,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                                           clipBehavior: Clip.antiAlias,
                                           child: (item['imageUrl'] != null && item['imageUrl'].toString().isNotEmpty)
                                               ? Image.network(
-                                                  'http://127.0.0.1:3001${item['imageUrl']}',
+                                                  'http://100.77.229.76:3001${item['imageUrl']}',
                                                   fit: BoxFit.cover,
                                                   errorBuilder: (c,e,s) => Icon(Icons.local_cafe_rounded, color: Theme.of(context).primaryColor.withOpacity(0.5), size: 40),
                                                 )

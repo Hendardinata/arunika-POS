@@ -2,6 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../db';
+import { logActivity } from '../services/systemLogger';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_for_development_only';
@@ -115,6 +116,8 @@ router.post('/users', async (req, res) => {
       select: { id: true, username: true, role: true, assignedShift: true, createdAt: true }
     });
     
+    await logActivity('CREATE_USER', req.headers['x-user-id'] ? Number(req.headers['x-user-id']) : undefined, `Created user: ${username} (${role})`, 'User', user.id);
+    
     res.status(201).json(user);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create user' });
@@ -151,6 +154,8 @@ router.put('/users/:id', async (req, res) => {
       data: updateData,
       select: { id: true, username: true, role: true, assignedShift: true, createdAt: true }
     });
+    
+    await logActivity('UPDATE_USER', req.headers['x-user-id'] ? Number(req.headers['x-user-id']) : undefined, `Updated user: ${user.username}`, 'User', user.id);
     
     res.json(user);
   } catch (error) {
@@ -194,6 +199,7 @@ router.delete('/users/:id', async (req, res) => {
     }
 
     await prisma.user.delete({ where: { id } });
+    await logActivity('DELETE_USER', req.headers['x-user-id'] ? Number(req.headers['x-user-id']) : undefined, `Deleted user ID: ${id}`, 'User', id);
     res.json({ message: 'User deleted' });
   } catch (error) {
     console.error('Failed to delete user:', error);

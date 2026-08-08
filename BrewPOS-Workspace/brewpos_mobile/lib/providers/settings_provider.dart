@@ -62,7 +62,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
 
   Future<void> _fetchSettings() async {
     try {
-      final res = await http.get(Uri.parse('http://127.0.0.1:3001/api/settings'));
+      final res = await http.get(Uri.parse('http://100.77.229.76:3001/api/settings'));
       if (res.statusCode == 200) {
         final List<dynamic> data = json.decode(res.body);
         

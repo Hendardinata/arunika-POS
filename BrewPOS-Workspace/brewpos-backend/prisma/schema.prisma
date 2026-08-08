@@ -18,6 +18,7 @@ model User {
   createdAt     DateTime  @default(now())
   expenses      Expense[]
   shifts        Shift[]
+  systemLogs    SystemLog[]
 }
 
 model SystemSettings {
@@ -39,6 +40,7 @@ model Menu {
   name             String            @unique
   description      String?
   price            Int
+  hpp              Int               @default(0) // Harga Pokok Penjualan (Modal)
   imageUrl         String?
   category         Category          @relation(fields: [categoryId], references: [id])
   categoryId       Int
@@ -69,6 +71,10 @@ model Transaction {
   totalAmount   Int
   pointsEarned  Int
   paymentMethod String            @default("CASH")
+  status        String            @default("COMPLETED") // COMPLETED, VOID
+  voidReason    String?
+  voidedAt      DateTime?
+  voidedBy      Int?
   customer      Customer          @relation(fields: [customerId], references: [id])
   customerId    Int
   shift         Shift?            @relation(fields: [shiftId], references: [id])
@@ -85,6 +91,7 @@ model TransactionItem {
   menuId        Int
   quantity      Int
   price         Int
+  hpp           Int         @default(0) // Modal/HPP saat transaksi terjadi
 }
 
 model Reward {
@@ -223,4 +230,34 @@ model Shift {
   transactions       Transaction[]
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
+}
+
+model AppMenu {
+  id          Int          @id @default(autoincrement())
+  name        String       // Nama menu (cth: "Laporan Keuangan", "Kelola Karyawan")
+  path        String       // URL path di frontend (cth: "/dashboard/finance")
+  icon        String?
+  roleAccess  RoleAccess[]
+}
+
+model RoleAccess {
+  id          Int      @id @default(autoincrement())
+  role        String   // "ADMIN", "HEADBAR", "CASHIER"
+  appMenu     AppMenu  @relation(fields: [appMenuId], references: [id])
+  appMenuId   Int
+  canView     Boolean  @default(true)
+  canEdit     Boolean  @default(false)
+  
+  @@unique([role, appMenuId])
+}
+
+model SystemLog {
+  id          Int      @id @default(autoincrement())
+  action      String   // Aksi yang dilakukan (cth: "UPDATE_MENU", "VOID_TRANSACTION", "LOGIN")
+  entity      String?  // Tabel/Konteks yang diubah (cth: "Menu", "Transaction")
+  entityId    Int?     // ID data yang diubah
+  details     String?  // Keterangan lengkap (opsional bisa berupa format JSON)
+  userId      Int?     // Siapa yang melakukan
+  user        User?    @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
 }

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../db';
+import { logActivity } from '../services/systemLogger';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -53,6 +54,7 @@ router.post('/', upload.single('image'), async (req, res) => {
         data: { itemId: item.id, quantity: item.stock, type: 'IN', notes: 'Initial stock' }
       });
     }
+    await logActivity('CREATE_INVENTORY', req.headers['x-user-id'] ? Number(req.headers['x-user-id']) : undefined, `Added new item: ${name}`, 'InventoryItem', item.id);
     res.status(201).json(item);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create inventory item' });
@@ -111,6 +113,8 @@ router.put('/:id/adjust', upload.single('receipt'), async (req, res) => {
     await prisma.inventoryLog.create({
       data: { itemId: parseInt(id), quantity: q, type, notes, receiptUrl }
     });
+
+    await logActivity('UPDATE_INVENTORY', req.headers['x-user-id'] ? Number(req.headers['x-user-id']) : undefined, `Adjusted stock ${type} ${q} for ${item.name}`, 'InventoryItem', updated.id);
 
     res.json(updated);
   } catch (error) {

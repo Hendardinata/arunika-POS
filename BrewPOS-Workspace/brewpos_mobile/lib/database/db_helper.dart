@@ -10,7 +10,7 @@ class DBHelper {
   factory DBHelper() => _instance;
   DBHelper._internal();
 
-  final String apiUrl = 'http://127.0.0.1:3001/api';
+  final String apiUrl = 'http://100.77.229.76:3001/api';
   Database? _db;
 
   Future<Database> get db async {

@@ -27,7 +27,7 @@ class _ReportScreenState extends State<ReportScreen> {
   Future<void> _fetchReport() async {
     setState(() => _isLoading = true);
     try {
-      final res = await http.get(Uri.parse('http://127.0.0.1:3001/api/analytics?days=$_selectedDays'));
+      final res = await http.get(Uri.parse('http://100.77.229.76:3001/api/analytics?days=$_selectedDays'));
       if (res.statusCode == 200) {
         setState(() {
           _reportData = json.decode(res.body);

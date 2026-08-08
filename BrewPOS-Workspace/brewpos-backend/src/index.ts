@@ -13,6 +13,8 @@ import inventoryRoutes from './routes/inventory';
 import expensesRoutes from './routes/expenses';
 import recipeRoutes from './routes/recipe';
 import shiftRoutes from './routes/shift';
+import roleAccessRoutes from './routes/role-access';
+import logsRoutes from './routes/logs';
 import './cron';
 
 dotenv.config();
@@ -39,6 +41,8 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/expenses', expensesRoutes);
 app.use('/api/recipes', recipeRoutes);
 app.use('/api/shift', shiftRoutes);
+app.use('/api/role-access', roleAccessRoutes);
+app.use('/api/logs', logsRoutes);
 
 app.get('/', (req, res) => {
   res.send('BrewPOS API is running');

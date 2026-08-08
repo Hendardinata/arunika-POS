@@ -47,7 +47,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     
     try {
       final res = await http.post(
-        Uri.parse('http://127.0.0.1:3001/api/checkout/sync'),
+        Uri.parse('http://100.77.229.76:3001/api/checkout/sync'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'transactions': offlineTx.map((e) => e['payload']).toList()}),
       );

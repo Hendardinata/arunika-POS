@@ -78,7 +78,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
 
   Future<void> _fetchRewards() async {
     try {
-      final res = await http.get(Uri.parse('http://127.0.0.1:3001/api/gamification/rewards'));
+      final res = await http.get(Uri.parse('http://100.77.229.76:3001/api/gamification/rewards'));
       if (!mounted) return;
       if (res.statusCode == 200) {
         setState(() {
@@ -97,7 +97,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     setState(() { _isLoadingCustomer = true; _customerProfile = null; _selectedReward = null; _isCustomerNotFound = false; });
     
     try {
-      final res = await http.get(Uri.parse('http://127.0.0.1:3001/api/customers/search?nickname=$nickname'));
+      final res = await http.get(Uri.parse('http://100.77.229.76:3001/api/customers/search?nickname=$nickname'));
       if (!mounted) return;
       if (res.statusCode == 200) {
         setState(() { _customerProfile = json.decode(res.body); });
@@ -115,7 +115,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   Future<void> _doLuckySpin(int customerId) async {
     try {
       final res = await http.post(
-        Uri.parse('http://127.0.0.1:3001/api/gamification/spin'),
+        Uri.parse('http://100.77.229.76:3001/api/gamification/spin'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'customerId': customerId}),
       );
@@ -158,7 +158,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           ),
           clipBehavior: Clip.antiAlias,
           child: Image.network(
-            'http://127.0.0.1:3001${menu.imageUrl}',
+            'http://100.77.229.76:3001${menu.imageUrl}',
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) => _buildFallbackImage(menu),
           ),
@@ -404,7 +404,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                             clipBehavior: Clip.antiAlias,
                             child: (item.menu.imageUrl != null && item.menu.imageUrl!.isNotEmpty)
                                 ? Image.network(
-                                    'http://127.0.0.1:3001${item.menu.imageUrl}',
+                                    'http://100.77.229.76:3001${item.menu.imageUrl}',
                                     fit: BoxFit.cover,
                                     errorBuilder: (ctx, err, stack) => Icon(
                                       item.menu.categoryName == 'Minuman' ? Icons.local_cafe_rounded : Icons.fastfood_rounded, 
@@ -737,7 +737,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
 
       try {
         final res = await http.post(
-          Uri.parse('http://127.0.0.1:3001/api/checkout'),
+          Uri.parse('http://100.77.229.76:3001/api/checkout'),
           headers: {'Content-Type': 'application/json'},
           body: json.encode(payload),
         );

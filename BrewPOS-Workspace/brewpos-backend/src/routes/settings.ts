@@ -1,6 +1,7 @@
 import express from 'express';
 import { prisma } from '../db';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
+import { logActivity } from '../services/systemLogger';
 
 const router = express.Router();
 
@@ -30,6 +31,8 @@ router.post('/', async (req, res) => {
       update: { value, description },
       create: { key, value, description }
     });
+
+    await logActivity('UPDATE_SETTINGS', req.headers['x-user-id'] ? Number(req.headers['x-user-id']) : undefined, `Updated setting ${key} to ${value}`, 'SystemSettings', setting.id);
 
     res.json(setting);
   } catch (error) {

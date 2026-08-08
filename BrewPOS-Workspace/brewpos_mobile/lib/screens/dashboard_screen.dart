@@ -39,7 +39,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   Future<void> _fetchAnalytics() async {
     try {
-      final res = await http.get(Uri.parse('http://127.0.0.1:3001/api/analytics?days=7'));
+      final res = await http.get(Uri.parse('http://100.77.229.76:3001/api/analytics?days=7'));
       if (res.statusCode == 200) {
         if (mounted) {
           setState(() {

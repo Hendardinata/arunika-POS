@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../db';
+import { logActivity } from '../services/systemLogger';
 import { processGamificationAsync } from '../services/gamificationService';
 
 const router = Router();
@@ -131,6 +132,14 @@ router.post('/', async (req, res) => {
     const subTotal = Math.round(amountWithoutParking / taxMultiplier);
     const taxAmount = amountWithoutParking - subTotal;
 
+    // Fetch HPP untuk items
+    const menuIds = items ? items.map((item: any) => item.menuId) : [];
+    const menus = await prisma.menu.findMany({
+      where: { id: { in: menuIds } },
+      select: { id: true, hpp: true }
+    });
+    const hppMap = new Map(menus.map(m => [m.id, m.hpp]));
+
     // Simpan Transaksi beserta Items
     const transaction = await prisma.transaction.create({
       data: {
@@ -147,6 +156,7 @@ router.post('/', async (req, res) => {
             menuId: item.menuId,
             quantity: item.quantity,
             price: item.price,
+            hpp: hppMap.get(item.menuId) || 0,
           }))
         } : undefined
       },
@@ -160,6 +170,10 @@ router.post('/', async (req, res) => {
     if (nickname !== 'Guest') {
       processGamificationAsync(customer.id, transaction.id);
     }
+
+    // Log Transaction
+    const shiftInfo = shiftId ? await prisma.shift.findUnique({ where: { id: parseInt(shiftId) } }) : null;
+    await logActivity('TRANSACTION', shiftInfo?.userId, `Total: Rp ${totalAmount.toLocaleString('id-ID')} via ${paymentMethod}`, 'Transaction', transaction.id);
 
     res.status(201).json({
       message: 'Checkout successful',
@@ -260,6 +274,14 @@ router.post('/sync', async (req, res) => {
       const subTotal = Math.round(amountWithoutParking / taxMultiplier);
       const taxAmount = amountWithoutParking - subTotal;
 
+      // Fetch HPP untuk items
+      const menuIds = items ? items.map((item: any) => item.menuId) : [];
+      const menus = await prisma.menu.findMany({
+        where: { id: { in: menuIds } },
+        select: { id: true, hpp: true }
+      });
+      const hppMap = new Map(menus.map(m => [m.id, m.hpp]));
+
       const transaction = await prisma.transaction.create({
         data: {
           totalAmount,
@@ -276,6 +298,7 @@ router.post('/sync', async (req, res) => {
               menuId: item.menuId,
               quantity: item.quantity,
               price: item.price,
+              hpp: hppMap.get(item.menuId) || 0,
             }))
           } : undefined
         },
@@ -290,6 +313,53 @@ router.post('/sync', async (req, res) => {
   } catch (error) {
     console.error('Error during checkout sync:', error);
     res.status(500).json({ error: 'Failed to process checkout sync' });
+  }
+});
+
+router.post('/history/:id/void', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { voidReason, voidedBy } = req.body;
+
+    const transaction = await prisma.transaction.findUnique({
+      where: { id: Number(id) }
+    });
+
+    if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+    if (transaction.status === 'VOID') return res.status(400).json({ error: 'Transaction already voided' });
+
+    // Update status
+    const updatedTx = await prisma.transaction.update({
+      where: { id: Number(id) },
+      data: {
+        status: 'VOID',
+        voidReason,
+        voidedAt: new Date(),
+        voidedBy: voidedBy ? Number(voidedBy) : undefined
+      }
+    });
+
+    // Revert points earned
+    if (transaction.pointsEarned > 0 && transaction.customerId) {
+      const customer = await prisma.customer.findUnique({ where: { id: transaction.customerId } });
+      if (customer) {
+        await prisma.customer.update({
+          where: { id: customer.id },
+          data: {
+            points: Math.max(0, customer.points - transaction.pointsEarned),
+            xp: Math.max(0, customer.xp - transaction.pointsEarned)
+          }
+        });
+      }
+    }
+
+    // Log the action
+    await logActivity('VOID_TRANSACTION', voidedBy ? Number(voidedBy) : undefined, voidReason, 'Transaction', transaction.id);
+
+    res.json(updatedTx);
+  } catch (error) {
+    console.error('Error voiding transaction:', error);
+    res.status(500).json({ error: 'Failed to void transaction' });
   }
 });
 

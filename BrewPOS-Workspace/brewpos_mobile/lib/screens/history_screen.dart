@@ -26,10 +26,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Future<void> _fetchHistory() async {
     try {
-      final res = await http.get(Uri.parse('http://127.0.0.1:3001/api/checkout/history'));
+      final res = await http.get(Uri.parse('http://100.77.229.76:3001/api/checkout/history'));
       if (res.statusCode == 200) {
         setState(() {
-          _history = json.decode(res.body);
+          final allHistory = json.decode(res.body) as List<dynamic>;
+          final today = DateTime.now();
+          _history = allHistory.where((tx) {
+            final txDate = DateTime.parse(tx['createdAt']).toLocal();
+            return txDate.year == today.year && txDate.month == today.month && txDate.day == today.day;
+          }).toList();
           _isLoading = false;
           _currentPage = 1; // Reset to page 1 on fetch
         });
@@ -125,12 +130,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 title: Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(customerName, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Colors.black87), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                          const SizedBox(height: 4),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Expanded(child: Text(customerName, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: tx['status'] == 'VOID' ? Colors.grey : Colors.black87, decoration: tx['status'] == 'VOID' ? TextDecoration.lineThrough : null), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                                if (tx['status'] == 'VOID')
+                                                  Container(
+                                                    margin: const EdgeInsets.only(left: 8),
+                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                    decoration: BoxDecoration(color: Colors.red[100], borderRadius: BorderRadius.circular(4)),
+                                                    child: Text('DIBATALKAN', style: TextStyle(color: Colors.red[700], fontSize: 10, fontWeight: FontWeight.bold)),
+                                                  ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 4),
                                           Text(formattedDate, style: TextStyle(color: Colors.grey[500], fontSize: 13)),
                                         ],
                                       ),
@@ -144,10 +160,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                           decoration: BoxDecoration(
-                                            color: paymentMethod == 'CASH' ? Colors.green.withOpacity(0.1) : Colors.blue.withOpacity(0.1),
+                                            color: tx['status'] == 'VOID' ? Colors.grey.withOpacity(0.1) : (paymentMethod == 'CASH' ? Colors.green.withOpacity(0.1) : Colors.blue.withOpacity(0.1)),
                                             borderRadius: BorderRadius.circular(8)
                                           ),
-                                          child: Text(paymentMethod, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: paymentMethod == 'CASH' ? Colors.green[700] : Colors.blue[700])),
+                                          child: Text(paymentMethod, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: tx['status'] == 'VOID' ? Colors.grey[600] : (paymentMethod == 'CASH' ? Colors.green[700] : Colors.blue[700]))),
                                         ),
                                       ],
                                     ),
