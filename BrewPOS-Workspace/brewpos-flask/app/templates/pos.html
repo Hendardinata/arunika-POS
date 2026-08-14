@@ -1,0 +1,977 @@
+{% extends 'base.html' %}
+
+{% block title %}POS Terminal Kasir | Arunika-POS{% endblock %}
+{% block page_title %}Terminal Kasir (POS){% endblock %}
+
+{% block content %}
+<div class="pos-layout">
+    <!-- Left: Catalog & Product Grid -->
+    <div class="pos-catalog-panel">
+        <!-- Categories Bar -->
+        <div class="pos-categories-bar" id="category-chips-container">
+            <button class="category-chip active" onclick="filterCategory('all', this)">Semua Menu</button>
+            <!-- Rendered from backend -->
+        </div>
+
+        <!-- Search Bar -->
+        <div class="pos-search-bar">
+            <div style="position: relative;">
+                <i class="fas fa-search" style="position: absolute; left: 14px; top: 12px; color: var(--text-muted);"></i>
+                <input type="text" id="menu-search-input" class="form-control" style="padding-left: 40px; border-radius: var(--radius-full);" placeholder="Cari kopi, pastry, makanan..." oninput="handleSearch(this.value)">
+            </div>
+        </div>
+
+        <!-- Menu Product Grid -->
+        <div class="menu-grid" id="pos-menu-grid">
+            <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
+                <i class="fas fa-spinner fa-spin" style="font-size: 28px;"></i>
+                <p style="margin-top: 10px;">Memuat menu kafe...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Order Panel & Checkout -->
+    <div class="pos-cart-panel">
+        <div class="cart-header">
+            <h3 style="font-family: var(--font-heading); font-size: 16px; font-weight: 800; color: var(--color-primary); display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-receipt"></i> Pesanan Baru
+            </h3>
+            <div style="display: flex; gap: 6px; align-items: center;">
+                <button class="btn btn-secondary btn-sm" onclick="clearCart()" title="Kosongkan Keranjang">
+                    <i class="fas fa-trash-can text-danger"></i>
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="toggleMobileCart()" title="Tutup Keranjang" style="border-radius: var(--radius-full);">
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Customer CRM Lookup with Instant Autocomplete Search & Live Info Box -->
+        <div class="customer-selector">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label class="form-label" style="margin: 0; font-size: 11.5px; font-weight: 700;">
+                    <i class="fas fa-users text-primary"></i> Customer / Member CRM
+                </label>
+                <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 10.5px;" onclick="resetToGuest()" title="Reset ke Transaksi Guest">
+                    <i class="fas fa-rotate-left"></i> Guest
+                </button>
+            </div>
+
+            <!-- Instant Search Input & Floating Suggestions Dropdown -->
+            <div style="position: relative;">
+                <div style="display: flex; gap: 6px;">
+                    <div style="position: relative; flex: 1;">
+                        <i class="fas fa-search" style="position: absolute; left: 10px; top: 9px; font-size: 12px; color: var(--text-muted);"></i>
+                        <input type="text" id="customer-nickname" class="form-control" style="padding-left: 28px; font-size: 12.5px; height: 34px;" placeholder="Cari nama, no. HP, atau email member..." autocomplete="off" oninput="handleMemberLiveSearch(this.value)" onfocus="handleMemberLiveSearch(this.value)">
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="lookupCustomer(true)" title="Cari / Pilih Member">
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+
+                <!-- Floating Autocomplete Search Results -->
+                <div id="member-search-results" class="member-search-dropdown" style="display: none;">
+                    <!-- Rendered dynamically -->
+                </div>
+            </div>
+
+            <!-- Customer Meta Info Card -->
+            <div id="customer-info-box" style="margin-top: 8px;">
+                <div style="font-size: 11.5px; color: var(--text-secondary); background: #FAF8F5; padding: 8px 10px; border-radius: var(--radius-xs); border: 1px solid var(--border-light);">
+                    <i class="fas fa-user-circle"></i> Transaksi sebagai <strong>Guest</strong> (Tanpa Poin Loyalty)
+                </div>
+            </div>
+
+            <!-- Employee Quota Benefit Button -->
+            <div id="employee-quota-box" style="display: none; margin-top: 8px; background: #FFF8E1; border: 1px solid #FFE082; padding: 10px; border-radius: var(--radius-sm);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <div style="font-size: 11.5px; font-weight: 700; color: #8D6E63;">
+                        <i class="fas fa-id-badge text-warning"></i> Jatah Karyawan:
+                    </div>
+                    <span id="employee-quota-badge" class="badge-chip warning" style="font-weight: 800; font-size: 11px;">0 cup</span>
+                </div>
+                <button type="button" class="btn btn-warning btn-sm" style="width: 100%; font-size: 11.5px; font-weight: 700; padding: 5px 8px;" onclick="applyEmployeeFreeQuota()">
+                    ☕ Pakai Jatah Gratis Karyawan (100% Bebas Menu)
+                </button>
+            </div>
+
+            <!-- Gamification Spin Shortcut if points available -->
+            <div id="customer-spin-btn-box" style="display: none; margin-top: 6px;">
+                <button type="button" class="btn btn-warning btn-sm" style="width: 100%; font-size: 11px; padding: 4px 8px;" onclick="triggerPosLuckySpin()">
+                    <i class="fas fa-arrows-spin"></i> Main Lucky Spin (50 Pts)
+                </button>
+            </div>
+
+            <!-- Loyalty Rewards / Point Exchange Dropdown Box -->
+            <div id="reward-select-box" style="display: none; margin-top: 10px; background: #FAF5EE; border: 1px solid #E6D7C8; padding: 10px 12px; border-radius: var(--radius-sm);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label style="font-size: 11.5px; font-weight: 800; color: var(--color-primary); margin: 0;">
+                        <i class="fas fa-gift text-warning"></i> Tukar Poin Loyalty:
+                    </label>
+                    <span id="member-points-badge" class="badge-chip primary" style="font-size: 10.5px; font-weight: 800;">0 Pts</span>
+                </div>
+                <select id="selected-reward-id" class="form-control" style="font-size: 12px; padding: 6px 10px; background: #FFF;" onchange="handleRewardChange()">
+                    <option value="">-- Tidak Menukar Reward --</option>
+                </select>
+                <div id="reward-applied-note" style="display: none; font-size: 11px; color: var(--color-success); font-weight: 700; margin-top: 4px;">
+                    <i class="fas fa-circle-check"></i> Reward aktif: Potongan voucher diterapkan pada transaksi!
+                </div>
+            </div>
+        </div>
+
+        <!-- Line Items -->
+        <div class="cart-items-list" id="cart-items-container">
+            <div style="text-align: center; color: var(--text-muted); margin-top: 40px;">
+                <i class="fas fa-mug-hot" style="font-size: 38px; margin-bottom: 12px; opacity: 0.35; color: var(--color-primary);"></i>
+                <p style="font-size: 13px; font-weight: 600;">Keranjang Masih Kosong</p>
+                <p style="font-size: 11.5px; margin-top: 4px;">Klik menu di sebelah kiri untuk menambahkan pesanan.</p>
+            </div>
+        </div>
+
+        <!-- Cart Financial Summary -->
+        <div class="cart-summary">
+            <div class="summary-row">
+                <span>Subtotal Menu (Gross)</span>
+                <span id="cart-gross">Rp 0</span>
+            </div>
+
+            <!-- Item Discounts Summary -->
+            <div class="summary-row discount" id="row-item-discount" style="display: none;">
+                <span>Total Diskon Menu / Jatah</span>
+                <span id="cart-item-discount">-Rp 0</span>
+            </div>
+
+            <!-- Order Level Discount Input -->
+            <div style="margin: 8px 0; padding: 8px 10px; background: #FFF; border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <label style="font-size: 11px; font-weight: 700; color: var(--text-secondary);">Diskon Total / Voucher (Rp)</label>
+                    <span id="order-discount-badge" class="badge-chip danger" style="font-size: 10px; display: none;">Voucher Aktif</span>
+                </div>
+                <input type="number" id="order-discount-input" class="form-control" style="font-size: 12px; padding: 4px 8px;" placeholder="0" value="0" oninput="recalculateTotals()">
+            </div>
+
+            <div class="summary-row">
+                <span>PB1 / PPN (<span id="label-tax-pct">11%</span> inc.)</span>
+                <span id="cart-tax">Rp 0</span>
+            </div>
+            <div class="summary-row total">
+                <span>Total Pembayaran</span>
+                <span id="cart-total" style="color: var(--color-primary);">Rp 0</span>
+            </div>
+
+            <!-- Payment Method & Cash Tendered -->
+            <div style="margin-top: 10px;">
+                <label class="form-label" style="font-size: 11.5px; margin-bottom: 4px;">Metode Pembayaran</label>
+                <select id="payment-method" class="form-control" style="font-size: 12.5px; padding: 6px 10px;" onchange="handlePaymentMethodChange()">
+                    <option value="CASH">💵 Uang Tunai (Cash)</option>
+                    <option value="QRIS">📱 QRIS / E-Wallet</option>
+                    <option value="TRANSFER">🏦 Transfer Bank</option>
+                    <option value="DEBIT">💳 Kartu Debit / EDC</option>
+                </select>
+            </div>
+
+            <!-- Cash Tendered & Presets -->
+            <div id="cash-tendered-section" style="margin-top: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label class="form-label" style="font-size: 11px; margin-bottom: 2px;">Uang Tunai Diterima (Rp)</label>
+                    <span id="change-display" style="font-size: 11.5px; font-weight: 700; color: var(--color-success);">Kembalian: Rp 0</span>
+                </div>
+                <input type="number" id="cash-received-input" class="form-control" style="font-size: 13px; padding: 5px 10px;" placeholder="0" oninput="calculateChange()">
+                <div class="cash-preset-grid">
+                    <button class="cash-preset-btn" onclick="setCashPreset('exact')">Pas</button>
+                    <button class="cash-preset-btn" onclick="setCashPreset(20000)">20k</button>
+                    <button class="cash-preset-btn" onclick="setCashPreset(50000)">50k</button>
+                    <button class="cash-preset-btn" onclick="setCashPreset(100000)">100k</button>
+                </div>
+            </div>
+
+            <!-- Checkout Action Button -->
+            <button class="btn btn-primary btn-lg" style="width: 100%; margin-top: 8px; border-radius: var(--radius-md);" id="btn-checkout" onclick="processCheckout()">
+                <i class="fas fa-check-circle"></i> Selesaikan Transaksi
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Floating Mobile Cart Bar Trigger (Visible on mobile screens) -->
+<div class="mobile-cart-bar no-print" onclick="toggleMobileCart()">
+    <div style="display: flex; align-items: center; gap: 10px;">
+        <i class="fas fa-shopping-bag" style="font-size: 20px;"></i>
+        <div>
+            <span id="mobile-cart-badge" class="cart-badge">0 item</span>
+            <strong id="mobile-cart-total" style="font-size: 15px; margin-left: 6px;">Rp 0</strong>
+        </div>
+    </div>
+    <button class="btn btn-secondary btn-sm" style="color: var(--text-main); font-weight: 700; border-radius: var(--radius-full);">
+        Buka Keranjang <i class="fas fa-chevron-up"></i>
+    </button>
+</div>
+
+<!-- Modal Thermal Receipt -->
+<div id="modal-receipt" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 380px;">
+        <div class="modal-header no-print">
+            <h3 class="modal-title"><i class="fas fa-receipt text-primary"></i> Struk Transaksi</h3>
+            <button class="modal-close" onclick="closeModal('modal-receipt')">&times;</button>
+        </div>
+        <div class="modal-body" id="receipt-modal-body" style="padding: 16px;">
+            <!-- Rendered dynamically -->
+        </div>
+        <div class="modal-footer no-print" style="justify-content: space-between;">
+            <button class="btn btn-secondary" onclick="closeModal('modal-receipt')">
+                <i class="fas fa-arrow-left"></i> Selesai
+            </button>
+            <button class="btn btn-primary" onclick="printReceipt()">
+                <i class="fas fa-print"></i> Cetak Struk
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Lucky Spin Gamification -->
+<div id="modal-lucky-spin" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 380px; text-align: center;">
+        <div class="modal-header">
+            <h3 class="modal-title"><i class="fas fa-arrows-spin text-warning"></i> Lucky Spin Wheel</h3>
+            <button class="modal-close" onclick="closeModal('modal-lucky-spin')">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 20px;">
+            <div class="lucky-wheel-container">
+                <div class="lucky-wheel-pointer"></div>
+                <div class="lucky-wheel" id="lucky-wheel-disc"></div>
+            </div>
+            <p id="spin-result-text" style="font-weight: 600; color: var(--color-primary); min-height: 24px; margin-bottom: 12px;"></p>
+            <button class="btn btn-warning btn-lg" style="width: 100%; border-radius: var(--radius-md);" id="btn-do-spin" onclick="executeSpin()">
+                <i class="fas fa-play"></i> Putar Sekarang (50 Pts)
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Mystery Box Surprise Drop -->
+<div id="modal-mystery-box" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 360px; text-align: center;">
+        <div class="modal-body" style="padding: 30px 20px;">
+            <div class="mystery-box-anim" id="mystery-box-icon" onclick="openMysteryBox()">🎁</div>
+            <h3 id="mystery-box-title" style="font-family: var(--font-heading); color: var(--color-primary); margin-top: 14px;">Surprise Mystery Drop!</h3>
+            <p id="mystery-box-desc" style="font-size: 13px; color: var(--text-secondary); margin-top: 6px;">Ketuk kotak kado di atas untuk membuka bonus spesial Anda!</p>
+    </div>
+</div>
+
+<!-- Mobile Floating Bottom Bar for Cart Drawer -->
+<div class="mobile-cart-bar no-print" onclick="toggleMobileCart()">
+    <div style="display: flex; align-items: center; gap: 10px;">
+        <i class="fas fa-shopping-cart"></i>
+        <span class="cart-badge" id="mobile-cart-badge">0 item</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px;">
+        <span id="mobile-cart-total" style="font-weight: 800; font-family: var(--font-heading);">Rp 0</span>
+        <i class="fas fa-chevron-up"></i>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let allMenus = [];
+    let allCategories = [];
+    let availableRewards = [];
+    let cart = [];
+    let currentCustomer = null;
+    let activeCategory = 'all';
+    let currentStoreSettings = null;
+    let employeeQuotaAppliedCount = 0;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        currentStoreSettings = await getStoreSettings();
+        const taxPct = currentStoreSettings.TAX_PERCENT || '11';
+        document.getElementById('label-tax-pct').textContent = taxPct + '%';
+
+        await loadCategories();
+        await loadMenus();
+        await loadRewards();
+        lookupCustomer();
+    });
+
+    function toggleMobileCart() {
+        const cartPanel = document.querySelector('.pos-cart-panel');
+        if (cartPanel) cartPanel.classList.toggle('open');
+    }
+
+    async function loadCategories() {
+        try {
+            const data = await apiFetch('/categories');
+            allCategories = data;
+            const container = document.getElementById('category-chips-container');
+            container.innerHTML = `
+                <button class="category-chip active" onclick="filterCategory('all', this)">Semua Menu</button>
+                ${data.map(cat => `
+                    <button class="category-chip" onclick="filterCategory('${cat.name}', this)">${cat.name}</button>
+                `).join('')}
+            `;
+        } catch (e) {
+            console.error('Error loading categories:', e);
+        }
+    }
+
+    async function loadMenus() {
+        try {
+            const data = await apiFetch('/menus');
+            allMenus = data;
+            renderMenus();
+        } catch (e) {
+            console.error('Error loading menus:', e);
+            document.getElementById('pos-menu-grid').innerHTML = `
+                <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--color-danger);">
+                    <i class="fas fa-exclamation-triangle"></i> Gagal memuat menu: ${e.message}
+                </div>
+            `;
+        }
+    }
+
+    async function loadRewards() {
+        try {
+            const data = await apiFetch('/gamification/rewards');
+            availableRewards = Array.isArray(data) ? data : [];
+        } catch (e) {
+            console.error('Error loading rewards:', e);
+            availableRewards = [];
+        }
+    }
+
+    function renderMenus() {
+        const grid = document.getElementById('pos-menu-grid');
+        const query = document.getElementById('menu-search-input').value.toLowerCase().trim();
+
+        let filtered = allMenus;
+        if (activeCategory !== 'all') {
+            filtered = filtered.filter(m => m.category && m.category.name === activeCategory);
+        }
+        if (query) {
+            filtered = filtered.filter(m => m.name.toLowerCase().includes(query) || (m.description && m.description.toLowerCase().includes(query)));
+        }
+
+        if (filtered.length === 0) {
+            grid.innerHTML = `
+                <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
+                    <i class="fas fa-mug-saucer" style="font-size: 32px; opacity: 0.4;"></i>
+                    <p style="margin-top: 8px;">Tidak ada menu yang sesuai.</p>
+                </div>
+            `;
+            return;
+        }
+
+        const fallbackColors = ['#6F4E37', '#C89058', '#8F6647', '#D4A373', '#5A3D2A', '#A26743'];
+
+        grid.innerHTML = filtered.map(m => {
+            let imgContent = '';
+            if (m.imageUrl) {
+                imgContent = `<img src="${m.imageUrl}" style="width: 100%; height: 100%; object-fit: cover;">`;
+            } else {
+                const color = fallbackColors[m.id % fallbackColors.length];
+                const icon = (m.category && m.category.name.toLowerCase().includes('makan')) ? 'fa-utensils' : 'fa-mug-hot';
+                imgContent = `
+                    <div style="width: 100%; height: 100%; background: linear-gradient(135deg, ${color}, #3D2617); display: flex; align-items: center; justify-content: center;">
+                        <i class="fas ${icon}"></i>
+                    </div>
+                `;
+            }
+
+            const descHtml = (m.description && m.description.trim()) ? `<div class="menu-card-desc">${m.description}</div>` : '';
+            return `
+                <div class="menu-card" onclick="addToCart(${m.id})">
+                    <div class="menu-card-img">${imgContent}</div>
+                    <div class="menu-card-title">${m.name}</div>
+                    ${descHtml}
+                    <div class="menu-card-footer">
+                        <span class="menu-card-price">${formatRp(m.price)}</span>
+                        <span class="badge-chip primary" style="font-size: 10px; padding: 2px 7px;">${m.category ? m.category.name : 'Menu'}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function filterCategory(catName, chipEl) {
+        activeCategory = catName;
+        document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('active'));
+        chipEl.classList.add('active');
+        renderMenus();
+    }
+
+    function handleSearch(val) {
+        renderMenus();
+    }
+
+    // Cart Engine
+    function addToCart(menuId) {
+        const menu = allMenus.find(m => m.id === menuId);
+        if (!menu) return;
+
+        const existing = cart.find(it => it.menuId === menuId);
+        if (existing) {
+            existing.quantity += 1;
+        } else {
+            cart.push({
+                menuId: menu.id,
+                name: menu.name,
+                price: menu.price,
+                quantity: 1,
+                discountAmount: 0
+            });
+        }
+        renderCart();
+    }
+
+    function updateQty(menuId, delta) {
+        const item = cart.find(it => it.menuId === menuId);
+        if (!item) return;
+
+        item.quantity += delta;
+        if (item.quantity <= 0) {
+            cart = cart.filter(it => it.menuId !== menuId);
+        }
+        renderCart();
+    }
+
+    function setItemDiscount(menuId, val) {
+        const item = cart.find(it => it.menuId === menuId);
+        if (!item) return;
+        item.discountAmount = Math.max(0, parseInt(val) || 0);
+        renderCart();
+    }
+
+    function clearCart() {
+        cart = [];
+        employeeQuotaAppliedCount = 0;
+        document.getElementById('order-discount-input').value = '0';
+        renderCart();
+    }
+
+    function renderCart() {
+        const container = document.getElementById('cart-items-container');
+        const totalItemsCount = cart.reduce((sum, it) => sum + it.quantity, 0);
+        const grossTotal = cart.reduce((sum, it) => sum + (it.price * it.quantity), 0);
+
+        // Update mobile bottom bar badge
+        document.getElementById('mobile-cart-badge').textContent = `${totalItemsCount} item`;
+        document.getElementById('mobile-cart-total').textContent = formatRp(grossTotal);
+
+        if (cart.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; color: var(--text-muted); margin-top: 40px;">
+                    <i class="fas fa-mug-hot" style="font-size: 38px; margin-bottom: 12px; opacity: 0.35; color: var(--color-primary);"></i>
+                    <p style="font-size: 13px; font-weight: 600;">Keranjang Masih Kosong</p>
+                    <p style="font-size: 11.5px; margin-top: 4px;">Klik menu di sebelah kiri untuk menambahkan pesanan.</p>
+                </div>
+            `;
+            recalculateTotals();
+            return;
+        }
+
+        container.innerHTML = cart.map(item => {
+            const lineGross = item.price * item.quantity;
+            const lineDiscount = item.discountAmount * item.quantity;
+            const lineNet = Math.max(0, lineGross - lineDiscount);
+
+            return `
+                <div class="cart-item-row">
+                    <div class="cart-item-main">
+                        <div class="cart-item-info">
+                            <h5>${item.name}</h5>
+                            <span>${formatRp(lineNet)}</span>
+                            ${lineDiscount > 0 ? `<small style="color: var(--color-danger); text-decoration: line-through; margin-left: 4px;">${formatRp(lineGross)}</small>` : ''}
+                        </div>
+                        <div class="qty-stepper">
+                            <button class="qty-btn" onclick="updateQty(${item.menuId}, -1)">-</button>
+                            <span style="font-weight: 800; font-size: 12.5px; min-width: 16px; text-align: center;">${item.quantity}</span>
+                            <button class="qty-btn" onclick="updateQty(${item.menuId}, 1)">+</button>
+                        </div>
+                    </div>
+                    <!-- Item Discount Input -->
+                    <div class="cart-item-discount-row">
+                        <span style="color: var(--text-secondary);"><i class="fas fa-tag text-danger"></i> Potongan/item (Rp):</span>
+                        <input type="number" class="cart-item-discount-input" value="${item.discountAmount || 0}" placeholder="0" onchange="setItemDiscount(${item.menuId}, this.value)">
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        recalculateTotals();
+    }
+
+    function recalculateTotals() {
+        const grossTotal = cart.reduce((sum, it) => sum + (it.price * it.quantity), 0);
+        const totalItemDiscount = cart.reduce((sum, it) => sum + ((it.discountAmount || 0) * it.quantity), 0);
+        const orderDiscount = Math.max(0, parseInt(document.getElementById('order-discount-input').value) || 0);
+
+        const rowItemDisc = document.getElementById('row-item-discount');
+        if (totalItemDiscount > 0) {
+            rowItemDisc.style.display = 'flex';
+            document.getElementById('cart-item-discount').textContent = `-${formatRp(totalItemDiscount)}`;
+        } else {
+            rowItemDisc.style.display = 'none';
+        }
+
+        const totalFinal = Math.max(0, grossTotal - totalItemDiscount - orderDiscount);
+
+        const settings = currentStoreSettings || { TAX_PERCENT: '11' };
+        const taxPercent = parseFloat(settings.TAX_PERCENT) || 11.0;
+        const taxMult = 1.0 + (taxPercent / 100.0);
+        const subTotalClean = (totalFinal > 0) ? Math.round(totalFinal / taxMult) : 0;
+        const taxAmount = Math.max(0, totalFinal - subTotalClean);
+
+        document.getElementById('cart-gross').textContent = formatRp(grossTotal);
+        document.getElementById('cart-tax').textContent = formatRp(taxAmount);
+        document.getElementById('cart-total').textContent = formatRp(totalFinal);
+        document.getElementById('mobile-cart-total').textContent = formatRp(totalFinal);
+
+        calculateChange();
+    }
+
+    // Apply Employee Free Quota
+    function applyEmployeeFreeQuota() {
+        if (!currentCustomer || currentCustomer.customerType !== 'EMPLOYEE') {
+            showToast('Bukan member karyawan', 'warning');
+            return;
+        }
+
+        const remainingQuota = currentCustomer.remainingQuota || 0;
+        if (remainingQuota <= 0) {
+            showToast('Jatah kuota gratis hari ini sudah habis!', 'warning');
+            return;
+        }
+
+        if (cart.length === 0) {
+            showToast('Pilih menu terlebih dahulu ke dalam keranjang!', 'warning');
+            return;
+        }
+
+        let quotaToApply = remainingQuota;
+        let applied = 0;
+
+        for (const it of cart) {
+            if (quotaToApply <= 0) break;
+            it.discountAmount = it.price; // 100% Free
+            applied += 1;
+            quotaToApply -= 1;
+        }
+
+        employeeQuotaAppliedCount = applied;
+        renderCart();
+        showToast(`Berhasil menerapkan ${applied} cup jatah gratis karyawan!`, 'success');
+    }
+
+    // Cash Preset & Change Calculator
+    function handlePaymentMethodChange() {
+        const method = document.getElementById('payment-method').value;
+        const cashSection = document.getElementById('cash-tendered-section');
+        if (method === 'CASH') {
+            cashSection.style.display = 'block';
+            calculateChange();
+        } else {
+            cashSection.style.display = 'none';
+        }
+    }
+
+    function setCashPreset(val) {
+        const total = getFinalTotal();
+        const input = document.getElementById('cash-received-input');
+        if (val === 'exact') {
+            input.value = total;
+        } else {
+            input.value = val;
+        }
+        calculateChange();
+    }
+
+    function getFinalTotal() {
+        const grossTotal = cart.reduce((sum, it) => sum + (it.price * it.quantity), 0);
+        const totalItemDiscount = cart.reduce((sum, it) => sum + ((it.discountAmount || 0) * it.quantity), 0);
+        const orderDiscount = Math.max(0, parseInt(document.getElementById('order-discount-input').value) || 0);
+        return Math.max(0, grossTotal - totalItemDiscount - orderDiscount);
+    }
+
+    function calculateChange() {
+        const total = getFinalTotal();
+        const cashInput = parseFloat(document.getElementById('cash-received-input').value) || 0;
+        const changeDisplay = document.getElementById('change-display');
+
+        if (cashInput >= total) {
+            changeDisplay.textContent = `Kembalian: ${formatRp(cashInput - total)}`;
+            changeDisplay.style.color = 'var(--color-success)';
+        } else {
+            changeDisplay.textContent = `Kurang: ${formatRp(total - cashInput)}`;
+            changeDisplay.style.color = 'var(--color-danger)';
+        }
+    }
+
+    // -------------------------------------------------------------
+    // Customer Member Live Autocomplete & CRM Engine
+    // -------------------------------------------------------------
+    let liveSearchTimeout = null;
+
+    async function handleMemberLiveSearch(query) {
+        clearTimeout(liveSearchTimeout);
+        const dropdown = document.getElementById('member-search-results');
+        const trimmed = (query || '').trim();
+
+        if (!trimmed || trimmed.toLowerCase() === 'guest') {
+            dropdown.style.display = 'none';
+            return;
+        }
+
+        liveSearchTimeout = setTimeout(async () => {
+            try {
+                const results = await apiFetch(`/customers/autocomplete?q=${encodeURIComponent(trimmed)}`);
+                if (!results || results.length === 0) {
+                    dropdown.innerHTML = `
+                        <div style="padding: 10px; text-align: center; color: var(--text-muted); font-size: 11.5px;">
+                            Member tidak ditemukan. Tekan ➡️ untuk daftarkan "${trimmed}".
+                        </div>
+                    `;
+                    dropdown.style.display = 'block';
+                    return;
+                }
+
+                dropdown.innerHTML = results.map(c => {
+                    const isEmp = (c.customerType === 'EMPLOYEE');
+                    const initial = (c.nickname || 'U').charAt(0).toUpperCase();
+                    return `
+                        <div class="member-search-item" onclick="selectMemberById(${c.id})">
+                            <div class="member-search-avatar">${initial}</div>
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <strong style="font-size: 12.5px; color: var(--text-main);">${c.nickname}</strong>
+                                    <span class="badge-chip ${isEmp ? 'warning' : 'success'}" style="font-size: 9.5px; padding: 1px 6px;">
+                                        ${isEmp ? '☕ Karyawan' : '👤 Pelanggan'}
+                                    </span>
+                                </div>
+                                <div style="font-size: 11px; color: var(--text-muted); display: flex; gap: 8px; margin-top: 2px;">
+                                    <span><i class="fas fa-phone" style="font-size: 10px;"></i> ${c.phone || '-'}</span>
+                                    <span>⭐ <strong>${c.points || 0} Pts</strong></span>
+                                    <span style="color: ${c.status === 'AKTIF' ? 'var(--color-success)' : 'var(--color-danger)'}; font-weight: 700;">● ${c.status || 'AKTIF'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                dropdown.style.display = 'block';
+            } catch (e) {
+                dropdown.style.display = 'none';
+            }
+        }, 180);
+    }
+
+    // Close dropdown on outside click
+    document.addEventListener('click', (e) => {
+        const dropdown = document.getElementById('member-search-results');
+        const input = document.getElementById('customer-nickname');
+        if (dropdown && !dropdown.contains(e.target) && e.target !== input) {
+            dropdown.style.display = 'none';
+        }
+    });
+
+    async function selectMemberById(customerId) {
+        const dropdown = document.getElementById('member-search-results');
+        if (dropdown) dropdown.style.display = 'none';
+
+        try {
+            const customer = await apiFetch(`/customers/search?id=${customerId}`);
+            applySelectedCustomer(customer);
+        } catch (e) {
+            showToast('Gagal memuat detail member: ' + e.message, 'error');
+        }
+    }
+
+    async function lookupCustomer(fromButton = false) {
+        const input = document.getElementById('customer-nickname');
+        const nickname = input.value.trim();
+        const dropdown = document.getElementById('member-search-results');
+        if (dropdown) dropdown.style.display = 'none';
+
+        if (!nickname || nickname.toLowerCase() === 'guest') {
+            resetToGuest();
+            return;
+        }
+
+        try {
+            const customer = await apiFetch(`/customers/search?nickname=${encodeURIComponent(nickname)}`);
+            applySelectedCustomer(customer);
+        } catch (e) {
+            currentCustomer = null;
+            document.getElementById('customer-info-box').innerHTML = `
+                <div style="background: #FFF9C4; border: 1px solid #FFE082; padding: 8px 10px; border-radius: var(--radius-xs); font-size: 11.5px; color: #8D6E63;">
+                    <i class="fas fa-user-plus text-warning"></i> Member baru <strong>"${nickname}"</strong> akan otomatis didaftarkan saat checkout!
+                </div>
+            `;
+            document.getElementById('reward-select-box').style.display = 'none';
+            document.getElementById('customer-spin-btn-box').style.display = 'none';
+            document.getElementById('employee-quota-box').style.display = 'none';
+            resetRewardSelection();
+        }
+    }
+
+    function applySelectedCustomer(customer) {
+        currentCustomer = customer;
+        document.getElementById('customer-nickname').value = customer.nickname;
+
+        const isEmp = (customer.customerType === 'EMPLOYEE');
+        const infoBox = document.getElementById('customer-info-box');
+        const employeeQuotaBox = document.getElementById('employee-quota-box');
+        const spinBtnBox = document.getElementById('customer-spin-btn-box');
+        const rewardBox = document.getElementById('reward-select-box');
+        const rewardSelect = document.getElementById('selected-reward-id');
+
+        // Render Rich Member Card Info
+        const statusBadge = (customer.status === 'AKTIF')
+            ? '<span class="badge-chip success" style="font-size: 9.5px; padding: 1px 6px;"><i class="fas fa-circle-check"></i> AKTIF</span>'
+            : `<span class="badge-chip danger" style="font-size: 9.5px; padding: 1px 6px;"><i class="fas fa-user-clock"></i> HILANG (${customer.daysSinceLastVisit || 0} hr)</span>`;
+
+        const contactStr = customer.phone || customer.email || 'Tanpa Kontak';
+
+        infoBox.innerHTML = `
+            <div class="member-selected-card">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <div class="member-avatar-mini">${(customer.nickname || 'U').charAt(0).toUpperCase()}</div>
+                        <div>
+                            <strong style="font-size: 13px; color: var(--text-main);">${customer.nickname}</strong>
+                            <div style="font-size: 10.5px; color: var(--text-muted);">${contactStr}</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 4px; align-items: center;">
+                        <span class="badge-chip ${isEmp ? 'warning' : 'success'}" style="font-size: 9.5px; padding: 1px 6px;">${isEmp ? '☕ Karyawan' : '👤 Pelanggan'}</span>
+                        ${statusBadge}
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; background: #FFF; padding: 6px 8px; border-radius: var(--radius-xs); font-size: 11px; border: 1px solid var(--border-light);">
+                    <div>⭐ Poin: <strong style="color: var(--color-primary); font-size: 12px;">${customer.points || 0} Pts</strong></div>
+                    <div>🏆 Level: <strong>Lvl ${customer.level || 1}</strong> (${customer.streakCount || 0}🔥)</div>
+                </div>
+            </div>
+        `;
+
+        // Employee Quota Handler
+        if (isEmp) {
+            document.getElementById('employee-quota-badge').textContent = `${customer.remainingQuota || 0} cup`;
+            employeeQuotaBox.style.display = 'block';
+        } else {
+            employeeQuotaBox.style.display = 'none';
+        }
+
+        // Lucky Spin Shortcut
+        if (customer.points >= 50) {
+            spinBtnBox.style.display = 'block';
+        } else {
+            spinBtnBox.style.display = 'none';
+        }
+
+        // Populate Rewards Dropdown
+        document.getElementById('member-points-badge').textContent = `${customer.points || 0} Pts`;
+        rewardSelect.innerHTML = `<option value="">-- Tidak Menukar Reward --</option>`;
+
+        if (availableRewards && availableRewards.length > 0) {
+            availableRewards.forEach(r => {
+                const canAfford = (customer.points >= r.pointsRequired);
+                if (canAfford) {
+                    rewardSelect.innerHTML += `<option value="${r.id}" data-points="${r.pointsRequired}" data-type="${r.type}">🎁 ${r.name} (Tukar ${r.pointsRequired} Pts)</option>`;
+                } else {
+                    rewardSelect.innerHTML += `<option value="${r.id}" disabled style="color: #999;">${r.name} (Butuh ${r.pointsRequired} Pts - Poin kurang)</option>`;
+                }
+            });
+            rewardBox.style.display = 'block';
+        } else {
+            rewardBox.style.display = 'none';
+        }
+    }
+
+    function resetToGuest() {
+        currentCustomer = null;
+        document.getElementById('customer-nickname').value = 'Guest';
+        document.getElementById('customer-info-box').innerHTML = `
+            <div style="font-size: 11.5px; color: var(--text-secondary); background: #FAF8F5; padding: 8px 10px; border-radius: var(--radius-xs); border: 1px solid var(--border-light);">
+                <i class="fas fa-user-circle"></i> Transaksi sebagai <strong>Guest</strong> (Tanpa Poin Loyalty)
+            </div>
+        `;
+        document.getElementById('employee-quota-box').style.display = 'none';
+        document.getElementById('customer-spin-btn-box').style.display = 'none';
+        document.getElementById('reward-select-box').style.display = 'none';
+        resetRewardSelection();
+    }
+
+    function resetRewardSelection() {
+        const rewardSelect = document.getElementById('selected-reward-id');
+        if (rewardSelect) rewardSelect.value = '';
+        const discountBadge = document.getElementById('order-discount-badge');
+        if (discountBadge) discountBadge.style.display = 'none';
+        const note = document.getElementById('reward-applied-note');
+        if (note) note.style.display = 'none';
+        const discountInput = document.getElementById('order-discount-input');
+        if (discountInput) discountInput.value = '0';
+        recalculateTotals();
+    }
+
+    function handleRewardChange() {
+        const rewardSelect = document.getElementById('selected-reward-id');
+        const rewardId = rewardSelect.value;
+        const discountBadge = document.getElementById('order-discount-badge');
+        const discountInput = document.getElementById('order-discount-input');
+        const note = document.getElementById('reward-applied-note');
+
+        if (rewardId) {
+            const selectedReward = availableRewards.find(r => r.id === parseInt(rewardId));
+            if (selectedReward) {
+                let discountVal = 10000;
+                if (selectedReward.name.toLowerCase().includes('20')) discountVal = 20000;
+                else if (selectedReward.name.toLowerCase().includes('15')) discountVal = 15000;
+                else if (selectedReward.name.toLowerCase().includes('50')) discountVal = 50000;
+
+                discountInput.value = discountVal;
+                discountBadge.style.display = 'inline-block';
+                discountBadge.textContent = `Reward: ${selectedReward.name} (-${selectedReward.pointsRequired} Pts)`;
+
+                if (note) {
+                    note.style.display = 'block';
+                    note.innerHTML = `<i class="fas fa-circle-check"></i> Reward Aktif: <strong>${selectedReward.name}</strong> (Memotong ${selectedReward.pointsRequired} poin saat pembayaran).`;
+                }
+                showToast(`Reward "${selectedReward.name}" diterapkan! Diskon Rp ${discountVal.toLocaleString('id-ID')}`, 'success');
+            }
+        } else {
+            discountBadge.style.display = 'none';
+            if (note) note.style.display = 'none';
+            discountInput.value = '0';
+        }
+        recalculateTotals();
+    }
+
+    // Checkout Execution
+    async function processCheckout() {
+        if (cart.length === 0) {
+            showToast('Pilih menu terlebih dahulu!', 'warning');
+            return;
+        }
+
+        const totalAmount = getFinalTotal();
+        const nickname = document.getElementById('customer-nickname').value.trim() || 'Guest';
+        const paymentMethod = document.getElementById('payment-method').value;
+        const rewardId = document.getElementById('selected-reward-id').value || null;
+        const cashReceived = parseFloat(document.getElementById('cash-received-input').value) || totalAmount;
+        const orderDiscount = Math.max(0, parseInt(document.getElementById('order-discount-input').value) || 0);
+
+        if (paymentMethod === 'CASH' && cashReceived < totalAmount) {
+            showToast('Uang tunai yang diterima kurang dari total tagihan!', 'warning');
+            return;
+        }
+
+        const btn = document.getElementById('btn-checkout');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...';
+
+        try {
+            let shiftId = null;
+            try {
+                const shiftData = await apiFetch('/shift/current');
+                if (shiftData && shiftData.currentShift) {
+                    shiftId = shiftData.currentShift.id;
+                }
+            } catch (e) {}
+
+            const payload = {
+                nickname,
+                totalAmount,
+                discountAmount: orderDiscount,
+                paymentMethod,
+                rewardId,
+                shiftId,
+                employeeQuotaUsed: employeeQuotaAppliedCount,
+                items: cart.map(it => ({
+                    menuId: it.menuId,
+                    quantity: it.quantity,
+                    price: it.price,
+                    discountAmount: it.discountAmount || 0
+                }))
+            };
+
+            const res = await apiFetch('/checkout', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+
+            showToast('Transaksi berhasil!', 'success');
+
+            // Render Thermal Receipt with live store settings
+            const settings = await getStoreSettings();
+            res.cashReceived = cashReceived;
+            document.getElementById('receipt-modal-body').innerHTML = renderThermalReceiptHtml(res, settings);
+            openModal('modal-receipt');
+
+            // Check for Lucky Drop or Mystery Box
+            if (res.luckyDrop) {
+                setTimeout(() => {
+                    document.getElementById('mystery-box-desc').textContent = `Selamat! Anda memperoleh Bonus Surprise Drop: +${res.luckyDrop.bonusPoints} Poin!`;
+                    openModal('modal-mystery-box');
+                }, 800);
+            }
+
+            clearCart();
+            document.getElementById('customer-nickname').value = 'Guest';
+            document.getElementById('cash-received-input').value = '';
+            lookupCustomer();
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check-circle"></i> Selesaikan Transaksi';
+        }
+    }
+
+    // Lucky Spin Functions
+    function triggerPosLuckySpin() {
+        if (!currentCustomer) return;
+        document.getElementById('spin-result-text').textContent = `Member: ${currentCustomer.nickname} (Poin: ${currentCustomer.points})`;
+        document.getElementById('lucky-wheel-disc').style.transform = 'rotate(0deg)';
+        document.getElementById('btn-do-spin').disabled = false;
+        openModal('modal-lucky-spin');
+    }
+
+    async function executeSpin() {
+        if (!currentCustomer) return;
+        const btn = document.getElementById('btn-do-spin');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memutar Roda...';
+
+        try {
+            const res = await apiFetch('/gamification/spin', {
+                method: 'POST',
+                body: JSON.stringify({ customerId: currentCustomer.id })
+            });
+
+            // Spin animation
+            const wheel = document.getElementById('lucky-wheel-disc');
+            const randomRot = 1440 + Math.floor(Math.random() * 360);
+            wheel.style.transform = `rotate(${randomRot}deg)`;
+
+            setTimeout(() => {
+                document.getElementById('spin-result-text').innerHTML = `🎉 <strong>${res.rewardName}</strong> (+${res.bonusPoints} Pts / +${res.bonusXp} XP)`;
+                showToast(`Lucky Spin Berhasil! Mendapat ${res.rewardName}`, 'success');
+                lookupCustomer();
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-rotate-right"></i> Putar Lagi (50 Pts)';
+            }, 3600);
+        } catch (err) {
+            showToast(err.message, 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-play"></i> Putar Sekarang (50 Pts)';
+        }
+    }
+
+    function openMysteryBox() {
+        const icon = document.getElementById('mystery-box-icon');
+        icon.style.animation = 'none';
+        icon.textContent = '🎉';
+        document.getElementById('mystery-box-title').textContent = 'Hadiah Terbuka!';
+        document.getElementById('btn-close-box').style.display = 'block';
+    }
+</script>
+{% endblock %}

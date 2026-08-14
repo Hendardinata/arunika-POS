@@ -1,0 +1,643 @@
+{% extends 'base.html' %}
+
+{% block title %}Pengaturan & Hak Akses | Arunika-POS{% endblock %}
+{% block page_title %}Pengaturan Sistem, Staff & Hak Akses Role{% endblock %}
+
+{% block content %}
+<div style="display: grid; grid-template-columns: 1fr 1.35fr; gap: 24px; margin-bottom: 24px;">
+    <!-- System & Store Config Parameters -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title"><i class="fas fa-store text-primary"></i> Profil Toko & Parameter Struk</h3>
+        </div>
+
+        <form id="settings-form" onsubmit="saveSystemSettings(event)">
+            <div class="form-group">
+                <label class="form-label">Nama Kafe / Restoran</label>
+                <input type="text" id="cfg-store-name" class="form-control" placeholder="Arunika Coffee & Lounge" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Tagline Kafe</label>
+                <input type="text" id="cfg-tagline" class="form-control" placeholder="Every Cup Has A Story">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Alamat Lengkap (Dicantumkan di Struk)</label>
+                <input type="text" id="cfg-address" class="form-control" placeholder="Jl. Melati Kopi No. 12, City Center">
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                    <label class="form-label">No. Telepon / WA</label>
+                    <input type="text" id="cfg-phone" class="form-control" placeholder="0812-3456-7890">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Instagram / Medsos</label>
+                    <input type="text" id="cfg-instagram" class="form-control" placeholder="@arunika.coffee">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Website Toko</label>
+                <input type="text" id="cfg-website" class="form-control" placeholder="www.arunikacoffee.com">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Pesan Kaki Struk (Receipt Footer Notes)</label>
+                <textarea id="cfg-receipt-footer" class="form-control" rows="2" placeholder="Terima kasih atas kunjungannya! Wifi: arunika_free (Pass: ngopidulu)"></textarea>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                    <label class="form-label">Pajak Resto PB1 / PPN (%)</label>
+                    <input type="number" step="0.1" id="cfg-tax" class="form-control" placeholder="11" required>
+                    <small class="text-muted" style="font-size: 11px;">Termasuk dalam harga (Included).</small>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Jatah Karyawan / Hari (Cup)</label>
+                    <input type="number" id="cfg-employee-quota" class="form-control" placeholder="2" value="2" required>
+                    <small class="text-muted" style="font-size: 11px;">Jatah gratis menu untuk member karyawan.</small>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Masa Kedaluwarsa Poin (Hari)</label>
+                <input type="number" id="cfg-expiry" class="form-control" placeholder="90" required>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                    <label class="form-label">Jam Shift Pagi</label>
+                    <input type="text" id="cfg-shift-morning" class="form-control" placeholder="07:00 - 15:00">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Jam Shift Malam</label>
+                    <input type="text" id="cfg-shift-night" class="form-control" placeholder="15:00 - 23:00">
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px;" id="btn-save-settings">
+                <i class="fas fa-save"></i> Simpan Informasi & Pengaturan
+            </button>
+        </form>
+    </div>
+
+    <!-- Staff & User Accounts Management -->
+    <div class="card">
+        <div class="card-header" style="flex-wrap: wrap; gap: 10px;">
+            <div>
+                <h3 class="card-title"><i class="fas fa-users-gear text-primary"></i> Akun Pengguna & Hak Akses Per-User</h3>
+                <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                    Kelola akun login dan tentukan halaman spesifik yang boleh dibuka oleh masing-masing user.
+                </p>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openUserModal()"><i class="fas fa-user-plus"></i> Tambah User</button>
+        </div>
+
+        <div class="table-responsive">
+            <table class="custom-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Role Akses</th>
+                        <th>Izin Halaman</th>
+                        <th>Shift</th>
+                        <th style="text-align: right;">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody id="users-table-body">
+                    <tr><td colspan="5" class="text-center text-muted" style="padding: 30px;">Memuat data staff...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Page Permissions Matrix (Matriks Hak Akses Halaman Aplikasi) -->
+<div class="card" style="margin-bottom: 24px;">
+    <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
+        <div>
+            <h3 class="card-title"><i class="fas fa-shield-halved text-primary"></i> Matriks Hak Akses Halaman Standar (Role Defaults)</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                Atur izin halaman bawaan untuk tiap role. Jika user tidak diatur secara khusus per-individu, sistem akan mengikuti matriks ini.
+            </p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="savePermissionMatrix()" id="btn-save-matrix">
+            <i class="fas fa-floppy-disk"></i> Simpan Matriks Hak Akses
+        </button>
+    </div>
+
+    <div class="table-responsive">
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th style="min-width: 220px;">Halaman Aplikasi</th>
+                    <th style="text-align: center; width: 140px; background: #FAF5FF;"><i class="fas fa-crown text-warning"></i> Superadmin</th>
+                    <th style="text-align: center; width: 140px;"><i class="fas fa-user-tie text-primary"></i> Admin / Owner</th>
+                    <th style="text-align: center; width: 140px;"><i class="fas fa-mug-saucer text-warning"></i> Headbar</th>
+                    <th style="text-align: center; width: 140px;"><i class="fas fa-cash-register text-success"></i> Kasir</th>
+                </tr>
+            </thead>
+            <tbody id="permission-matrix-body">
+                <tr><td colspan="5" class="text-center text-muted" style="padding: 30px;">Memuat matriks hak akses...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal Add/Edit Staff User -->
+<div id="modal-user" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 440px;">
+        <div class="modal-header">
+            <h3 class="modal-title" id="user-modal-title">Tambah Akun Pengguna</h3>
+            <button class="modal-close" onclick="closeModal('modal-user')">&times;</button>
+        </div>
+        <form id="user-form" onsubmit="saveUser(event)">
+            <div class="modal-body">
+                <input type="hidden" id="user-edit-id">
+
+                <div class="form-group">
+                    <label class="form-label">Username <span class="text-danger">*</span></label>
+                    <input type="text" id="user-username" class="form-control" placeholder="Contoh: barista1" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Password / PIN Login</label>
+                    <input type="password" id="user-password" class="form-control" placeholder="Ketik kata sandi akun">
+                    <small class="text-muted" style="font-size: 11px;" id="password-hint">Wajib diisi saat membuat user baru.</small>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">Role Hak Akses <span class="text-danger">*</span></label>
+                        <select id="user-role" class="form-control">
+                            <!-- Populated dynamically based on actor hierarchy -->
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Sesi Shift</label>
+                        <select id="user-assigned-shift" class="form-control">
+                            <option value="MORNING">Shift Pagi</option>
+                            <option value="NIGHT">Shift Malam</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('modal-user')">Batal</button>
+                <button type="submit" class="btn btn-primary" id="btn-save-user">Simpan Akun</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Manage Specific User Page Permissions -->
+<div id="modal-user-access" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 520px;">
+        <div class="modal-header">
+            <h3 class="modal-title" id="user-access-modal-title"><i class="fas fa-shield-halved text-primary"></i> Kelola Hak Akses Halaman User</h3>
+            <button class="modal-close" onclick="closeModal('modal-user-access')">&times;</button>
+        </div>
+        <form id="user-access-form" onsubmit="saveUserAccess(event)">
+            <div class="modal-body">
+                <input type="hidden" id="access-user-id">
+
+                <div style="background: #FAF8F5; padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-light); margin-bottom: 16px;">
+                    <div style="font-size: 12px; color: var(--text-muted);">Pengaturan Akses Untuk:</div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                        <strong id="access-user-name" style="font-size: 15px; color: var(--text-main);">-</strong>
+                        <span id="access-user-role-badge" class="badge-chip primary">-</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" style="font-weight: 700;">Mode Penentuan Hak Akses</label>
+                    <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+                            <input type="radio" name="access_mode" id="mode-role-default" value="default" onchange="toggleAccessMode(false)">
+                            <span><strong>Ikuti Standar Role</strong> (Sesuai matriks role)</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+                            <input type="radio" name="access_mode" id="mode-custom" value="custom" onchange="toggleAccessMode(true)">
+                            <span><strong>Kustomisasi Khusus User Ini</strong> (Pilih halaman tertentu di bawah)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div id="custom-pages-container" style="margin-top: 16px; border-top: 1px solid var(--border-light); padding-top: 14px;">
+                    <label class="form-label" style="font-weight: 700; margin-bottom: 8px;">Pilih Halaman yang Diizinkan untuk User Ini:</label>
+                    <div id="user-pages-checkbox-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; padding-right: 4px;">
+                        <!-- Rendered dynamically -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('modal-user-access')">Batal</button>
+                <button type="submit" class="btn btn-primary" id="btn-save-user-access">Simpan Hak Akses User</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let usersList = [];
+    let permissionMatrix = [];
+    let allAppMenus = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadSettings();
+        loadUsers();
+        loadPermissionMatrix();
+    });
+
+    async function loadSettings() {
+        try {
+            const settings = await apiFetch('/settings');
+            const map = {};
+            settings.forEach(s => map[s.key] = s.value);
+
+            document.getElementById('cfg-store-name').value = map['STORE_NAME'] || 'Arunika Coffee & Lounge';
+            document.getElementById('cfg-tagline').value = map['TAGLINE'] || 'Every Cup Has A Story';
+            document.getElementById('cfg-address').value = map['STORE_ADDRESS'] || 'Jl. Melati Kopi No. 12, City Center';
+            document.getElementById('cfg-phone').value = map['STORE_PHONE'] || '0812-3456-7890';
+            document.getElementById('cfg-website').value = map['STORE_WEBSITE'] || 'www.arunikacoffee.com';
+            document.getElementById('cfg-instagram').value = map['STORE_INSTAGRAM'] || '@arunika.coffee';
+            document.getElementById('cfg-receipt-footer').value = map['RECEIPT_FOOTER'] || 'Terima kasih atas kunjungannya! Wifi: arunika_free (Pass: ngopidulu)';
+            document.getElementById('cfg-tax').value = map['TAX_PERCENT'] || map['TAX_PERCENTAGE'] || '11';
+            document.getElementById('cfg-employee-quota').value = map['EMPLOYEE_DAILY_QUOTA'] || '2';
+            document.getElementById('cfg-expiry').value = map['POINT_EXPIRATION_DAYS'] || '90';
+            document.getElementById('cfg-shift-morning').value = map['SHIFT_MORNING_HOURS'] || '07:00 - 15:00';
+            document.getElementById('cfg-shift-night').value = map['SHIFT_NIGHT_HOURS'] || '15:00 - 23:00';
+        } catch (e) {
+            showToast('Gagal memuat pengaturan: ' + e.message, 'error');
+        }
+    }
+
+    async function saveSystemSettings(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-save-settings');
+        btn.disabled = true;
+
+        const pairs = [
+            { key: 'STORE_NAME', value: document.getElementById('cfg-store-name').value.trim() },
+            { key: 'TAGLINE', value: document.getElementById('cfg-tagline').value.trim() },
+            { key: 'STORE_ADDRESS', value: document.getElementById('cfg-address').value.trim() },
+            { key: 'STORE_PHONE', value: document.getElementById('cfg-phone').value.trim() },
+            { key: 'STORE_WEBSITE', value: document.getElementById('cfg-website').value.trim() },
+            { key: 'STORE_INSTAGRAM', value: document.getElementById('cfg-instagram').value.trim() },
+            { key: 'RECEIPT_FOOTER', value: document.getElementById('cfg-receipt-footer').value.trim() },
+            { key: 'TAX_PERCENT', value: document.getElementById('cfg-tax').value },
+            { key: 'TAX_PERCENTAGE', value: document.getElementById('cfg-tax').value },
+            { key: 'EMPLOYEE_DAILY_QUOTA', value: document.getElementById('cfg-employee-quota').value },
+            { key: 'POINT_EXPIRATION_DAYS', value: document.getElementById('cfg-expiry').value },
+            { key: 'SHIFT_MORNING_HOURS', value: document.getElementById('cfg-shift-morning').value },
+            { key: 'SHIFT_NIGHT_HOURS', value: document.getElementById('cfg-shift-night').value }
+        ];
+
+        try {
+            for (const item of pairs) {
+                await apiFetch('/settings', {
+                    method: 'POST',
+                    body: JSON.stringify(item)
+                });
+            }
+            await getStoreSettings(true);
+            showToast('Informasi kafe & pengaturan berhasil disimpan!', 'success');
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    async function loadUsers() {
+        const tbody = document.getElementById('users-table-body');
+        const currentUser = getUser();
+        const actorRole = currentUser ? (currentUser.role || 'CASHIER').toUpperCase() : 'CASHIER';
+
+        try {
+            usersList = await apiFetch('/auth/users');
+            if (usersList.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada data user.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = usersList.map(u => {
+                const uRole = (u.role || 'CASHIER').toUpperCase();
+
+                let roleBadge = '<span class="badge-chip success">CASHIER</span>';
+                if (uRole === 'SUPERADMIN') {
+                    roleBadge = '<span class="badge-chip primary" style="background:#5C2C90; color:#FFF; font-weight:800;"><i class="fas fa-crown"></i> SUPERADMIN</span>';
+                } else if (uRole === 'ADMIN' || uRole === 'OWNER') {
+                    roleBadge = '<span class="badge-chip primary" style="font-weight:700;"><i class="fas fa-user-tie"></i> ADMIN / OWNER</span>';
+                } else if (uRole === 'HEADBAR') {
+                    roleBadge = '<span class="badge-chip warning" style="font-weight:700;"><i class="fas fa-mug-saucer"></i> HEADBAR</span>';
+                }
+
+                // Custom Permission Indicator
+                const accessBadge = u.hasCustomAccess 
+                    ? `<span class="badge-chip warning" style="font-weight:700; font-size:11px;"><i class="fas fa-sliders"></i> Kustom (${u.allowedPages ? u.allowedPages.length : 0} Hal)</span>`
+                    : `<span class="badge-chip secondary" style="font-size:11px;">Default Role</span>`;
+
+                // Hierarchy Protection for Buttons
+                const isSuperAdminRow = (uRole === 'SUPERADMIN');
+                const canEditThisUser = (actorRole === 'SUPERADMIN') || (!isSuperAdminRow && (actorRole === 'ADMIN' || actorRole === 'OWNER'));
+
+                const actionButtons = canEditThisUser ? `
+                    <button class="btn btn-secondary btn-sm" onclick="openUserAccessModal(${u.id})" title="Atur Akses Halaman User"><i class="fas fa-shield-halved text-primary"></i> Akses</button>
+                    <button class="btn btn-secondary btn-sm" onclick="editUser(${u.id})" title="Edit User"><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-secondary btn-sm text-danger" onclick="deleteUser(${u.id}, '${u.username}')" title="Hapus User"><i class="fas fa-trash"></i></button>
+                ` : `
+                    <span class="badge-chip secondary" style="font-size: 11px; opacity: 0.7;" title="Hak akses terkunci"><i class="fas fa-lock"></i> Protected</span>
+                `;
+
+                return `
+                    <tr>
+                        <td><strong style="color: var(--text-main); font-size: 14px;">${u.username}</strong></td>
+                        <td>${roleBadge}</td>
+                        <td>${accessBadge}</td>
+                        <td><span class="badge-chip primary" style="font-size: 11px;">${u.assignedShift || 'Semua'}</span></td>
+                        <td style="text-align: right;">${actionButtons}</td>
+                    </tr>
+                `;
+            }).join('');
+        } catch (e) {
+            showToast('Gagal memuat users: ' + e.message, 'error');
+        }
+    }
+
+    function populateRoleOptions(selectedRole = 'CASHIER') {
+        const select = document.getElementById('user-role');
+        const currentUser = getUser();
+        const actorRole = currentUser ? (currentUser.role || 'CASHIER').toUpperCase() : 'CASHIER';
+
+        let options = [];
+        if (actorRole === 'SUPERADMIN') {
+            options = [
+                { value: 'SUPERADMIN', label: '👑 Superadmin (Master / Full)' },
+                { value: 'ADMIN', label: '👔 Admin / Owner' },
+                { value: 'HEADBAR', label: '☕ Head Barista' },
+                { value: 'CASHIER', label: '💵 Kasir' }
+            ];
+        } else if (actorRole === 'ADMIN' || actorRole === 'OWNER') {
+            options = [
+                { value: 'ADMIN', label: '👔 Admin / Owner' },
+                { value: 'HEADBAR', label: '☕ Head Barista' },
+                { value: 'CASHIER', label: '💵 Kasir' }
+            ];
+        } else {
+            options = [
+                { value: 'HEADBAR', label: '☕ Head Barista' },
+                { value: 'CASHIER', label: '💵 Kasir' }
+            ];
+        }
+
+        select.innerHTML = options.map(o => `
+            <option value="${o.value}" ${o.value === selectedRole ? 'selected' : ''}>${o.label}</option>
+        `).join('');
+    }
+
+    function openUserModal() {
+        document.getElementById('user-edit-id').value = '';
+        document.getElementById('user-modal-title').textContent = 'Tambah Akun Staff Baru';
+        document.getElementById('user-password').required = true;
+        document.getElementById('password-hint').textContent = 'Wajib diisi saat membuat user baru.';
+        document.getElementById('user-form').reset();
+        populateRoleOptions('CASHIER');
+        openModal('modal-user');
+    }
+
+    function editUser(id) {
+        const u = usersList.find(x => x.id === id);
+        if (!u) return;
+
+        document.getElementById('user-edit-id').value = u.id;
+        document.getElementById('user-modal-title').textContent = 'Edit Akun: ' + u.username;
+        document.getElementById('user-username').value = u.username;
+        populateRoleOptions(u.role);
+        document.getElementById('user-assigned-shift').value = u.assignedShift || 'MORNING';
+        document.getElementById('user-password').value = '';
+        document.getElementById('user-password').required = false;
+        document.getElementById('password-hint').textContent = 'Kosongkan jika tidak ingin mengubah password.';
+        openModal('modal-user');
+    }
+
+    async function saveUser(e) {
+        e.preventDefault();
+        const id = document.getElementById('user-edit-id').value;
+        const username = document.getElementById('user-username').value.trim();
+        const password = document.getElementById('user-password').value.trim();
+        const role = document.getElementById('user-role').value;
+        const assignedShift = document.getElementById('user-assigned-shift').value;
+
+        const payload = { username, role, assignedShift };
+        if (password) payload.password = password;
+
+        const btn = document.getElementById('btn-save-user');
+        btn.disabled = true;
+
+        try {
+            if (id) {
+                await apiFetch(`/auth/users/${id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(payload)
+                });
+                showToast('Akun pengguna diperbarui!', 'success');
+            } else {
+                await apiFetch('/auth/users', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+                showToast('Akun pengguna baru berhasil dibuat!', 'success');
+            }
+            closeModal('modal-user');
+            loadUsers();
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    async function deleteUser(id, username) {
+        if (!confirm(`Yakin ingin menghapus akun "${username}"?`)) return;
+        try {
+            await apiFetch(`/auth/users/${id}`, { method: 'DELETE' });
+            showToast('Akun pengguna berhasil dihapus', 'success');
+            loadUsers();
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+
+    // -------------------------------------------------------------
+    // Per-User Page Access Management
+    // -------------------------------------------------------------
+    async function openUserAccessModal(userId) {
+        try {
+            const data = await apiFetch(`/role-access/user/${userId}`);
+            const user = data.user;
+            allAppMenus = data.allMenus || [];
+
+            document.getElementById('access-user-id').value = user.id;
+            document.getElementById('access-user-name').textContent = user.username;
+            document.getElementById('access-user-role-badge').textContent = user.role;
+
+            const hasCustom = data.hasCustomAccess;
+            document.getElementById('mode-custom').checked = hasCustom;
+            document.getElementById('mode-role-default').checked = !hasCustom;
+
+            const activePages = data.allowedPages || [];
+
+            const listContainer = document.getElementById('user-pages-checkbox-list');
+            listContainer.innerHTML = allAppMenus.map(m => {
+                const isChecked = activePages.includes(m.path);
+                return `
+                    <label style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #FFF; border: 1px solid var(--border-light); border-radius: var(--radius-sm); cursor: pointer;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-${m.icon || 'file'} text-primary" style="width: 16px;"></i>
+                            <span style="font-size: 13px; font-weight: 600; color: var(--text-main);">${m.name}</span>
+                            <span style="font-size: 11px; color: var(--text-muted); font-family: monospace;">(${m.path})</span>
+                        </div>
+                        <input type="checkbox" class="user-page-cb" value="${m.path}" ${isChecked ? 'checked' : ''} style="width: 18px; height: 18px;">
+                    </label>
+                `;
+            }).join('');
+
+            toggleAccessMode(hasCustom);
+            openModal('modal-user-access');
+        } catch (err) {
+            showToast('Gagal memuat hak akses user: ' + err.message, 'error');
+        }
+    }
+
+    function toggleAccessMode(isCustom) {
+        const container = document.getElementById('custom-pages-container');
+        const checkboxes = document.querySelectorAll('.user-page-cb');
+        if (isCustom) {
+            container.style.opacity = '1';
+            checkboxes.forEach(cb => cb.disabled = false);
+        } else {
+            container.style.opacity = '0.4';
+            checkboxes.forEach(cb => cb.disabled = true);
+        }
+    }
+
+    async function saveUserAccess(e) {
+        e.preventDefault();
+        const userId = document.getElementById('access-user-id').value;
+        const isCustom = document.getElementById('mode-custom').checked;
+
+        let selectedPages = [];
+        if (isCustom) {
+            const checkboxes = document.querySelectorAll('.user-page-cb:checked');
+            checkboxes.forEach(cb => selectedPages.push(cb.value));
+        }
+
+        const btn = document.getElementById('btn-save-user-access');
+        btn.disabled = true;
+
+        try {
+            await apiFetch(`/role-access/user/${userId}`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    useCustom: isCustom,
+                    allowedPages: selectedPages
+                })
+            });
+            showToast('Hak akses halaman user berhasil disimpan!', 'success');
+            closeModal('modal-user-access');
+            loadUsers();
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    // -------------------------------------------------------------
+    // Matriks Hak Akses Halaman (Role Defaults)
+    // -------------------------------------------------------------
+    async function loadPermissionMatrix() {
+        const tbody = document.getElementById('permission-matrix-body');
+        try {
+            const data = await apiFetch('/role-access/matrix');
+            permissionMatrix = data.menus || [];
+
+            if (permissionMatrix.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada konfigurasi halaman.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = permissionMatrix.map(m => {
+                const superadminCheck = `<i class="fas fa-circle-check text-success" style="font-size: 16px;" title="Superadmin selalu memiliki akses penuh"></i>`;
+                const adminCheck = `<input type="checkbox" id="perm_${m.id}_ADMIN" ${m.permissions.ADMIN?.canView ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">`;
+                const headbarCheck = `<input type="checkbox" id="perm_${m.id}_HEADBAR" ${m.permissions.HEADBAR?.canView ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">`;
+                const cashierCheck = `<input type="checkbox" id="perm_${m.id}_CASHIER" ${m.permissions.CASHIER?.canView ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">`;
+
+                return `
+                    <tr>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div style="width: 32px; height: 32px; border-radius: 6px; background: var(--color-primary-light); color: var(--color-primary); display: flex; align-items: center; justify-content: center;">
+                                    <i class="fas fa-${m.icon || 'file'}"></i>
+                                </div>
+                                <div>
+                                    <strong style="color: var(--text-main); font-size: 13.5px;">${m.name}</strong>
+                                    <div style="font-size: 11px; color: var(--text-muted); font-family: monospace;">${m.path}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td style="text-align: center; background: #FAF5FF;">${superadminCheck}</td>
+                        <td style="text-align: center;">${adminCheck}</td>
+                        <td style="text-align: center;">${headbarCheck}</td>
+                        <td style="text-align: center;">${cashierCheck}</td>
+                    </tr>
+                `;
+            }).join('');
+        } catch (err) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-danger text-center">Gagal memuat matriks hak akses: ${err.message}</td></tr>`;
+        }
+    }
+
+    async function savePermissionMatrix() {
+        const btn = document.getElementById('btn-save-matrix');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
+
+        const updates = [];
+        permissionMatrix.forEach(m => {
+            ['ADMIN', 'HEADBAR', 'CASHIER'].forEach(role => {
+                const cb = document.getElementById(`perm_${m.id}_${role}`);
+                if (cb) {
+                    updates.push({
+                        menuId: m.id,
+                        role: role,
+                        canView: cb.checked,
+                        canEdit: cb.checked
+                    });
+                }
+            });
+        });
+
+        try {
+            await apiFetch('/role-access/matrix', {
+                method: 'PUT',
+                body: JSON.stringify({ matrix: updates })
+            });
+            showToast('Matriks hak akses halaman berhasil disimpan & langsung aktif!', 'success');
+            await initRbacNavigation();
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-floppy-disk"></i> Simpan Matriks Hak Akses';
+        }
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,749 @@
+{% extends 'base.html' %}
+
+{% block title %}Inventori & Pembelian Bahan | Arunika-POS{% endblock %}
+{% block page_title %}Inventori, Pembelian Bahan & Opname Harian{% endblock %}
+
+{% block content %}
+<!-- Daily Opname Workflow Banner -->
+<div class="card" style="margin-bottom: 24px;">
+    <div class="card-header">
+        <div>
+            <h3 class="card-title"><i class="fas fa-clipboard-check text-primary"></i> Alur Stock Opname Harian (SOP Kafe)</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                Audit fisik pagi sebelum buka $\rightarrow$ Kunci baseline $\rightarrow$ Hitung sisa malam saat tutup untuk cek selisih bahan.
+            </p>
+        </div>
+        <div style="display: flex; gap: 8px;" id="opname-action-buttons">
+            <!-- Rendered dynamically based on status -->
+        </div>
+    </div>
+
+    <div style="display: flex; gap: 16px; align-items: center; background: #FAF8F5; padding: 14px 18px; border-radius: var(--radius-md); border: 1px solid var(--border-light);">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 13px; font-weight: 700; color: var(--text-secondary);">Status Audit Hari Ini:</span>
+            <span id="opname-status-label" class="badge-chip warning">Memuat Status...</span>
+        </div>
+        <div style="font-size: 12px; color: var(--text-muted); margin-left: auto;">
+            Sesi Opname Terakhir: <strong id="opname-last-date" style="color: var(--text-main);">-</strong>
+        </div>
+    </div>
+</div>
+
+<!-- Raw Materials Inventory Grid/Table -->
+<div class="card" style="margin-bottom: 24px;">
+    <div class="card-header">
+        <div>
+            <h3 class="card-title"><i class="fas fa-boxes-stacked text-primary"></i> Data Stok Bahan Baku & Harga Pokok (Cost/Unit)</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                Harga beli satuan digunakan sebagai dasar perhitungan HPP menu secara otomatis.
+            </p>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <input type="text" id="inventory-search" class="form-control" style="max-width: 200px;" placeholder="Cari bahan..." oninput="filterInventory()">
+            <button class="btn btn-primary btn-sm" onclick="openPurchaseModal()"><i class="fas fa-cart-plus"></i> Beli / Restok Bahan</button>
+            <button class="btn btn-secondary btn-sm" onclick="openNewItemModal()"><i class="fas fa-plus"></i> Tambah Master Bahan</button>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th>Foto</th>
+                    <th>Nama Bahan Baku / Kemasan</th>
+                    <th>Sisa Stok Fisik</th>
+                    <th>Harga Pokok / Satuan</th>
+                    <th>Batas Minimum</th>
+                    <th>Status Stok</th>
+                    <th style="text-align: right;">Aksi</th>
+                </tr>
+            </thead>
+            <tbody id="inventory-table-body">
+                <tr><td colspan="7" class="text-center text-muted" style="padding: 30px;">Memuat data inventori...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Recent Stock Mutation Logs Table -->
+<div class="card">
+    <div class="card-header">
+        <div>
+            <h3 class="card-title"><i class="fas fa-history text-secondary"></i> Riwayat Pembelian & Mutasi Stok</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Rekam jejak belanja bahan, supplier, dan penyesuaian stok manual.</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="loadInventory()"><i class="fas fa-rotate-right"></i> Refresh</button>
+    </div>
+
+    <div class="table-responsive">
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th>Waktu / Tanggal</th>
+                    <th>Nama Bahan</th>
+                    <th>Tipe Mutasi</th>
+                    <th>Jumlah</th>
+                    <th>Total Biaya Beli</th>
+                    <th>Supplier / Keterangan</th>
+                    <th>Foto Nota</th>
+                </tr>
+            </thead>
+            <tbody id="inventory-logs-table-body">
+                <tr><td colspan="7" class="text-center text-muted" style="padding: 30px;">Memuat riwayat mutasi...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal Material Purchase (Pembelian Bahan & Hitung HPP Otomatis) -->
+<div id="modal-purchase" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 520px;">
+        <div class="modal-header">
+            <div>
+                <h3 class="modal-title"><i class="fas fa-cart-shopping text-primary"></i> Catat Pembelian / Restok Bahan Baku</h3>
+                <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                    Sistem otomatis menghitung harga satuan & memperbarui HPP menu.
+                </p>
+            </div>
+            <button class="modal-close" onclick="closeModal('modal-purchase')">&times;</button>
+        </div>
+        <form id="purchase-form" onsubmit="submitPurchase(event)">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Pilih Bahan Baku yang Dibeli</label>
+                    <select id="purchase-item-id" class="form-control" onchange="handlePurchaseItemChange()" required>
+                        <!-- Rendered dynamically -->
+                    </select>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">Jumlah Dibeli (<span id="purchase-unit-label">satuan</span>)</label>
+                        <input type="number" step="any" id="purchase-quantity" class="form-control" placeholder="Contoh: 5000" oninput="calculateUnitCost()" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Total Biaya Pembelian (Rp)</label>
+                        <input type="number" id="purchase-total-cost" class="form-control" placeholder="Contoh: 600000" oninput="calculateUnitCost()" required>
+                    </div>
+                </div>
+
+                <!-- Live Unit Cost Indicator -->
+                <div style="background: linear-gradient(135deg, #FAF8F5, #F4EAE1); border: 1px solid var(--border-color); padding: 10px 14px; border-radius: var(--radius-sm); margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">Harga Pokok Satuan (Modal Baru):</span>
+                    <strong id="purchase-unit-cost-display" style="font-size: 15px; color: var(--color-primary);">Rp 0 / unit</strong>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">Supplier / Nama Toko</label>
+                        <input type="text" id="purchase-supplier" class="form-control" placeholder="Contoh: CV Kopi Nusantara">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Tanggal Pembelian</label>
+                        <input type="date" id="purchase-date" class="form-control" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Keterangan / Catatan Tambahan</label>
+                    <input type="text" id="purchase-notes" class="form-control" placeholder="Contoh: Pembelian stok mingguan biji kopi arabica">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Upload Foto Struk / Faktur Pembelian (Opsional)</label>
+                    <input type="file" id="purchase-receipt" class="form-control" accept="image/*">
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 6px; padding: 10px 0; border-top: 1px solid var(--border-light);">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="purchase-sync-expense" checked style="width: 16px; height: 16px;">
+                        <label for="purchase-sync-expense" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); cursor: pointer;">
+                            Catat otomatis ke Pengeluaran Toko (Kategori: Bahan Baku / Restok)
+                        </label>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="purchase-recalc-hpp" checked style="width: 16px; height: 16px;">
+                        <label for="purchase-recalc-hpp" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); cursor: pointer;">
+                            Perbarui otomatis HPP menu yang menggunakan bahan ini
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('modal-purchase')">Batal</button>
+                <button type="submit" class="btn btn-primary" id="btn-save-purchase">
+                    <i class="fas fa-check-circle"></i> Simpan Pembelian & Update HPP
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Add/Edit Material Master -->
+<div id="modal-material" class="modal-backdrop">
+    <div class="modal-dialog">
+        <div class="modal-header">
+            <h3 class="modal-title" id="material-modal-title">Tambah Bahan Baku Baru</h3>
+            <button class="modal-close" onclick="closeModal('modal-material')">&times;</button>
+        </div>
+        <form id="material-form" onsubmit="saveMaterial(event)">
+            <div class="modal-body">
+                <input type="hidden" id="material-id">
+
+                <div class="form-group">
+                    <label class="form-label">Nama Bahan Baku / Kemasan</label>
+                    <input type="text" id="material-name" class="form-control" placeholder="Contoh: Biji Kopi Arabica Gayo" required>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">Satuan Pengukuran (Unit)</label>
+                        <select id="material-unit" class="form-control">
+                            <option value="gram">Gram (g)</option>
+                            <option value="ml">Mililiter (ml)</option>
+                            <option value="pcs">Pcs / Buah</option>
+                            <option value="shot">Shot</option>
+                            <option value="bag">Bag / Kantong</option>
+                            <option value="kg">Kilogram (kg)</option>
+                            <option value="liter">Liter (l)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Batas Stok Minimum (Alert)</label>
+                        <input type="number" step="any" id="material-min-stock" class="form-control" placeholder="Contoh: 500" value="10" required>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">Harga Pokok per Satuan (Rp)</label>
+                        <input type="number" step="any" id="material-cost-per-unit" class="form-control" placeholder="Contoh: 120" value="0">
+                        <small class="text-muted" style="font-size: 11px;">Biaya modal per 1 gram/ml/pcs.</small>
+                    </div>
+
+                    <div class="form-group" id="material-initial-stock-group">
+                        <label class="form-label">Stok Awal</label>
+                        <input type="number" step="any" id="material-stock" class="form-control" placeholder="Contoh: 5000" value="0">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Foto Bahan (Opsional)</label>
+                    <input type="file" id="material-image" class="form-control" accept="image/*">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('modal-material')">Batal</button>
+                <button type="submit" class="btn btn-primary" id="btn-save-material">Simpan Bahan</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Quick Stock Adjustment -->
+<div id="modal-adjust" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 440px;">
+        <div class="modal-header">
+            <h3 class="modal-title"><i class="fas fa-sliders text-primary"></i> Penyesuaian Stok Cepat</h3>
+            <button class="modal-close" onclick="closeModal('modal-adjust')">&times;</button>
+        </div>
+        <form id="adjust-form" onsubmit="submitStockAdjust(event)">
+            <div class="modal-body">
+                <input type="hidden" id="adjust-item-id">
+                
+                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 14px;">
+                    Bahan: <strong id="adjust-item-name" style="color: var(--color-primary);">-</strong> (Stok saat ini: <span id="adjust-item-cur-stock">0</span>)
+                </p>
+
+                <div class="form-group">
+                    <label class="form-label">Tipe Penyesuaian</label>
+                    <select id="adjust-type" class="form-control">
+                        <option value="IN">➕ Masuk / Belanja Bahan (Stock IN)</option>
+                        <option value="OUT">➖ Keluar / Rusak / Tumpah (Stock OUT)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Jumlah (<span id="adjust-unit-label">unit</span>)</label>
+                    <input type="number" step="any" id="adjust-qty" class="form-control" placeholder="Contoh: 500" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Catatan / Alasan</label>
+                    <input type="text" id="adjust-notes" class="form-control" placeholder="Contoh: Penyesuaian fisik harian">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Foto Struk / Nota (Opsional)</label>
+                    <input type="file" id="adjust-receipt" class="form-control" accept="image/*">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('modal-adjust')">Batal</button>
+                <button type="submit" class="btn btn-primary" id="btn-save-adjust">Simpan Perubahan</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Opname Audit Session (Morning / Night) -->
+<div id="modal-opname-session" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 620px;">
+        <div class="modal-header">
+            <h3 class="modal-title" id="opname-session-title">Audit Stock Opname</h3>
+            <button class="modal-close" onclick="closeModal('modal-opname-session')">&times;</button>
+        </div>
+        <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+            <p id="opname-session-desc" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+                Hitung jumlah fisik stok bahan baku di bar/gudang dan masukkan ke kolom berikut:
+            </p>
+            <div id="opname-items-form-container">
+                <!-- Rendered dynamically -->
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('modal-opname-session')">Batal</button>
+            <button type="button" class="btn btn-primary" id="btn-submit-opname" onclick="submitOpnameSession()">Simpan Opname</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let rawInventory = [];
+    let todayOpname = null;
+    let inventoryLogs = [];
+    let opnameMode = 'open'; // 'open' or 'close'
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('purchase-date').valueAsDate = new Date();
+        loadInventory();
+    });
+
+    async function loadInventory() {
+        try {
+            const [items, opnameData, logsData] = await Promise.all([
+                apiFetch('/inventory'),
+                apiFetch('/inventory/opname/active'),
+                apiFetch('/inventory/transactions')
+            ]);
+            rawInventory = items || [];
+            todayOpname = opnameData || null;
+            inventoryLogs = logsData || [];
+
+            renderOpnameBanner();
+            renderInventoryTable(rawInventory);
+            renderLogsTable(inventoryLogs);
+        } catch (e) {
+            showToast('Gagal memuat inventori: ' + e.message, 'error');
+        }
+    }
+
+    function renderOpnameBanner() {
+        const label = document.getElementById('opname-status-label');
+        const actions = document.getElementById('opname-action-buttons');
+        const lastDateEl = document.getElementById('opname-last-date');
+        const status = todayOpname ? todayOpname.status : 'NOT_OPEN';
+
+        if (todayOpname && todayOpname.opname && todayOpname.opname.date) {
+            lastDateEl.textContent = new Date(todayOpname.opname.date).toLocaleDateString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+        } else {
+            lastDateEl.textContent = 'Belum Ada';
+        }
+
+        if (status === 'NOT_OPEN') {
+            label.className = 'badge-chip warning';
+            label.textContent = 'Belum Dibuka (Pagi)';
+            actions.innerHTML = `
+                <button class="btn btn-primary btn-sm" onclick="startMorningOpname()">
+                    <i class="fas fa-sun"></i> Buka Opname Pagi
+                </button>
+            `;
+        } else if (status === 'OPEN') {
+            const isConfirmed = todayOpname.opname && todayOpname.opname.isStockConfirmed;
+            if (!isConfirmed) {
+                label.className = 'badge-chip info';
+                label.textContent = 'Opname Pagi Terbuka (Belum Kunci Baseline)';
+                actions.innerHTML = `
+                    <button class="btn btn-secondary btn-sm" onclick="confirmStockBaseline()">
+                        <i class="fas fa-lock"></i> Kunci Stok Baseline
+                    </button>
+                `;
+            } else {
+                label.className = 'badge-chip success';
+                label.textContent = 'Stok Terkunci (Siap Tutup Malam)';
+                actions.innerHTML = `
+                    <button class="btn btn-danger btn-sm" onclick="startNightOpname()">
+                        <i class="fas fa-moon"></i> Tutup Opname Malam
+                    </button>
+                `;
+            }
+        } else {
+            label.className = 'badge-chip success';
+            label.textContent = 'Selesai Ditutup (Malam)';
+            actions.innerHTML = `
+                <span class="badge-chip success" style="font-size: 12px; padding: 6px 12px;">
+                    <i class="fas fa-check-double"></i> Audit Hari Ini Tuntas
+                </span>
+            `;
+        }
+    }
+
+    function renderInventoryTable(items) {
+        const tbody = document.getElementById('inventory-table-body');
+        if (items.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada data bahan baku.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = items.map(it => {
+            const stock = it.stock || 0;
+            const minStock = it.minStock || 10;
+            const costPerUnit = it.costPerUnit || 0;
+            const isLow = stock <= minStock;
+            const isOut = stock <= 0;
+
+            let statusChip = '<span class="badge-chip success"><i class="fas fa-circle-check"></i> Aman</span>';
+            if (isOut) {
+                statusChip = '<span class="badge-chip danger"><i class="fas fa-circle-xmark"></i> Habis</span>';
+            } else if (isLow) {
+                statusChip = '<span class="badge-chip warning"><i class="fas fa-triangle-exclamation"></i> Menipis</span>';
+            }
+
+            const imgTag = it.imageUrl 
+                ? `<img src="${it.imageUrl}" style="width: 36px; height: 36px; border-radius: var(--radius-xs); object-fit: cover;">`
+                : `<div style="width: 36px; height: 36px; border-radius: var(--radius-xs); background: var(--color-primary-light); color: var(--color-primary); display: flex; align-items: center; justify-content: center; font-size: 14px;"><i class="fas fa-box"></i></div>`;
+
+            return `
+                <tr>
+                    <td>${imgTag}</td>
+                    <td>
+                        <strong style="color: var(--text-main); font-size: 13.5px;">${it.name}</strong>
+                    </td>
+                    <td><strong style="font-size: 15px; color: ${isLow ? 'var(--color-danger)' : 'var(--color-primary)'};">${stock} ${it.unit}</strong></td>
+                    <td><strong style="color: var(--color-primary); font-size: 13.5px;">${formatRp(costPerUnit)}</strong> <span style="font-size: 11px; color: var(--text-muted);">/ ${it.unit}</span></td>
+                    <td>${minStock} ${it.unit}</td>
+                    <td>${statusChip}</td>
+                    <td style="text-align: right;">
+                        <button class="btn btn-primary btn-sm" onclick="openPurchaseModal(${it.id})" title="Beli Stok Bahan">
+                            <i class="fas fa-cart-shopping"></i> Beli
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="openAdjustModal(${it.id})" title="Sesuaikan Stok">
+                            <i class="fas fa-sliders"></i>
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="editMaterial(${it.id})" title="Edit Bahan">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function renderLogsTable(logs) {
+        const tbody = document.getElementById('inventory-logs-table-body');
+        if (logs.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada riwayat mutasi.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = logs.map(l => {
+            const dateStr = new Date(l.createdAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' });
+            const isIN = l.type === 'IN';
+            const badge = isIN 
+                ? '<span class="badge-chip success"><i class="fas fa-arrow-down"></i> Masuk (IN)</span>'
+                : '<span class="badge-chip danger"><i class="fas fa-arrow-up"></i> Keluar (OUT)</span>';
+
+            const photoLink = l.receiptUrl 
+                ? `<a href="${l.receiptUrl}" target="_blank" class="badge-chip info"><i class="fas fa-image"></i> Lihat Nota</a>`
+                : '-';
+
+            return `
+                <tr>
+                    <td><strong>${dateStr}</strong></td>
+                    <td><strong style="color: var(--text-main);">${l.itemName || 'Bahan'}</strong></td>
+                    <td>${badge}</td>
+                    <td><strong style="color: ${isIN ? 'var(--color-success)' : 'var(--color-danger)'};">${isIN ? '+' : '-'}${l.quantity} ${l.unit || ''}</strong></td>
+                    <td><strong>${l.totalCost > 0 ? formatRp(l.totalCost) : '-'}</strong></td>
+                    <td>${l.supplier ? `<strong>${l.supplier}</strong> - ` : ''}${l.notes || '-'}</td>
+                    <td>${photoLink}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function filterInventory() {
+        const query = document.getElementById('inventory-search').value.toLowerCase().trim();
+        const filtered = rawInventory.filter(it => !query || it.name.toLowerCase().includes(query));
+        renderInventoryTable(filtered);
+    }
+
+    // Material Purchase Modal Handlers
+    function openPurchaseModal(preselectedId = null) {
+        const sel = document.getElementById('purchase-item-id');
+        sel.innerHTML = rawInventory.map(it => `
+            <option value="${it.id}" data-unit="${it.unit}" ${preselectedId === it.id ? 'selected' : ''}>
+                ${it.name} (${it.unit})
+            </option>
+        `).join('');
+
+        document.getElementById('purchase-form').reset();
+        document.getElementById('purchase-date').valueAsDate = new Date();
+        document.getElementById('purchase-sync-expense').checked = true;
+        document.getElementById('purchase-recalc-hpp').checked = true;
+
+        handlePurchaseItemChange();
+        openModal('modal-purchase');
+    }
+
+    function handlePurchaseItemChange() {
+        const sel = document.getElementById('purchase-item-id');
+        if (sel.selectedIndex >= 0) {
+            const opt = sel.options[sel.selectedIndex];
+            const unit = opt.dataset.unit || 'unit';
+            document.getElementById('purchase-unit-label').textContent = unit;
+        }
+        calculateUnitCost();
+    }
+
+    function calculateUnitCost() {
+        const qty = parseFloat(document.getElementById('purchase-quantity').value) || 0;
+        const total = parseFloat(document.getElementById('purchase-total-cost').value) || 0;
+        const sel = document.getElementById('purchase-item-id');
+        const opt = sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex] : null;
+        const unit = opt ? (opt.dataset.unit || 'unit') : 'unit';
+
+        if (qty > 0 && total >= 0) {
+            const unitCost = Math.round(total / qty);
+            document.getElementById('purchase-unit-cost-display').textContent = `${formatRp(unitCost)} / ${unit}`;
+        } else {
+            document.getElementById('purchase-unit-cost-display').textContent = `Rp 0 / ${unit}`;
+        }
+    }
+
+    async function submitPurchase(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-save-purchase');
+        btn.disabled = true;
+
+        const formData = new FormData();
+        formData.append('itemId', document.getElementById('purchase-item-id').value);
+        formData.append('quantity', document.getElementById('purchase-quantity').value);
+        formData.append('totalCost', document.getElementById('purchase-total-cost').value);
+        formData.append('supplier', document.getElementById('purchase-supplier').value);
+        formData.append('date', document.getElementById('purchase-date').value);
+        formData.append('notes', document.getElementById('purchase-notes').value);
+        formData.append('syncExpense', document.getElementById('purchase-sync-expense').checked);
+        formData.append('recalcHpp', document.getElementById('purchase-recalc-hpp').checked);
+
+        const receipt = document.getElementById('purchase-receipt').files[0];
+        if (receipt) formData.append('receipt', receipt);
+
+        try {
+            const res = await apiFetch('/inventory/purchase', {
+                method: 'POST',
+                body: formData
+            });
+            showToast(res.message || 'Pembelian bahan berhasil dicatat!', 'success');
+            closeModal('modal-purchase');
+            loadInventory();
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    // Material Master Modal Actions
+    function openNewItemModal() {
+        document.getElementById('material-id').value = '';
+        document.getElementById('material-modal-title').textContent = 'Tambah Master Bahan Baku Baru';
+        document.getElementById('material-initial-stock-group').style.display = 'block';
+        document.getElementById('material-form').reset();
+        openModal('modal-material');
+    }
+
+    function editMaterial(id) {
+        const it = rawInventory.find(x => x.id === id);
+        if (!it) return;
+
+        document.getElementById('material-id').value = it.id;
+        document.getElementById('material-modal-title').textContent = 'Edit Master Bahan: ' + it.name;
+        document.getElementById('material-name').value = it.name;
+        document.getElementById('material-unit').value = it.unit;
+        document.getElementById('material-min-stock').value = it.minStock || 10;
+        document.getElementById('material-cost-per-unit').value = it.costPerUnit || 0;
+        document.getElementById('material-initial-stock-group').style.display = 'none';
+        openModal('modal-material');
+    }
+
+    async function saveMaterial(e) {
+        e.preventDefault();
+        const id = document.getElementById('material-id').value;
+        const btn = document.getElementById('btn-save-material');
+        btn.disabled = true;
+
+        const formData = new FormData();
+        formData.append('name', document.getElementById('material-name').value.trim());
+        formData.append('unit', document.getElementById('material-unit').value);
+        formData.append('minStock', document.getElementById('material-min-stock').value);
+        formData.append('costPerUnit', document.getElementById('material-cost-per-unit').value || 0);
+
+        if (!id) {
+            formData.append('stock', document.getElementById('material-stock').value || 0);
+        }
+
+        const img = document.getElementById('material-image').files[0];
+        if (img) formData.append('image', img);
+
+        try {
+            if (id) {
+                await apiFetch(`/inventory/${id}`, { method: 'PUT', body: formData });
+                showToast('Bahan baku diperbarui!', 'success');
+            } else {
+                await apiFetch('/inventory', { method: 'POST', body: formData });
+                showToast('Bahan baku baru ditambahkan!', 'success');
+            }
+            closeModal('modal-material');
+            loadInventory();
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    // Quick Adjustment
+    function openAdjustModal(id) {
+        const it = rawInventory.find(x => x.id === id);
+        if (!it) return;
+
+        document.getElementById('adjust-item-id').value = it.id;
+        document.getElementById('adjust-item-name').textContent = it.name;
+        document.getElementById('adjust-item-cur-stock').textContent = `${it.stock} ${it.unit}`;
+        document.getElementById('adjust-unit-label').textContent = it.unit;
+        document.getElementById('adjust-form').reset();
+        openModal('modal-adjust');
+    }
+
+    async function submitStockAdjust(e) {
+        e.preventDefault();
+        const id = document.getElementById('adjust-item-id').value;
+        const btn = document.getElementById('btn-save-adjust');
+        btn.disabled = true;
+
+        const formData = new FormData();
+        formData.append('type', document.getElementById('adjust-type').value);
+        formData.append('quantity', document.getElementById('adjust-qty').value);
+        formData.append('notes', document.getElementById('adjust-notes').value);
+
+        const receipt = document.getElementById('adjust-receipt').files[0];
+        if (receipt) formData.append('receipt', receipt);
+
+        try {
+            await apiFetch(`/inventory/${id}/adjust`, { method: 'PUT', body: formData });
+            showToast('Stok berhasil disesuaikan!', 'success');
+            closeModal('modal-adjust');
+            loadInventory();
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    // Opname Workflow Handlers
+    function startMorningOpname() {
+        opnameMode = 'open';
+        document.getElementById('opname-session-title').textContent = 'Audit Stock Opname Pagi (Buka Toko)';
+        document.getElementById('opname-session-desc').textContent = 'Hitung fisik stok bahan baku di bar/gudang sebelum mulai transaksi hari ini:';
+
+        const container = document.getElementById('opname-items-form-container');
+        container.innerHTML = rawInventory.map(it => `
+            <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-light);">
+                <div>
+                    <strong style="color: var(--text-main); font-size: 13.5px;">${it.name}</strong>
+                    <div style="font-size: 11px; color: var(--text-muted);">Sistem: ${it.stock} ${it.unit}</div>
+                </div>
+                <input type="number" step="any" class="form-control opname-input" data-id="${it.id}" value="${it.stock}" placeholder="Jumlah Fisik" required>
+            </div>
+        `).join('');
+
+        openModal('modal-opname-session');
+    }
+
+    async function confirmStockBaseline() {
+        if (!confirm('Kunci stok baseline untuk transaksi hari ini?')) return;
+        try {
+            await apiFetch('/inventory/opname/confirm-stock', { method: 'POST' });
+            showToast('Stok baseline berhasil dikunci!', 'success');
+            loadInventory();
+        } catch (err) { showToast(err.message, 'error'); }
+    }
+
+    function startNightOpname() {
+        opnameMode = 'close';
+        document.getElementById('opname-session-title').textContent = 'Audit Stock Opname Malam (Tutup Toko)';
+        document.getElementById('opname-session-desc').textContent = 'Hitung sisa fisik stok bahan baku malam ini untuk menghitung pemakaian & selisih bahan:';
+
+        const container = document.getElementById('opname-items-form-container');
+        container.innerHTML = rawInventory.map(it => `
+            <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-light);">
+                <div>
+                    <strong style="color: var(--text-main); font-size: 13.5px;">${it.name}</strong>
+                    <div style="font-size: 11px; color: var(--text-muted);">Sisa Sistem: ${it.stock} ${it.unit}</div>
+                </div>
+                <input type="number" step="any" class="form-control opname-input" data-id="${it.id}" value="${it.stock}" placeholder="Sisa Fisik Malam" required>
+            </div>
+        `).join('');
+
+        openModal('modal-opname-session');
+    }
+
+    async function submitOpnameSession() {
+        const inputs = document.querySelectorAll('.opname-input');
+        const items = [];
+        inputs.forEach(inp => {
+            items.push({
+                inventoryItemId: parseInt(inp.dataset.id),
+                openingStock: parseFloat(inp.value) || 0,
+                closingStock: parseFloat(inp.value) || 0,
+                morningNotes: 'Opname Pagi',
+                nightNotes: 'Opname Malam'
+            });
+        });
+
+        const btn = document.getElementById('btn-submit-opname');
+        btn.disabled = true;
+
+        try {
+            if (opnameMode === 'open') {
+                await apiFetch('/inventory/opname/open', {
+                    method: 'POST',
+                    body: JSON.stringify({ items })
+                });
+                showToast('Opname pagi berhasil dibuka!', 'success');
+            } else {
+                await apiFetch('/inventory/opname/close', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        opnameId: todayOpname.opname.id,
+                        items
+                    })
+                });
+                showToast('Audit opname malam selesai dan ditutup!', 'success');
+            }
+            closeModal('modal-opname-session');
+            loadInventory();
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+</script>
+{% endblock %}

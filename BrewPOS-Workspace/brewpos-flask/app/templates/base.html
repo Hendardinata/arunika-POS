@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Arunika-POS | Every Cup Has A Story{% endblock %}</title>
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Main Style -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS (Excel .xlsx export) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar no-print">
+            <div class="sidebar-header">
+                <div class="brand-logo">☕</div>
+                <div class="brand-info">
+                    <h1>Arunika-POS</h1>
+                    <p>Every Cup Has A Story</p>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-section-title">Operasional Kasir</div>
+                <a href="/pos" class="nav-item {% if active_page == 'pos' %}active{% endif %}">
+                    <i class="fas fa-cash-register"></i>
+                    <span>POS Kasir</span>
+                </a>
+                <a href="/dashboard" class="nav-item {% if active_page == 'dashboard' %}active{% endif %}">
+                    <i class="fas fa-chart-pie"></i>
+                    <span>Dashboard Analitik</span>
+                </a>
+
+                <a href="/monitoring" class="nav-item {% if active_page == 'monitoring' %}active{% endif %}">
+                    <i class="fas fa-tv"></i>
+                    <span>Live Monitoring / KDS</span>
+                </a>
+
+                <div class="nav-section-title">Katalog & Stok</div>
+                <a href="/menus" class="nav-item {% if active_page == 'menus' %}active{% endif %}">
+                    <i class="fas fa-mug-hot"></i>
+                    <span>Menu & Resep Bahan</span>
+                </a>
+                <a href="/inventory" class="nav-item {% if active_page == 'inventory' %}active{% endif %}">
+                    <i class="fas fa-boxes-stacked"></i>
+                    <span>Inventori & Opname</span>
+                </a>
+
+                <div class="nav-section-title">Member & CRM</div>
+                <a href="/customers" class="nav-item {% if active_page == 'customers' %}active{% endif %}">
+                    <i class="fas fa-users"></i>
+                    <span>Member & Loyalty</span>
+                </a>
+
+                <div class="nav-section-title">Keuangan & Laporan</div>
+                <a href="/expenses" class="nav-item {% if active_page == 'expenses' %}active{% endif %}">
+                    <i class="fas fa-receipt"></i>
+                    <span>Pengeluaran Toko</span>
+                </a>
+                <a href="/reports" class="nav-item {% if active_page == 'reports' %}active{% endif %}">
+                    <i class="fas fa-file-invoice-dollar"></i>
+                    <span>Pusat Laporan Lengkap</span>
+                </a>
+
+                <div class="nav-section-title">Sistem</div>
+                <a href="/settings" class="nav-item {% if active_page == 'settings' %}active{% endif %}">
+                    <i class="fas fa-sliders"></i>
+                    <span>Pengaturan & Akun</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="user-profile-badge">
+                    <div class="user-avatar">A</div>
+                    <div class="user-meta">
+                        <div class="user-name">Memuat...</div>
+                        <div class="user-role">CASHIER</div>
+                    </div>
+                    <button class="btn btn-icon btn-secondary" onclick="logout()" title="Keluar">
+                        <i class="fas fa-power-off text-danger"></i>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Mobile Sidebar Backdrop Overlay -->
+        <div class="sidebar-backdrop no-print" id="sidebar-backdrop" onclick="toggleMobileSidebar()"></div>
+
+        <!-- Main Viewport -->
+        <div class="main-wrapper">
+            <!-- Topbar -->
+            <header class="topbar no-print">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <button class="btn btn-icon btn-secondary mobile-menu-toggle" id="btn-mobile-sidebar-toggle" onclick="toggleMobileSidebar()" title="Buka Menu">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <div class="page-title">
+                        <h2>{% block page_title %}Dashboard{% endblock %}</h2>
+                    </div>
+                </div>
+                <div class="topbar-actions">
+                    <div class="shift-status-pill open" style="cursor: default;">
+                        <span class="status-dot"></span> <span class="shift-text">Terminal Online</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dynamic Content -->
+            <main class="content-area">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

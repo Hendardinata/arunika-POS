@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | Arunika-POS</title>
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Main Style -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .login-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #F5EFEB 0%, #FAF8F5 50%, #EADBCE 100%);
+            padding: 20px;
+        }
+        .login-box {
+            background-color: #FFFFFF;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-xl);
+            padding: 42px;
+            width: 100%;
+            max-width: 440px;
+            box-shadow: var(--shadow-lg);
+            position: relative;
+        }
+        .login-logo {
+            width: 72px;
+            height: 72px;
+            background: linear-gradient(135deg, var(--color-primary), #8F6647);
+            border-radius: var(--radius-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 34px;
+            color: #FFF;
+            margin: 0 auto 20px;
+            box-shadow: 0 8px 20px rgba(111, 78, 55, 0.35);
+        }
+        .login-header {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+        .login-header h2 {
+            font-family: var(--font-heading);
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--color-primary);
+            margin-bottom: 6px;
+        }
+        .login-header p {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        .login-footer-badge {
+            margin-top: 24px;
+            padding-top: 18px;
+            border-top: 1px solid var(--border-light);
+            text-align: center;
+            font-size: 11.5px;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="login-wrapper">
+        <div class="login-box">
+            <div class="login-logo">
+                ☕
+            </div>
+            <div class="login-header">
+                <h2>Arunika-POS</h2>
+                <p>Silakan masuk menggunakan kredensial akun Anda</p>
+            </div>
+
+            <form id="login-form" onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label class="form-label"><i class="fas fa-user text-primary"></i> Username</label>
+                    <input type="text" id="username" class="form-control" placeholder="Masukkan username" required autofocus autocomplete="username">
+                </div>
+
+                <div class="form-group" style="margin-bottom: 26px;">
+                    <label class="form-label"><i class="fas fa-lock text-primary"></i> Password</label>
+                    <input type="password" id="password" class="form-control" placeholder="Masukkan password" required autocomplete="current-password">
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-lg" style="width: 100%; border-radius: var(--radius-md); font-size: 15px; font-weight: 700;" id="btn-login">
+                    <i class="fas fa-right-to-bracket"></i> Masuk ke Sistem
+                </button>
+            </form>
+
+            <div class="login-footer-badge">
+                <i class="fas fa-shield-halved text-success"></i> Sistem POS & Manajemen Kafe Terenkripsi
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Helpers Script -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script>
+        async function handleLogin(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btn-login');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memverifikasi kredensial...';
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+
+            try {
+                const res = await apiFetch('/auth/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ username, password })
+                });
+
+                setUser(res.user, res.token);
+                showToast(`Selamat datang, ${res.user.username}!`, 'success');
+
+                const targetLanding = res.landingPage || '/pos';
+                setTimeout(() => {
+                    window.location.href = targetLanding;
+                }, 500);
+            } catch (err) {
+                showToast(err.message || 'Login gagal. Periksa username dan password Anda.', 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-right-to-bracket"></i> Masuk ke Sistem';
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,552 @@
+{% extends 'base.html' %}
+
+{% block title %}Kelola Menu & Resep | Arunika-POS{% endblock %}
+{% block page_title %}Katalog Menu & Racikan Resep Bahan{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom: 24px;">
+    <div class="card-header">
+        <div>
+            <h3 class="card-title"><i class="fas fa-mug-hot text-primary"></i> Daftar Menu Minuman & Makanan</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                Kelola harga jual, HPP (modal racikan otomatis), dan racikan resep bahan baku per cup.
+            </p>
+        </div>
+        <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary btn-sm" onclick="openCategoryModal()"><i class="fas fa-tags"></i> Kategori</button>
+            <button class="btn btn-primary btn-sm" onclick="openMenuModal()"><i class="fas fa-plus"></i> Tambah Menu Baru</button>
+        </div>
+    </div>
+
+    <!-- Search & Category Filter (Responsive) -->
+    <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
+        <input type="text" id="filter-menu-search" class="form-control" style="flex: 1 1 220px; min-width: 180px;" placeholder="🔍 Cari nama menu..." oninput="filterMenus()">
+        <select id="filter-category-select" class="form-control" style="flex: 0 1 200px; min-width: 150px;" onchange="filterMenus()">
+            <option value="all">Semua Kategori</option>
+        </select>
+    </div>
+
+    <div class="table-responsive">
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th style="width: 50px;">Foto</th>
+                    <th>Nama Menu</th>
+                    <th>Kategori</th>
+                    <th>Harga Jual</th>
+                    <th>HPP (Modal Bahan)</th>
+                    <th>Margin / Cup</th>
+                    <th>Terjual</th>
+                    <th>Resep & HPP Otomatis</th>
+                    <th style="text-align: right;">Aksi</th>
+                </tr>
+            </thead>
+            <tbody id="menus-table-body">
+                <tr><td colspan="9" class="text-center text-muted" style="padding: 30px;">Memuat data menu...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal Add/Edit Menu -->
+<div id="modal-menu" class="modal-backdrop">
+    <div class="modal-dialog">
+        <div class="modal-header">
+            <h3 class="modal-title" id="menu-modal-title">Tambah Menu Baru</h3>
+            <button class="modal-close" onclick="closeModal('modal-menu')">&times;</button>
+        </div>
+        <form id="menu-form" onsubmit="saveMenu(event)">
+            <div class="modal-body">
+                <input type="hidden" id="menu-id">
+                
+                <div class="form-group">
+                    <label class="form-label">Nama Menu</label>
+                    <input type="text" id="menu-name" class="form-control" placeholder="Contoh: Kopi Susu Gula Aren" required>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">Kategori</label>
+                        <select id="menu-category" class="form-control" required>
+                            <!-- Rendered dynamically -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Harga Jual (Rp)</label>
+                        <input type="number" id="menu-price" class="form-control" placeholder="Contoh: 25000" required>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">HPP / Modal Estimasi (Rp)</label>
+                        <input type="number" id="menu-hpp" class="form-control" placeholder="Contoh: 6500" value="0">
+                        <small class="text-muted" style="font-size: 11px;">Bisa dihitung otomatis dari racikan resep.</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Upload Foto Menu</label>
+                        <input type="file" id="menu-image" class="form-control" accept="image/*">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Deskripsi Menu</label>
+                    <textarea id="menu-desc" class="form-control" rows="2" placeholder="Deskripsi singkat rasa atau keunggulan menu"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Catatan SOP Barista</label>
+                    <textarea id="menu-recipe-notes" class="form-control" rows="2" placeholder="Contoh: Espresso 18g + Susu 120ml + Aren 20ml"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('modal-menu')">Batal</button>
+                <button type="submit" class="btn btn-primary" id="btn-save-menu">Simpan Menu</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Interactive Modal Recipe Builder & Real-Time HPP Calculator -->
+<div id="modal-recipe-builder" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 640px;">
+        <div class="modal-header">
+            <div>
+                <h3 class="modal-title"><i class="fas fa-flask text-primary"></i> Racikan Resep & Kalkulator HPP Otomatis</h3>
+                <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                    Menu: <strong id="recipe-target-menu-name" style="color: var(--color-primary);">-</strong> (Harga Jual: <span id="recipe-target-price">Rp 0</span>)
+                </p>
+            </div>
+            <button class="modal-close" onclick="closeModal('modal-recipe-builder')">&times;</button>
+        </div>
+        <div class="modal-body" style="max-height: 65vh; overflow-y: auto;">
+            <!-- Live Calculated HPP Summary Card -->
+            <div style="background: linear-gradient(135deg, #FAF8F5, #F4EAE1); border: 1px solid var(--border-color); padding: 14px 18px; border-radius: var(--radius-md); margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Total HPP Hasil Racikan</div>
+                    <div id="recipe-live-hpp" style="font-family: var(--font-heading); font-size: 22px; font-weight: 800; color: var(--color-primary); margin-top: 2px;">Rp 0</div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Estimasi Margin Laba / Cup</div>
+                    <div id="recipe-live-margin" style="font-family: var(--font-heading); font-size: 18px; font-weight: 800; color: var(--color-success); margin-top: 2px;">+Rp 0 (0%)</div>
+                </div>
+            </div>
+
+            <!-- Current Ingredients List in Recipe -->
+            <label class="form-label" style="font-size: 12.5px; font-weight: 700; color: var(--text-main); margin-bottom: 8px;">
+                Bahan Baku yang Digunakan per 1 Porsi:
+            </label>
+            <div id="recipe-ingredients-list-container" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px;">
+                <p class="text-muted text-center" style="padding: 20px;">Memuat racikan resep...</p>
+            </div>
+
+            <!-- Add Ingredient to Recipe Bar -->
+            <div style="background: #FFF; border: 1px dashed var(--border-color); padding: 12px 14px; border-radius: var(--radius-md); margin-bottom: 18px;">
+                <label class="form-label" style="font-size: 11.5px; margin-bottom: 6px;">➕ Tambah Bahan Baku ke Resep:</label>
+                <div style="display: grid; grid-template-columns: 2fr 1fr auto; gap: 8px;">
+                    <select id="builder-add-item-select" class="form-control" style="font-size: 12.5px;">
+                        <!-- Rendered dynamically from inventory -->
+                    </select>
+                    <input type="number" step="any" id="builder-add-item-qty" class="form-control" placeholder="Takaran" style="font-size: 12.5px;">
+                    <button class="btn btn-secondary btn-sm" onclick="addIngredientToRecipe()"><i class="fas fa-plus"></i> Tambah</button>
+                </div>
+            </div>
+
+            <!-- SOP Instructions Area -->
+            <div class="form-group">
+                <label class="form-label">Catatan SOP Pembuatan Barista</label>
+                <textarea id="recipe-instructions-input" class="form-control" rows="2" placeholder="Contoh: Ekstraksi 18g espresso 30ml dalam 25 detik, campur aren dan susu dingin."></textarea>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="recipe-apply-hpp-check" checked style="width: 16px; height: 16px;">
+                <label for="recipe-apply-hpp-check" style="font-size: 12.5px; font-weight: 600; color: var(--text-secondary); cursor: pointer;">
+                    Terapkan otomatis HPP hasil hitungan resep ini ke harga modal menu
+                </label>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('modal-recipe-builder')">Batal</button>
+            <button type="button" class="btn btn-primary" id="btn-save-recipe-builder" onclick="submitRecipeBuilder()">
+                <i class="fas fa-check-circle"></i> Simpan Resep & Terapkan HPP
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Category Manager -->
+<div id="modal-category" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 440px;">
+        <div class="modal-header">
+            <h3 class="modal-title">Kelola Kategori Menu</h3>
+            <button class="modal-close" onclick="closeModal('modal-category')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="category-form" onsubmit="saveCategory(event)" style="display: flex; gap: 8px; margin-bottom: 16px;">
+                <input type="text" id="category-name-input" class="form-control" placeholder="Nama kategori baru..." required>
+                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Tambah</button>
+            </form>
+
+            <div id="category-list-box" style="display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto;">
+                <!-- Rendered dynamically -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let rawMenus = [];
+    let categoriesList = [];
+    let inventoryItemsList = [];
+    let activeRecipeMenuId = null;
+    let activeRecipeMenuPrice = 0;
+    let currentRecipeIngredients = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadData();
+    });
+
+    async function loadData() {
+        try {
+            const [menus, cats, inv] = await Promise.all([
+                apiFetch('/menus'),
+                apiFetch('/categories'),
+                apiFetch('/inventory')
+            ]);
+            rawMenus = menus;
+            categoriesList = cats;
+            inventoryItemsList = inv || [];
+
+            populateCategoryOptions();
+            renderTable(rawMenus);
+        } catch (e) {
+            showToast('Gagal memuat menu: ' + e.message, 'error');
+        }
+    }
+
+    function populateCategoryOptions() {
+        const sel = document.getElementById('menu-category');
+        const filterSel = document.getElementById('filter-category-select');
+        
+        sel.innerHTML = categoriesList.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+        filterSel.innerHTML = `<option value="all">Semua Kategori</option>` + categoriesList.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+    }
+
+    function renderTable(menus) {
+        const tbody = document.getElementById('menus-table-body');
+        if (menus.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada data menu.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = menus.map(m => {
+            const hpp = m.hpp || 0;
+            const margin = m.price - hpp;
+            const marginPct = m.price > 0 ? Math.round((margin / m.price) * 100) : 0;
+
+            const imgTag = m.imageUrl 
+                ? `<img src="${m.imageUrl}" style="width: 36px; height: 36px; border-radius: var(--radius-xs); object-fit: cover;">`
+                : `<div style="width: 36px; height: 36px; border-radius: var(--radius-xs); background: var(--color-primary-light); color: var(--color-primary); display: flex; align-items: center; justify-content: center; font-size: 14px;"><i class="fas fa-mug-hot"></i></div>`;
+
+            return `
+                <tr>
+                    <td>${imgTag}</td>
+                    <td>
+                        <strong style="color: var(--text-main);">${m.name}</strong>
+                        ${m.description ? `<div style="font-size: 11px; color: var(--text-muted);">${m.description}</div>` : ''}
+                    </td>
+                    <td><span class="badge-chip primary">${m.category ? m.category.name : '-'}</span></td>
+                    <td><strong style="color: var(--color-primary); font-size: 14px;">${formatRp(m.price)}</strong></td>
+                    <td><strong style="color: var(--text-secondary);">${formatRp(hpp)}</strong></td>
+                    <td>
+                        <strong style="color: var(--color-success); font-size: 13px;">+${formatRp(margin)}</strong>
+                        <span class="badge-chip success" style="font-size: 10px; margin-left: 4px;">${marginPct}%</span>
+                    </td>
+                    <td><strong>${m.soldCount || 0}</strong> cup</td>
+                    <td>
+                        <button class="btn btn-secondary btn-sm" onclick="openRecipeBuilder(${m.id}, '${m.name.replace(/'/g, "\\'")}', ${m.price})">
+                            <i class="fas fa-flask text-primary"></i> Racikan Resep (HPP)
+                        </button>
+                    </td>
+                    <td style="text-align: right;">
+                        <button class="btn btn-secondary btn-sm" onclick="editMenu(${m.id})" title="Edit Menu"><i class="fas fa-edit"></i></button>
+                        <button class="btn btn-secondary btn-sm text-danger" onclick="deleteMenu(${m.id}, '${m.name.replace(/'/g, "\\'")}')" title="Hapus"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function filterMenus() {
+        const query = document.getElementById('filter-menu-search').value.toLowerCase().trim();
+        const cat = document.getElementById('filter-category-select').value;
+
+        const filtered = rawMenus.filter(m => {
+            const matchQuery = !query || m.name.toLowerCase().includes(query);
+            const matchCat = cat === 'all' || (m.category && m.category.name === cat);
+            return matchQuery && matchCat;
+        });
+
+        renderTable(filtered);
+    }
+
+    // Modal Menu Add/Edit
+    function openMenuModal() {
+        document.getElementById('menu-id').value = '';
+        document.getElementById('menu-modal-title').textContent = 'Tambah Menu Baru';
+        document.getElementById('menu-form').reset();
+        openModal('modal-menu');
+    }
+
+    function editMenu(id) {
+        const m = rawMenus.find(it => it.id === id);
+        if (!m) return;
+
+        document.getElementById('menu-id').value = m.id;
+        document.getElementById('menu-modal-title').textContent = 'Edit Menu: ' + m.name;
+        document.getElementById('menu-name').value = m.name;
+        document.getElementById('menu-category').value = m.categoryId;
+        document.getElementById('menu-price').value = m.price;
+        document.getElementById('menu-hpp').value = m.hpp || 0;
+        document.getElementById('menu-desc').value = m.description || '';
+        document.getElementById('menu-recipe-notes').value = m.recipeNotes || '';
+        openModal('modal-menu');
+    }
+
+    async function saveMenu(e) {
+        e.preventDefault();
+        const id = document.getElementById('menu-id').value;
+        const btn = document.getElementById('btn-save-menu');
+        btn.disabled = true;
+
+        const formData = new FormData();
+        formData.append('name', document.getElementById('menu-name').value.trim());
+        formData.append('categoryId', document.getElementById('menu-category').value);
+        formData.append('price', document.getElementById('menu-price').value);
+        formData.append('hpp', document.getElementById('menu-hpp').value || 0);
+        formData.append('description', document.getElementById('menu-desc').value);
+        formData.append('recipeNotes', document.getElementById('menu-recipe-notes').value);
+
+        const imgFile = document.getElementById('menu-image').files[0];
+        if (imgFile) formData.append('image', imgFile);
+
+        try {
+            if (id) {
+                await apiFetch(`/menus/${id}`, { method: 'PUT', body: formData });
+                showToast('Menu berhasil diperbarui!', 'success');
+            } else {
+                await apiFetch('/menus', { method: 'POST', body: formData });
+                showToast('Menu baru berhasil ditambahkan!', 'success');
+            }
+            closeModal('modal-menu');
+            loadData();
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    async function deleteMenu(id, name) {
+        if (!confirm(`Yakin ingin menghapus menu "${name}"?`)) return;
+        try {
+            await apiFetch(`/menus/${id}`, { method: 'DELETE' });
+            showToast('Menu berhasil dihapus', 'success');
+            loadData();
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+
+    // Interactive Recipe Builder & Live HPP Calculator
+    async function openRecipeBuilder(menuId, menuName, price) {
+        activeRecipeMenuId = menuId;
+        activeRecipeMenuPrice = price;
+
+        document.getElementById('recipe-target-menu-name').textContent = menuName;
+        document.getElementById('recipe-target-price').textContent = formatRp(price);
+
+        // Populate raw materials dropdown in builder
+        const sel = document.getElementById('builder-add-item-select');
+        sel.innerHTML = inventoryItemsList.map(it => `
+            <option value="${it.id}" data-name="${it.name}" data-unit="${it.unit}" data-cost="${it.costPerUnit || 0}">
+                ${it.name} (@ ${formatRp(it.costPerUnit || 0)} / ${it.unit})
+            </option>
+        `).join('');
+
+        openModal('modal-recipe-builder');
+
+        // Fetch current recipe data from API
+        try {
+            const res = await apiFetch(`/recipes/menu/${menuId}`);
+            document.getElementById('recipe-instructions-input').value = res.recipeNotes || '';
+            currentRecipeIngredients = res.ingredients || [];
+            renderRecipeIngredientsList();
+        } catch (e) {
+            currentRecipeIngredients = [];
+            renderRecipeIngredientsList();
+        }
+    }
+
+    function renderRecipeIngredientsList() {
+        const container = document.getElementById('recipe-ingredients-list-container');
+        if (currentRecipeIngredients.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; color: var(--text-muted); padding: 18px; background: #FAF8F5; border-radius: var(--radius-sm);">
+                    <i class="fas fa-flask" style="font-size: 24px; opacity: 0.35; margin-bottom: 6px;"></i>
+                    <p style="font-size: 12px;">Belum ada bahan baku racikan pada menu ini.</p>
+                </div>
+            `;
+            updateLiveHppDisplay(0);
+            return;
+        }
+
+        let totalHpp = 0;
+        container.innerHTML = currentRecipeIngredients.map((item, idx) => {
+            const unitCost = item.costPerUnit || 0;
+            const subCost = Math.round(item.quantityNeeded * unitCost);
+            totalHpp += subCost;
+
+            return `
+                <div style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 8px; align-items: center; padding: 8px 12px; background: #FAF8F5; border-radius: var(--radius-sm); border: 1px solid var(--border-light);">
+                    <div>
+                        <strong style="color: var(--text-main); font-size: 13px;">${item.name}</strong>
+                        <div style="font-size: 11px; color: var(--text-muted);">@ ${formatRp(unitCost)} / ${item.unit}</div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <input type="number" step="any" class="form-control" style="padding: 4px 6px; font-size: 12px;" value="${item.quantityNeeded}" onchange="updateIngredientQty(${idx}, this.value)">
+                        <span style="font-size: 11px; color: var(--text-secondary);">${item.unit}</span>
+                    </div>
+                    <div style="text-align: right;">
+                        <strong style="color: var(--color-primary); font-size: 13px;">${formatRp(subCost)}</strong>
+                    </div>
+                    <button class="btn btn-secondary btn-sm text-danger" onclick="removeIngredientFromRecipe(${idx})" title="Hapus"><i class="fas fa-trash"></i></button>
+                </div>
+            `;
+        }).join('');
+
+        updateLiveHppDisplay(totalHpp);
+    }
+
+    function updateLiveHppDisplay(totalHpp) {
+        document.getElementById('recipe-live-hpp').textContent = formatRp(totalHpp);
+        const margin = activeRecipeMenuPrice - totalHpp;
+        const marginPct = activeRecipeMenuPrice > 0 ? Math.round((margin / activeRecipeMenuPrice) * 100) : 0;
+        document.getElementById('recipe-live-margin').textContent = `+${formatRp(margin)} (${marginPct}%)`;
+    }
+
+    function updateIngredientQty(idx, val) {
+        if (currentRecipeIngredients[idx]) {
+            currentRecipeIngredients[idx].quantityNeeded = parseFloat(val) || 0;
+            renderRecipeIngredientsList();
+        }
+    }
+
+    function removeIngredientFromRecipe(idx) {
+        currentRecipeIngredients.splice(idx, 1);
+        renderRecipeIngredientsList();
+    }
+
+    function addIngredientToRecipe() {
+        const sel = document.getElementById('builder-add-item-select');
+        const qtyInput = document.getElementById('builder-add-item-qty');
+        const qty = parseFloat(qtyInput.value);
+
+        if (!qty || qty <= 0) {
+            showToast('Masukkan takaran bahan yang valid!', 'warning');
+            return;
+        }
+
+        const selectedOption = sel.options[sel.selectedIndex];
+        const invId = parseInt(sel.value);
+        const name = selectedOption.dataset.name;
+        const unit = selectedOption.dataset.unit;
+        const costPerUnit = parseFloat(selectedOption.dataset.cost) || 0;
+
+        const existing = currentRecipeIngredients.find(it => it.inventoryItemId === invId);
+        if (existing) {
+            existing.quantityNeeded += qty;
+        } else {
+            currentRecipeIngredients.push({
+                inventoryItemId: invId,
+                name: name,
+                unit: unit,
+                costPerUnit: costPerUnit,
+                quantityNeeded: qty
+            });
+        }
+
+        qtyInput.value = '';
+        renderRecipeIngredientsList();
+    }
+
+    async function submitRecipeBuilder() {
+        if (!activeRecipeMenuId) return;
+
+        const notes = document.getElementById('recipe-instructions-input').value;
+        const applyHpp = document.getElementById('recipe-apply-hpp-check').checked;
+        const btn = document.getElementById('btn-save-recipe-builder');
+        btn.disabled = true;
+
+        const payload = {
+            ingredients: currentRecipeIngredients.map(it => ({
+                inventoryItemId: it.inventoryItemId,
+                quantityNeeded: it.quantityNeeded
+            })),
+            recipeNotes: notes,
+            applyHpp: applyHpp
+        };
+
+        try {
+            await apiFetch(`/recipes/menu/${activeRecipeMenuId}`, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            showToast('Racikan resep & HPP otomatis berhasil disimpan!', 'success');
+            closeModal('modal-recipe-builder');
+            loadData();
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    // Category Manager Modal
+    function openCategoryModal() {
+        renderCategoryList();
+        openModal('modal-category');
+    }
+
+    function renderCategoryList() {
+        const box = document.getElementById('category-list-box');
+        box.innerHTML = categoriesList.map(c => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #FAF8F5; border-radius: var(--radius-sm);">
+                <span style="font-weight: 600; font-size: 13px;">${c.name}</span>
+                <span class="badge-chip primary" style="font-size: 10px;">ID: ${c.id}</span>
+            </div>
+        `).join('');
+    }
+
+    async function saveCategory(e) {
+        e.preventDefault();
+        const input = document.getElementById('category-name-input');
+        const name = input.value.trim();
+
+        try {
+            await apiFetch('/categories', {
+                method: 'POST',
+                body: JSON.stringify({ name })
+            });
+            showToast('Kategori baru ditambahkan!', 'success');
+            input.value = '';
+            loadData();
+            openCategoryModal();
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+</script>
+{% endblock %}

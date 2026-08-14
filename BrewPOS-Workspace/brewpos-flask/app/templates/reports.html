@@ -1,0 +1,779 @@
+{% extends 'base.html' %}
+
+{% block title %}Pusat Laporan Lengkap | Arunika-POS{% endblock %}
+{% block page_title %}Pusat Laporan Keuangan & Inventori{% endblock %}
+
+{% block content %}
+<!-- Top Action Bar & Tabs Navigation -->
+<div class="no-print" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; flex-wrap: wrap; gap: 12px;">
+    <div style="display: flex; gap: 6px; flex-wrap: wrap;" id="report-tabs-nav">
+        <button class="btn btn-primary btn-sm rep-tab-btn" id="btn-rep-sales" onclick="switchReportSection('sales')">
+            <i class="fas fa-receipt"></i> 1. Penjualan
+        </button>
+        <button class="btn btn-secondary btn-sm rep-tab-btn" id="btn-rep-cogs" onclick="switchReportSection('cogs')">
+            <i class="fas fa-calculator"></i> 2. HPP & Margin Menu
+        </button>
+        <button class="btn btn-secondary btn-sm rep-tab-btn" id="btn-rep-purchases" onclick="switchReportSection('purchases')">
+            <i class="fas fa-cart-shopping"></i> 3. Pembelian & Biaya
+        </button>
+        <button class="btn btn-secondary btn-sm rep-tab-btn" id="btn-rep-variance" onclick="switchReportSection('variance')">
+            <i class="fas fa-boxes-stacked"></i> 4. Stok Bahan
+        </button>
+        <button class="btn btn-secondary btn-sm rep-tab-btn" id="btn-rep-pnl" onclick="switchReportSection('pnl')">
+            <i class="fas fa-file-invoice-dollar"></i> 5. Laba Rugi (P&L)
+        </button>
+        <button class="btn btn-secondary btn-sm rep-tab-btn" id="btn-rep-shifts" onclick="switchReportSection('shifts')">
+            <i class="fas fa-clock-rotate-left"></i> 6. Rekap Shift
+        </button>
+    </div>
+
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button class="btn btn-success btn-sm" onclick="downloadExcelFull()" title="Download seluruh lembar laporan dalam satu file Excel">
+            <i class="fas fa-file-excel"></i> Download Buku Laporan (.xlsx)
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="exportCurrentTabToExcel()" title="Ekspor tab yang sedang aktif ke Excel">
+            <i class="fas fa-table"></i> Ekspor Tab Ini (.xlsx)
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="printOfficialReport()">
+            <i class="fas fa-file-pdf"></i> Cetak Dokumen PDF
+        </button>
+    </div>
+</div>
+
+<!-- Report Printable Area Container -->
+<div class="report-printable-area">
+    <!-- Official Report Header -->
+    <div class="card" id="report-official-header" style="margin-bottom: 20px; padding: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid var(--border-color); padding-bottom: 16px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 16px;">
+                <div class="brand-logo" style="width: 52px; height: 52px; font-size: 26px;">☕</div>
+                <div>
+                    <h2 id="rep-store-name" style="font-family: var(--font-heading); font-size: 20px; font-weight: 800; color: var(--color-primary); margin: 0;">
+                        ARUNIKA COFFEE & LOUNGE
+                    </h2>
+                    <p id="rep-store-tagline" style="font-size: 12px; color: var(--color-secondary); font-style: italic; margin-top: 2px;">
+                        Every Cup Has A Story
+                    </p>
+                    <p id="rep-store-address" style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
+                        Jl. Melati Kopi No. 12, City Center | Telp: 0812-3456-7890
+                    </p>
+                </div>
+            </div>
+            <div style="text-align: right;">
+                <h3 id="rep-active-title" style="font-family: var(--font-heading); font-size: 16px; font-weight: 700; color: var(--text-main); margin: 0;">
+                    LAPORAN PENJUALAN KAFE
+                </h3>
+                <p id="rep-period-label" style="font-size: 12px; color: var(--text-secondary); margin-top: 4px; font-weight: 600;">
+                    Periode: Semua Riwayat
+                </p>
+                <p style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                    Dicetak pada: <span id="rep-printed-date">-</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Filter Period Buttons (Hidden on Print) -->
+        <div class="no-print" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; gap: 6px;">
+                <button class="btn btn-secondary btn-sm filter-period-btn active" onclick="loadReportData('all', this)">Semua</button>
+                <button class="btn btn-secondary btn-sm filter-period-btn" onclick="loadReportData('30', this)">30 Hari</button>
+                <button class="btn btn-secondary btn-sm filter-period-btn" onclick="loadReportData('7', this)">7 Hari</button>
+                <button class="btn btn-secondary btn-sm filter-period-btn" onclick="loadReportData('1', this)">Hari Ini</button>
+            </div>
+            <div id="rep-section-subinfo" style="font-size: 12.5px; color: var(--text-secondary); font-weight: 600;">
+                Memuat data laporan...
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 1: LAPORAN PENJUALAN (SALES) -->
+    <div id="rep-sec-sales" class="rep-section-content">
+        <!-- Sales KPI Summary -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px;">
+            <div class="card" style="padding: 14px 18px; border-left: 4px solid var(--color-primary);">
+                <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Penjualan Kotor</div>
+                <div id="kpi-sales-gross" style="font-family: var(--font-heading); font-size: 18px; font-weight: 800; color: var(--text-main); margin-top: 2px;">Rp 0</div>
+            </div>
+            <div class="card" style="padding: 14px 18px; border-left: 4px solid var(--color-danger);">
+                <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Diskon Diberikan</div>
+                <div id="kpi-sales-discount" style="font-family: var(--font-heading); font-size: 18px; font-weight: 800; color: var(--color-danger); margin-top: 2px;">-Rp 0</div>
+            </div>
+            <div class="card" style="padding: 14px 18px; border-left: 4px solid var(--color-success);">
+                <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Penjualan Bersih (Net Sales)</div>
+                <div id="kpi-sales-net" style="font-family: var(--font-heading); font-size: 18px; font-weight: 800; color: var(--color-success); margin-top: 2px;">Rp 0</div>
+            </div>
+            <div class="card" style="padding: 14px 18px; border-left: 4px solid var(--color-secondary);">
+                <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total PPN Resto (PB1)</div>
+                <div id="kpi-sales-tax" style="font-family: var(--font-heading); font-size: 18px; font-weight: 800; color: var(--color-secondary); margin-top: 2px;">Rp 0</div>
+            </div>
+        </div>
+
+        <!-- Transactions Table -->
+        <div class="card">
+            <div class="card-header no-print">
+                <h3 class="card-title"><i class="fas fa-list-check text-primary"></i> Rincian Seluruh Transaksi Penjualan</h3>
+            </div>
+            <div class="table-responsive">
+                <table class="custom-table" id="table-sales-export">
+                    <thead>
+                        <tr>
+                            <th>Kode Transaksi</th>
+                            <th>Waktu</th>
+                            <th>Pelanggan</th>
+                            <th>Rincian Menu</th>
+                            <th>Diskon</th>
+                            <th>PPN (PB1)</th>
+                            <th>Total Bayar</th>
+                            <th>Metode</th>
+                            <th>Status</th>
+                            <th class="no-print" style="text-align: right;">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sales-table-body">
+                        <tr><td colspan="10" class="text-center text-muted" style="padding: 30px;">Memuat data penjualan...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: LAPORAN HPP & MARGIN MENU (COGS & PROFITABILITY) -->
+    <div id="rep-sec-cogs" class="rep-section-content" style="display: none;">
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h3 class="card-title"><i class="fas fa-calculator text-primary"></i> Analisis HPP, Omset & Margin Keuntungan per Menu</h3>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Evaluasi profitabilitas setiap cup minuman dan makanan yang terjual.</p>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="custom-table" id="table-cogs-export">
+                    <thead>
+                        <tr>
+                            <th>Nama Menu</th>
+                            <th>Kategori</th>
+                            <th>Harga Jual</th>
+                            <th>Modal / Cup (HPP)</th>
+                            <th>Jumlah Terjual</th>
+                            <th>Total Omset</th>
+                            <th>Total HPP (Modal)</th>
+                            <th>Laba Kotor (Rp)</th>
+                            <th>Margin Profit (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cogs-table-body">
+                        <tr><td colspan="9" class="text-center text-muted" style="padding: 30px;">Memuat data HPP menu...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: LAPORAN PEMBELIAN & BIAYA (PURCHASES & OPEX) -->
+    <div id="rep-sec-purchases" class="rep-section-content" style="display: none;">
+        <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header">
+                <div>
+                    <h3 class="card-title"><i class="fas fa-cart-shopping text-primary"></i> Biaya Operasional & Pembelian Bahan (OPEX)</h3>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Rekapitulasi seluruh pengeluaran belanja bahan, sewa, gaji, dan utilitas.</p>
+                </div>
+                <div style="font-family: var(--font-heading); font-size: 18px; font-weight: 800; color: var(--color-danger);" id="rep-total-opex-display">
+                    Rp 0
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="custom-table" id="table-purchases-export">
+                    <thead>
+                        <tr>
+                            <th>Tanggal</th>
+                            <th>Kategori Biaya</th>
+                            <th>Nominal (Rp)</th>
+                            <th>Keterangan / Keperluan</th>
+                            <th>Dicatat Oleh</th>
+                            <th>Foto Nota</th>
+                        </tr>
+                    </thead>
+                    <tbody id="purchases-table-body">
+                        <tr><td colspan="6" class="text-center text-muted" style="padding: 30px;">Memuat data pengeluaran...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 4: PEMAKAIAN & SELISIH STOK (INVENTORY VARIANCE) -->
+    <div id="rep-sec-variance" class="rep-section-content" style="display: none;">
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h3 class="card-title"><i class="fas fa-boxes-stacked text-primary"></i> Status & Tingkat Persediaan Bahan Baku</h3>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Monitoring sisa stok fisik di bar dan peringatan batas aman pemakaian.</p>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="custom-table" id="table-variance-export">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nama Bahan Baku</th>
+                            <th>Satuan</th>
+                            <th>Sisa Stok Saat Ini</th>
+                            <th>Batas Minimum Aman</th>
+                            <th>Status Persediaan</th>
+                        </tr>
+                    </thead>
+                    <tbody id="variance-table-body">
+                        <tr><td colspan="6" class="text-center text-muted" style="padding: 30px;">Memuat data stok bahan...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 5: LAPORAN LABA RUGI (PROFIT & LOSS STATEMENT) -->
+    <div id="rep-sec-pnl" class="rep-section-content" style="display: none;">
+        <div class="card" style="max-width: 720px; margin: 0 auto;">
+            <div class="card-header" style="text-align: center; border-bottom: 2px solid var(--border-color);">
+                <div style="width: 100%;">
+                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 800; color: var(--color-primary);">
+                        LAPORAN LABA RUGI OPERASIONAL (P&L)
+                    </h3>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                        Statement of Comprehensive Income
+                    </p>
+                </div>
+            </div>
+
+            <div style="padding: 10px 0; font-size: 13.5px;" id="pnl-statement-container">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tbody>
+                        <tr style="border-bottom: 1px solid var(--border-light);">
+                            <td style="padding: 12px; font-weight: 700;">1. Total Pendapatan Penjualan Bersih (Net Sales)</td>
+                            <td style="padding: 12px; text-align: right; font-weight: 800; color: var(--color-primary);" id="pnl-revenue">Rp 0</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid var(--border-light); color: var(--text-secondary);">
+                            <td style="padding: 12px; padding-left: 28px;">2. Harga Pokok Penjualan / Modal Bahan (COGS)</td>
+                            <td style="padding: 12px; text-align: right; color: var(--color-danger);" id="pnl-cogs">-Rp 0</td>
+                        </tr>
+                        <tr style="background: var(--bg-main); border-bottom: 2px solid var(--border-color); font-weight: 800;">
+                            <td style="padding: 14px 12px;">= LABA KOTOR (GROSS PROFIT) <span id="pnl-gross-margin" class="badge-chip primary" style="margin-left: 8px;">0%</span></td>
+                            <td style="padding: 14px 12px; text-align: right; font-size: 15px; color: var(--color-primary);" id="pnl-gross-profit">Rp 0</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid var(--border-light); color: var(--text-secondary);">
+                            <td style="padding: 12px; padding-left: 28px;">3. Total Beban Biaya Operasional (OPEX)</td>
+                            <td style="padding: 12px; text-align: right; color: var(--color-danger);" id="pnl-opex">-Rp 0</td>
+                        </tr>
+                        <tr style="background: #FFF5F0; border-top: 2px solid var(--color-primary); font-weight: 800; font-size: 16px;">
+                            <td style="padding: 16px 12px; color: var(--color-primary);">= LABA BERSIH BERJALAN (NET OPERATING PROFIT) <span id="pnl-net-margin" class="badge-chip success" style="margin-left: 8px;">0%</span></td>
+                            <td style="padding: 16px 12px; text-align: right; color: var(--color-success);" id="pnl-net-profit">Rp 0</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 6: REKAPITULASI SHIFT KASIR -->
+    <div id="rep-sec-shifts" class="rep-section-content" style="display: none;">
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h3 class="card-title"><i class="fas fa-user-clock text-primary"></i> Audit & Rekonsiliasi Shift Kasir</h3>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Pencocokan modal awal, penjualan tunai, dan uang fisik di laci kasir.</p>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="custom-table" id="table-shifts-export">
+                    <thead>
+                        <tr>
+                            <th>Sesi Shift</th>
+                            <th>Nama Kasir</th>
+                            <th>Waktu Mulai</th>
+                            <th>Waktu Selesai</th>
+                            <th>Modal Awal</th>
+                            <th>Ekspektasi Kas</th>
+                            <th>Kas Fisik Akhir</th>
+                            <th>Selisih Kas</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="shifts-table-body">
+                        <tr><td colspan="9" class="text-center text-muted" style="padding: 30px;">Memuat data shift...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Void Transaction -->
+<div id="modal-void" class="modal-backdrop no-print">
+    <div class="modal-dialog" style="max-width: 440px;">
+        <div class="modal-header">
+            <h3 class="modal-title text-danger"><i class="fas fa-ban"></i> Batalkan Transaksi (Void)</h3>
+            <button class="modal-close" onclick="closeModal('modal-void')">&times;</button>
+        </div>
+        <form id="void-form" onsubmit="submitVoidTransaction(event)">
+            <div class="modal-body">
+                <input type="hidden" id="void-tx-id">
+                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+                    Transaksi <strong>#<span id="void-tx-number">-</span></strong> akan dibatalkan. Poin loyalitas dan stok bahan baku akan otomatis di-rollback.
+                </p>
+                <div class="form-group">
+                    <label class="form-label">Alasan Pembatalan (Void Reason)</label>
+                    <textarea id="void-reason" class="form-control" rows="3" placeholder="Contoh: Salah input pesanan / pelanggan membatalkan pesanan" required></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('modal-void')">Batal</button>
+                <button type="submit" class="btn btn-danger" id="btn-submit-void">Konfirmasi Void</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Thermal Receipt View / Print -->
+<div id="modal-report-receipt" class="modal-backdrop no-print">
+    <div class="modal-dialog" style="max-width: 380px;">
+        <div class="modal-header no-print">
+            <h3 class="modal-title">Struk Transaksi</h3>
+            <button class="modal-close" onclick="closeModal('modal-report-receipt')">&times;</button>
+        </div>
+        <div class="modal-body" id="report-receipt-body" style="padding: 16px;">
+            <!-- Rendered dynamically -->
+        </div>
+        <div class="modal-footer no-print">
+            <button class="btn btn-primary" style="width: 100%;" onclick="printReceipt()">
+                <i class="fas fa-print"></i> Cetak Struk Ulang
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<!-- SheetJS for client-side Excel (.xlsx) generation -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<script>
+    let reportData = null;
+    let shiftsData = [];
+    let currentPeriod = 'all';
+    let activeSection = 'sales';
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        const storeSettings = await getStoreSettings();
+        document.getElementById('rep-store-name').textContent = storeSettings.STORE_NAME || 'ARUNIKA COFFEE & LOUNGE';
+        document.getElementById('rep-store-tagline').textContent = storeSettings.TAGLINE || 'Every Cup Has A Story';
+        document.getElementById('rep-store-address').textContent = `${storeSettings.STORE_ADDRESS || ''} | Telp: ${storeSettings.STORE_PHONE || '-'}`;
+        document.getElementById('rep-printed-date').textContent = new Date().toLocaleString('id-ID');
+
+        loadReportData('all');
+    });
+
+    function switchReportSection(sec) {
+        activeSection = sec;
+        document.querySelectorAll('.rep-section-content').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('.rep-tab-btn').forEach(el => el.className = 'btn btn-secondary btn-sm rep-tab-btn');
+
+        document.getElementById(`rep-sec-${sec}`).style.display = 'block';
+        document.getElementById(`btn-rep-${sec}`).className = 'btn btn-primary btn-sm rep-tab-btn';
+
+        const titles = {
+            'sales': 'LAPORAN PENJUALAN KAFE',
+            'cogs': 'LAPORAN HPP & MARGIN KEUNTUNGAN MENU',
+            'purchases': 'LAPORAN PEMBELIAN & BIAYA OPERASIONAL',
+            'variance': 'LAPORAN STATUS & TINGKAT STOK BAHAN',
+            'pnl': 'LAPORAN LABA RUGI OPERASIONAL (P&L)',
+            'shifts': 'LAPORAN REKAPITULASI SHIFT KASIR'
+        };
+        document.getElementById('rep-active-title').textContent = titles[sec] || 'LAPORAN KAFE';
+
+        if (sec === 'shifts' && shiftsData.length === 0) {
+            loadShiftsData();
+        }
+    }
+
+    async function loadReportData(period = 'all', btnEl = null) {
+        currentPeriod = period;
+        if (btnEl) {
+            document.querySelectorAll('.filter-period-btn').forEach(b => b.classList.remove('active'));
+            btnEl.classList.add('active');
+        }
+
+        const labels = {
+            'all': 'Periode: Semua Riwayat',
+            '30': 'Periode: 30 Hari Terakhir',
+            '7': 'Periode: 7 Hari Terakhir',
+            '1': 'Periode: Hari Ini'
+        };
+        document.getElementById('rep-period-label').textContent = labels[period] || 'Periode Kustom';
+
+        try {
+            const data = await apiFetch(`/analytics/comprehensive-reports?days=${period}`);
+            reportData = data;
+            renderAllReportSections(data);
+        } catch (e) {
+            showToast('Gagal memuat laporan: ' + e.message, 'error');
+        }
+    }
+
+    function renderAllReportSections(data) {
+        // 1. Sales Summary & Transactions
+        const sales = data.salesSummary || {};
+        document.getElementById('kpi-sales-gross').textContent = formatRp(sales.totalGross || 0);
+        document.getElementById('kpi-sales-discount').textContent = '-' + formatRp(sales.totalDiscounts || 0);
+        document.getElementById('kpi-sales-net').textContent = formatRp(sales.totalNet || 0);
+        document.getElementById('kpi-sales-tax').textContent = formatRp(sales.totalTax || 0);
+
+        renderSalesTable(data.transactions || []);
+
+        // 2. COGS & Menu Profitability
+        renderCogsTable(data.cogsReport || []);
+
+        // 3. Purchases & Expenses
+        const purchases = data.purchasesReport || {};
+        document.getElementById('rep-total-opex-display').textContent = formatRp(purchases.totalOpex || 0);
+        renderPurchasesTable(purchases.expensesList || []);
+
+        // 4. Inventory Variance
+        renderVarianceTable(data.inventoryVariance || []);
+
+        // 5. P&L Statement
+        const pnl = data.pnlStatement || {};
+        document.getElementById('pnl-revenue').textContent = formatRp(pnl.netRevenue || 0);
+        document.getElementById('pnl-cogs').textContent = '-' + formatRp(pnl.totalCogs || 0);
+        document.getElementById('pnl-gross-profit').textContent = formatRp(pnl.grossProfit || 0);
+        document.getElementById('pnl-gross-margin').textContent = `${pnl.grossMarginPct || 0}%`;
+        document.getElementById('pnl-opex').textContent = '-' + formatRp(pnl.totalOpex || 0);
+        document.getElementById('pnl-net-profit').textContent = formatRp(pnl.netOperatingProfit || 0);
+        document.getElementById('pnl-net-margin').textContent = `${pnl.netMarginPct || 0}%`;
+
+        document.getElementById('rep-section-subinfo').textContent = `Total Transaksi: ${sales.totalOrders || 0} | Omset Bersih: ${formatRp(sales.totalNet || 0)}`;
+    }
+
+    function renderSalesTable(transactions) {
+        const tbody = document.getElementById('sales-table-body');
+        if (transactions.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada data transaksi pada periode ini.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = transactions.map(t => {
+            const dateStr = new Date(t.createdAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' });
+            const itemsSummary = (t.items || []).map(i => `${i.quantity}x ${i.menu ? i.menu.name : 'Menu'}`).join(', ');
+            const isVoid = t.status === 'VOID';
+            const txCode = t.transactionCode || t.code || ('TRX-' + String(t.id).padStart(4, '0'));
+            const statusBadge = isVoid 
+                ? '<span class="badge-chip danger"><i class="fas fa-ban"></i> VOID</span>'
+                : '<span class="badge-chip success"><i class="fas fa-check"></i> Sukses</span>';
+
+            const voidBtn = isVoid 
+                ? `<span style="font-size: 11px; color: var(--color-danger);">${t.voidReason || 'Dibatalkan'}</span>`
+                : `<button class="btn btn-secondary btn-sm text-danger" onclick="openVoidModal(${t.id}, '${txCode}')" title="Void Transaksi"><i class="fas fa-ban"></i> Void</button>`;
+
+            const totalDisc = (t.discountAmount || 0) + (t.items || []).reduce((s, it) => s + ((it.discountAmount || 0) * it.quantity), 0);
+
+            return `
+                <tr style="${isVoid ? 'opacity: 0.6; background: #FFF5F5;' : ''}">
+                    <td><strong style="color: var(--color-primary); font-family: var(--font-mono); font-size: 13px;">${txCode}</strong></td>
+                    <td>${dateStr}</td>
+                    <td><strong>${t.customer ? t.customer.nickname : 'Guest'}</strong></td>
+                    <td style="max-width: 220px; font-size: 12px; color: var(--text-secondary);">${itemsSummary || '-'}</td>
+                    <td><span style="color: ${totalDisc > 0 ? 'var(--color-danger)' : 'var(--text-muted)'}; font-weight: 600;">${totalDisc > 0 ? '-' + formatRp(totalDisc) : '-'}</span></td>
+                    <td>${formatRp(t.taxAmount || 0)}</td>
+                    <td><strong style="color: ${isVoid ? 'var(--text-muted)' : 'var(--color-primary)'}; font-size: 14px;">${formatRp(t.totalAmount)}</strong></td>
+                    <td><span class="badge-chip primary">${t.paymentMethod || 'CASH'}</span></td>
+                    <td>${statusBadge}</td>
+                    <td class="no-print" style="text-align: right;">
+                        <button class="btn btn-secondary btn-sm" onclick="viewTransactionReceipt(${t.id})" title="Cetak Struk"><i class="fas fa-receipt text-primary"></i></button>
+                        ${voidBtn}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function renderCogsTable(cogsList) {
+        const tbody = document.getElementById('cogs-table-body');
+        if (cogsList.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada data menu.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = cogsList.map(c => `
+            <tr>
+                <td><strong style="color: var(--text-main); font-size: 13.5px;">${c.name}</strong></td>
+                <td><span class="badge-chip primary">${c.category}</span></td>
+                <td>${formatRp(c.price)}</td>
+                <td><strong style="color: var(--text-secondary);">${formatRp(c.unitHpp)}</strong></td>
+                <td><strong>${c.soldQty}</strong> cup</td>
+                <td><strong style="color: var(--color-primary);">${formatRp(c.totalRevenue)}</strong></td>
+                <td><strong style="color: var(--color-danger);">${formatRp(c.totalHpp)}</strong></td>
+                <td><strong style="color: var(--color-success);">+${formatRp(c.grossProfit)}</strong></td>
+                <td><span class="badge-chip success" style="font-weight: 800;">${c.marginPct}%</span></td>
+            </tr>
+        `).join('');
+    }
+
+    function renderPurchasesTable(expenses) {
+        const tbody = document.getElementById('purchases-table-body');
+        if (expenses.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada data biaya.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = expenses.map(e => {
+            const dateStr = new Date(e.date).toLocaleDateString('id-ID');
+            const receiptLink = e.receiptUrl 
+                ? `<a href="${e.receiptUrl}" target="_blank" class="badge-chip info"><i class="fas fa-image"></i> Lihat Foto</a>`
+                : '-';
+
+            return `
+                <tr>
+                    <td><strong>${dateStr}</strong></td>
+                    <td><span class="badge-chip danger">${e.category ? e.category.name : '-'}</span></td>
+                    <td><strong style="color: var(--color-danger); font-size: 14px;">${formatRp(e.amount)}</strong></td>
+                    <td>${e.notes || '-'}</td>
+                    <td>${e.recordedBy ? e.recordedBy.username : 'Staff'}</td>
+                    <td>${receiptLink}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function renderVarianceTable(invList) {
+        const tbody = document.getElementById('variance-table-body');
+        if (invList.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada data bahan baku.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = invList.map(it => `
+            <tr>
+                <td>#${it.id}</td>
+                <td><strong style="color: var(--text-main); font-size: 13.5px;">${it.name}</strong></td>
+                <td><span class="badge-chip primary">${it.unit}</span></td>
+                <td><strong style="font-size: 15px; color: ${it.isLowStock ? 'var(--color-danger)' : 'var(--color-primary)'};">${it.currentStock} ${it.unit}</strong></td>
+                <td>${it.minStock} ${it.unit}</td>
+                <td>${it.isLowStock ? '<span class="badge-chip danger">Stok Menipis</span>' : '<span class="badge-chip success">Aman</span>'}</td>
+            </tr>
+        `).join('');
+    }
+
+    async function loadShiftsData() {
+        const tbody = document.getElementById('shifts-table-body');
+        try {
+            shiftsData = await apiFetch('/shift/reports');
+            if (shiftsData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada riwayat shift.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = shiftsData.map(s => {
+                const startTime = new Date(s.startTime).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' });
+                const endTime = s.endTime ? new Date(s.endTime).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : 'Sedang Aktif';
+                const isClosed = s.status === 'CLOSED';
+
+                let diffTag = '-';
+                if (isClosed && s.endingCash !== null && s.expectedEndingCash !== null) {
+                    const diff = s.endingCash - s.expectedEndingCash;
+                    if (diff === 0) {
+                        diffTag = '<span class="badge-chip success">Pas (Rp 0)</span>';
+                    } else if (diff > 0) {
+                        diffTag = `<span class="badge-chip warning">+${formatRp(diff)} (Lebih)</span>`;
+                    } else {
+                        diffTag = `<span class="badge-chip danger">-${formatRp(Math.abs(diff))} (Kurang)</span>`;
+                    }
+                }
+
+                return `
+                    <tr>
+                        <td><span class="badge-chip primary">${s.type}</span></td>
+                        <td><strong>${s.user ? s.user.username : 'Kasir'}</strong></td>
+                        <td>${startTime}</td>
+                        <td>${endTime}</td>
+                        <td>${formatRp(s.startingCash)}</td>
+                        <td><strong>${s.expectedEndingCash !== null ? formatRp(s.expectedEndingCash) : '-'}</strong></td>
+                        <td><strong>${s.endingCash !== null ? formatRp(s.endingCash) : '-'}</strong></td>
+                        <td>${diffTag}</td>
+                        <td><span class="badge-chip ${isClosed ? 'success' : 'warning'}">${s.status}</span></td>
+                    </tr>
+                `;
+            }).join('');
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="9" class="text-danger text-center">Gagal memuat shift: ${e.message}</td></tr>`;
+        }
+    }
+
+    // 1. Download Full Multi-Sheet Excel Workbook (.xlsx)
+    async function downloadExcelFull() {
+        showToast('Menyiapkan buku laporan Excel (.xlsx)...', 'info');
+        const token = (typeof getToken === 'function') ? getToken() : localStorage.getItem('token');
+
+        // Try backend export first
+        try {
+            const res = await fetch(`/api/analytics/export-excel?days=${currentPeriod}`, {
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Buku_Laporan_Arunika_POS_${new Date().toISOString().slice(0,10)}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                showToast('Buku Laporan Excel (.xlsx) berhasil diunduh!', 'success');
+                return;
+            }
+        } catch (e) {
+            console.warn('Backend excel fetch failed, falling back to SheetJS multi-sheet builder:', e);
+        }
+
+        // Fallback: Client-side Multi-Sheet Excel Workbook via SheetJS
+        if (typeof XLSX !== 'undefined') {
+            try {
+                const wb = XLSX.utils.book_new();
+
+                // 1. P&L Sheet
+                const pnlTable = document.querySelector('#pnl-statement-container table');
+                if (pnlTable) {
+                    const wsPnl = XLSX.utils.table_to_sheet(pnlTable);
+                    XLSX.utils.book_append_sheet(wb, wsPnl, "1. Laba Rugi");
+                }
+
+                // 2. Sales Sheet
+                const salesTable = document.getElementById('table-sales-export');
+                if (salesTable) {
+                    const clone = salesTable.cloneNode(true);
+                    clone.querySelectorAll('.no-print').forEach(el => el.remove());
+                    const wsSales = XLSX.utils.table_to_sheet(clone);
+                    XLSX.utils.book_append_sheet(wb, wsSales, "2. Penjualan");
+                }
+
+                // 3. COGS Sheet
+                const cogsTable = document.getElementById('table-cogs-export');
+                if (cogsTable) {
+                    const wsCogs = XLSX.utils.table_to_sheet(cogsTable);
+                    XLSX.utils.book_append_sheet(wb, wsCogs, "3. HPP & Margin");
+                }
+
+                // 4. Purchases Sheet
+                const purchasesTable = document.getElementById('table-purchases-export');
+                if (purchasesTable) {
+                    const wsPurchases = XLSX.utils.table_to_sheet(purchasesTable);
+                    XLSX.utils.book_append_sheet(wb, wsPurchases, "4. Biaya & Pembelian");
+                }
+
+                // 5. Variance Sheet
+                const varianceTable = document.getElementById('table-variance-export');
+                if (varianceTable) {
+                    const wsVariance = XLSX.utils.table_to_sheet(varianceTable);
+                    XLSX.utils.book_append_sheet(wb, wsVariance, "5. Stok Bahan");
+                }
+
+                // 6. Shift Sheet
+                const shiftsTable = document.getElementById('table-shifts-export');
+                if (shiftsTable) {
+                    const wsShifts = XLSX.utils.table_to_sheet(shiftsTable);
+                    XLSX.utils.book_append_sheet(wb, wsShifts, "6. Rekap Shift");
+                }
+
+                const fileName = `Buku_Laporan_Arunika_POS_${new Date().toISOString().slice(0,10)}.xlsx`;
+                XLSX.writeFile(wb, fileName);
+                showToast(`Buku Laporan Excel (${fileName}) berhasil diunduh!`, 'success');
+                return;
+            } catch (err) {
+                showToast('Gagal membuat file Excel: ' + err.message, 'error');
+            }
+        }
+    }
+
+    // 2. Export Current Active Tab Directly to Native .xlsx via SheetJS
+    function exportCurrentTabToExcel() {
+        let tableId = 'table-sales-export';
+        let sheetName = 'Penjualan';
+        if (activeSection === 'cogs') { tableId = 'table-cogs-export'; sheetName = 'HPP & Margin'; }
+        else if (activeSection === 'purchases') { tableId = 'table-purchases-export'; sheetName = 'Biaya & Pembelian'; }
+        else if (activeSection === 'variance') { tableId = 'table-variance-export'; sheetName = 'Stok Bahan'; }
+        else if (activeSection === 'shifts') { tableId = 'table-shifts-export'; sheetName = 'Rekap Shift'; }
+        else if (activeSection === 'pnl') {
+            downloadExcelFull();
+            return;
+        }
+
+        const table = document.getElementById(tableId);
+        if (!table) {
+            showToast('Tidak ada data tabel untuk diekspor', 'warning');
+            return;
+        }
+
+        if (typeof XLSX !== 'undefined') {
+            try {
+                const clone = table.cloneNode(true);
+                clone.querySelectorAll('.no-print').forEach(el => el.remove());
+
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.table_to_sheet(clone);
+                XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+                const fileName = `Laporan_${sheetName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
+                XLSX.writeFile(wb, fileName);
+                showToast(`File Excel (${fileName}) berhasil diunduh!`, 'success');
+                return;
+            } catch (err) {
+                console.error('SheetJS export error:', err);
+                showToast('Gagal mengekspor tab ke Excel', 'error');
+            }
+        } else {
+            downloadExcelFull();
+        }
+    }
+
+    // Void Modal
+    function openVoidModal(txId, txCode = null) {
+        document.getElementById('void-tx-id').value = txId;
+        document.getElementById('void-tx-number').textContent = txCode || ('#' + txId);
+        document.getElementById('void-form').reset();
+        openModal('modal-void');
+    }
+
+    async function submitVoidTransaction(e) {
+        e.preventDefault();
+        const txId = document.getElementById('void-tx-id').value;
+        const reason = document.getElementById('void-reason').value.trim();
+        const user = getUser();
+
+        const btn = document.getElementById('btn-submit-void');
+        btn.disabled = true;
+
+        try {
+            await apiFetch(`/checkout/history/${txId}/void`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    voidReason: reason,
+                    voidedBy: user ? user.id : null
+                })
+            });
+            showToast('Transaksi berhasil dibatalkan (VOID)!', 'success');
+            closeModal('modal-void');
+            loadReportData(currentPeriod);
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    async function viewTransactionReceipt(id) {
+        const tx = (reportData && reportData.transactions) ? reportData.transactions.find(t => t.id === id) : null;
+        if (!tx) return;
+        const settings = await getStoreSettings();
+        document.getElementById('report-receipt-body').innerHTML = renderThermalReceiptHtml(tx, settings);
+        openModal('modal-report-receipt');
+    }
+</script>
+{% endblock %}

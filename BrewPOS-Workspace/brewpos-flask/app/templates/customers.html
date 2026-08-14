@@ -1,0 +1,739 @@
+{% extends 'base.html' %}
+
+{% block title %}Manajemen Member & Loyalty CRM | Arunika-POS{% endblock %}
+{% block page_title %}Direktori Member, CRM & Loyalty{% endblock %}
+
+{% block content %}
+<!-- Top Gamification Panels (Quests & Badges) -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;">
+    <!-- Active Quests (Misi Kopi) -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title"><i class="fas fa-scroll text-warning"></i> Misi Kopi Aktif (Quests)</h3>
+            <button class="btn btn-secondary btn-sm" onclick="openQuestModal()"><i class="fas fa-plus"></i> Tambah Misi</button>
+        </div>
+        <div id="quests-list-container" style="display: flex; flex-direction: column; gap: 10px; max-height: 240px; overflow-y: auto;">
+            <p class="text-muted text-center" style="padding: 20px;">Memuat data misi...</p>
+        </div>
+    </div>
+
+    <!-- Active Badges (Lencana Pencapaian) -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title"><i class="fas fa-medal text-primary"></i> Badges & Pencapaian</h3>
+            <button class="btn btn-secondary btn-sm" onclick="openBadgeModal()"><i class="fas fa-plus"></i> Tambah Badge</button>
+        </div>
+        <div id="badges-list-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; max-height: 240px; overflow-y: auto;">
+            <p class="text-muted text-center" style="padding: 20px; grid-column: 1/-1;">Memuat data badge...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Loyalty Rewards Catalog -->
+<div class="card" style="margin-bottom: 24px;">
+    <div class="card-header">
+        <div>
+            <h3 class="card-title"><i class="fas fa-gift text-primary"></i> Katalog Loyalty Rewards (Tukar Poin)</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Hadiah diskon atau produk gratis yang dapat ditukar member di kasir saat checkout.</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openRewardModal()"><i class="fas fa-plus"></i> Tambah Reward</button>
+    </div>
+    <div id="rewards-list-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px;">
+        <p class="text-muted text-center" style="padding: 20px; grid-column: 1/-1;">Memuat rewards...</p>
+    </div>
+</div>
+
+<!-- Member CRM Directory & Advanced Management -->
+<div class="card">
+    <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
+        <div>
+            <h3 class="card-title"><i class="fas fa-users-gear text-primary"></i> Direktori & Manajemen Member Kafe</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                Kelola tipe member (Pelanggan / Karyawan), status keaktifan, serta sensor kontak proteksi privasi.
+            </p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openMemberModal()">
+            <i class="fas fa-user-plus"></i> Tambah Member Baru
+        </button>
+    </div>
+
+    <!-- Filter, Search & Sorting Bar -->
+    <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
+        <!-- Instant Search -->
+        <input type="text" id="crm-search" class="form-control" style="flex: 1 1 200px; min-width: 180px;" placeholder="🔍 Cari nama, telepon, atau email..." oninput="filterAndSortCustomers()">
+
+        <!-- Filter Type -->
+        <select id="crm-filter-type" class="form-control" style="flex: 0 1 170px; min-width: 140px;" onchange="filterAndSortCustomers()">
+            <option value="ALL">Semua Tipe Member</option>
+            <option value="PELANGGAN">Tipe Pelanggan</option>
+            <option value="KARYAWAN">Tipe Karyawan</option>
+        </select>
+
+        <!-- Filter Status (Aktif vs Hilang) -->
+        <select id="crm-filter-status" class="form-control" style="flex: 0 1 180px; min-width: 150px;" onchange="filterAndSortCustomers()">
+            <option value="ALL">Semua Status Keaktifan</option>
+            <option value="AKTIF">🟢 Member Aktif</option>
+            <option value="HILANG">🔴 Member Hilang (>30 hr)</option>
+        </select>
+
+        <!-- Sorting -->
+        <select id="crm-sort-by" class="form-control" style="flex: 0 1 180px; min-width: 150px;" onchange="filterAndSortCustomers()">
+            <option value="points">Urutkan: Poin Tertinggi</option>
+            <option value="level">Urutkan: Level Tertinggi</option>
+            <option value="latest">Urutkan: Member Terbaru</option>
+            <option value="streak">Urutkan: Streak Terbanyak</option>
+            <option value="name">Urutkan: Nama (A-Z)</option>
+            <option value="days">Urutkan: Kunjungan Terlama</option>
+        </select>
+    </div>
+
+    <div class="table-responsive">
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th>Member</th>
+                    <th>Tipe Member</th>
+                    <th>Status Keaktifan</th>
+                    <th>Kontak (Telp / Email)</th>
+                    <th>Level & XP</th>
+                    <th>Poin</th>
+                    <th>Kunjungan Terakhir</th>
+                    <th style="text-align: right;">Aksi</th>
+                </tr>
+            </thead>
+            <tbody id="customers-table-body">
+                <tr><td colspan="8" class="text-center text-muted" style="padding: 30px;">Memuat data member...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal Add / Edit Member -->
+<div id="modal-member" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 480px;">
+        <div class="modal-header">
+            <h3 class="modal-title" id="member-modal-title"><i class="fas fa-user-plus text-primary"></i> Tambah Member Baru</h3>
+            <button class="modal-close" onclick="closeModal('modal-member')">&times;</button>
+        </div>
+        <form id="member-form" onsubmit="saveMember(event)">
+            <div class="modal-body">
+                <input type="hidden" id="member-id">
+
+                <div class="form-group">
+                    <label class="form-label">Nama / Nickname Member <span class="text-danger">*</span></label>
+                    <input type="text" id="member-nickname" class="form-control" placeholder="Contoh: Budi Santoso atau Staff_Kopi" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Tipe Member <span class="text-danger">*</span></label>
+                    <select id="member-type" class="form-control" onchange="toggleEmployeeQuotaField()">
+                        <option value="REGULAR">Tipe Pelanggan (Customer Member)</option>
+                        <option value="EMPLOYEE">Tipe Karyawan (Staff Benefit Quota)</option>
+                    </select>
+                </div>
+
+                <!-- Daily Free Quota for Employee -->
+                <div class="form-group" id="member-quota-group" style="display: none; background: #FFF8E1; padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid #FFE082;">
+                    <label class="form-label" style="font-size: 12px; color: #8D6E63; font-weight: 700;">
+                        <i class="fas fa-mug-hot text-warning"></i> Jatah Minuman Gratis per Hari (Cup)
+                    </label>
+                    <input type="number" id="member-quota" class="form-control" placeholder="2" value="2" min="0">
+                    <small class="text-muted" style="font-size: 11px; display: block; margin-top: 4px;">
+                        Member tipe karyawan akan mendapat kuota menu gratis 100% saat transaksi kasir.
+                    </small>
+                </div>
+
+                <!-- Mandatory Identity Notice -->
+                <div style="background: var(--color-primary-light); padding: 10px 12px; border-radius: var(--radius-sm); margin-bottom: 12px; font-size: 11.5px; color: var(--color-primary);">
+                    <i class="fas fa-shield-alt"></i> <strong>Ketentuan Identitas Wajib:</strong><br>
+                    Member wajib memiliki minimal salah satu identitas kontak (Nomor Telepon atau Email).
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Nomor Telepon / WhatsApp</label>
+                    <input type="text" id="member-phone" class="form-control" placeholder="Contoh: 081234567890">
+                    <small class="text-muted" style="font-size: 11px;">Hanya admin/owner yang melihat nomor lengkap; kasir hanya melihat 4 digit akhir.</small>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Alamat Email</label>
+                    <input type="email" id="member-email" class="form-control" placeholder="Contoh: budi@gmail.com">
+                    <small class="text-muted" style="font-size: 11px;">Sensor otomatis berlaku untuk kasir/karyawan non-admin.</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('modal-member')">Batal</button>
+                <button type="submit" class="btn btn-primary" id="btn-save-member">Simpan Member</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Member Detail & Badges View -->
+<div id="modal-member-detail" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 500px;">
+        <div class="modal-header">
+            <h3 class="modal-title" id="member-detail-title">Profil Member</h3>
+            <button class="modal-close" onclick="closeModal('modal-member-detail')">&times;</button>
+        </div>
+        <div class="modal-body" id="member-modal-body">
+            <!-- Rendered dynamically -->
+        </div>
+    </div>
+</div>
+
+<!-- Modal Add/Edit Quest -->
+<div id="modal-quest" class="modal-backdrop">
+    <div class="modal-dialog">
+        <div class="modal-header">
+            <h3 class="modal-title">Tambah Misi (Quest) Baru</h3>
+            <button class="modal-close" onclick="closeModal('modal-quest')">&times;</button>
+        </div>
+        <form id="quest-form" onsubmit="saveQuest(event)">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Nama Misi / Quest</label>
+                    <input type="text" id="quest-name" class="form-control" placeholder="Contoh: Sultan Kafe (Belanja 200rb)" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Tipe Misi</label>
+                    <select id="quest-type" class="form-control">
+                        <option value="TOTAL_TRANSACTIONS">Total Jumlah Kunjungan Transaksi</option>
+                        <option value="TOTAL_SPEND">Total Akumulasi Belanja (Rp)</option>
+                        <option value="BUY_ITEM">Beli Menu Spesifik</option>
+                    </select>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">Target Nilai Target</label>
+                        <input type="number" id="quest-target" class="form-control" placeholder="Contoh: 5" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Misi Harian (Reset Tiap Hari)</label>
+                        <select id="quest-is-daily" class="form-control">
+                            <option value="false">Misi Permanen (Lifetime)</option>
+                            <option value="true">Misi Harian (Daily Quest)</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">Hadiah Poin (Bonus)</label>
+                        <input type="number" id="quest-reward-pts" class="form-control" placeholder="50" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Hadiah XP</label>
+                        <input type="number" id="quest-reward-xp" class="form-control" placeholder="100" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Deskripsi Misi</label>
+                    <input type="text" id="quest-desc" class="form-control" placeholder="Beli menu apa saja 5 kali untuk menyelesaikan misi ini">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('modal-quest')">Batal</button>
+                <button type="submit" class="btn btn-primary">Simpan Misi</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Add/Edit Badge -->
+<div id="modal-badge" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 440px;">
+        <div class="modal-header">
+            <h3 class="modal-title">Tambah Badge Pencapaian</h3>
+            <button class="modal-close" onclick="closeModal('modal-badge')">&times;</button>
+        </div>
+        <form id="badge-form" onsubmit="saveBadge(event)">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Nama Badge</label>
+                    <input type="text" id="badge-name" class="form-control" placeholder="Contoh: Coffee Regular" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Syarat Jumlah Transaksi</label>
+                    <input type="number" id="badge-req-tx" class="form-control" placeholder="Contoh: 10" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Deskripsi Pencapaian</label>
+                    <input type="text" id="badge-desc" class="form-control" placeholder="Telah berkunjung dan memesan kopi sebanyak 10 kali">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('modal-badge')">Batal</button>
+                <button type="submit" class="btn btn-primary">Simpan Badge</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Add/Edit Reward -->
+<div id="modal-reward" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 440px;">
+        <div class="modal-header">
+            <h3 class="modal-title">Tambah Loyalty Reward</h3>
+            <button class="modal-close" onclick="closeModal('modal-reward')">&times;</button>
+        </div>
+        <form id="reward-form" onsubmit="saveReward(event)">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Nama Hadiah / Reward</label>
+                    <input type="text" id="reward-name" class="form-control" placeholder="Contoh: Diskon Rp 10.000" required>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">Tipe Hadiah</label>
+                        <select id="reward-type" class="form-control">
+                            <option value="DISCOUNT">Potongan Diskon (Rp)</option>
+                            <option value="FREE_ITEM">Minuman/Pastry Gratis</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Poin Dibutuhkan</label>
+                        <input type="number" id="reward-points" class="form-control" placeholder="100" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Deskripsi Hadiah</label>
+                    <input type="text" id="reward-desc" class="form-control" placeholder="Tukarkan 100 poin untuk potongan belanja 10rb">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('modal-reward')">Batal</button>
+                <button type="submit" class="btn btn-primary">Simpan Reward</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let rawCustomers = [];
+    let questsList = [];
+    let badgesList = [];
+    let rewardsList = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadCrmData();
+    });
+
+    async function loadCrmData() {
+        try {
+            const [custs, qList, bList, rList] = await Promise.all([
+                apiFetch('/customers').catch(e => { console.error('Cust err:', e); return []; }),
+                apiFetch('/gamification/quests').catch(e => { console.error('Quests err:', e); return []; }),
+                apiFetch('/gamification/badges').catch(e => { console.error('Badges err:', e); return []; }),
+                apiFetch('/gamification/rewards').catch(e => { console.error('Rewards err:', e); return []; })
+            ]);
+            rawCustomers = Array.isArray(custs) ? custs : [];
+            questsList = Array.isArray(qList) ? qList : [];
+            badgesList = Array.isArray(bList) ? bList : [];
+            rewardsList = Array.isArray(rList) ? rList : [];
+
+            renderQuests();
+            renderBadges();
+            renderRewards();
+            filterAndSortCustomers();
+        } catch (e) {
+            console.error('loadCrmData error:', e);
+            showToast('Gagal memuat data CRM: ' + e.message, 'error');
+            const tbody = document.getElementById('customers-table-body');
+            if (tbody) {
+                tbody.innerHTML = `<tr><td colspan="8" class="text-danger text-center">Gagal memuat data member: ${e.message}</td></tr>`;
+            }
+        }
+    }
+
+    function toggleEmployeeQuotaField() {
+        const type = document.getElementById('member-type').value;
+        const qGroup = document.getElementById('member-quota-group');
+        if (qGroup) {
+            qGroup.style.display = (type === 'EMPLOYEE') ? 'block' : 'none';
+        }
+    }
+
+    function openMemberModal() {
+        document.getElementById('member-id').value = '';
+        document.getElementById('member-modal-title').innerHTML = '<i class="fas fa-user-plus text-primary"></i> Tambah Member Baru';
+        document.getElementById('member-form').reset();
+        document.getElementById('member-type').value = 'REGULAR';
+        toggleEmployeeQuotaField();
+        openModal('modal-member');
+    }
+
+    function editMember(id) {
+        const c = rawCustomers.find(it => it.id === id);
+        if (!c) return;
+
+        document.getElementById('member-id').value = c.id;
+        document.getElementById('member-modal-title').innerHTML = '<i class="fas fa-user-pen text-primary"></i> Edit Data Member';
+        document.getElementById('member-nickname').value = c.nickname || '';
+        document.getElementById('member-type').value = c.customerType || 'REGULAR';
+        document.getElementById('member-quota').value = c.dailyQuota || 2;
+        document.getElementById('member-phone').value = (c.rawPhone !== undefined && c.rawPhone !== null) ? c.rawPhone : (c.phone && c.phone !== '-' ? c.phone : '');
+        document.getElementById('member-email').value = (c.rawEmail !== undefined && c.rawEmail !== null) ? c.rawEmail : (c.email && c.email !== '-' ? c.email : '');
+        toggleEmployeeQuotaField();
+        openModal('modal-member');
+    }
+
+    async function saveMember(e) {
+        e.preventDefault();
+        const id = document.getElementById('member-id').value;
+        const nickname = document.getElementById('member-nickname').value.trim();
+        const customerType = document.getElementById('member-type').value;
+        const dailyQuota = parseInt(document.getElementById('member-quota').value) || 0;
+        const phone = document.getElementById('member-phone').value.trim();
+        const email = document.getElementById('member-email').value.trim();
+
+        if (!nickname) {
+            showToast('Nama / Nickname wajib diisi!', 'warning');
+            return;
+        }
+
+        // Mandatory identity check: Phone or Email
+        if (!phone && !email) {
+            showToast('Member wajib memiliki minimal salah satu identitas (No. Telepon atau Email)!', 'warning');
+            return;
+        }
+
+        const payload = {
+            nickname,
+            customerType,
+            dailyQuota: (customerType === 'EMPLOYEE') ? dailyQuota : 0,
+            phone: phone || null,
+            email: email || null
+        };
+
+        const btn = document.getElementById('btn-save-member');
+        btn.disabled = true;
+
+        try {
+            if (id) {
+                await apiFetch(`/customers/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+                showToast('Data member berhasil diperbarui!', 'success');
+            } else {
+                await apiFetch('/customers', { method: 'POST', body: JSON.stringify(payload) });
+                showToast('Member baru berhasil didaftarkan!', 'success');
+            }
+            closeModal('modal-member');
+            loadCrmData();
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    async function deleteMember(id, nickname) {
+        if (!confirm(`Hapus member "${nickname}"? Seluruh riwayat poin dan streak akan dihapus.`)) return;
+        try {
+            await apiFetch(`/customers/${id}`, { method: 'DELETE' });
+            showToast('Member berhasil dihapus', 'success');
+            loadCrmData();
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+
+    function filterAndSortCustomers() {
+        const searchEl = document.getElementById('crm-search');
+        const typeEl = document.getElementById('crm-filter-type');
+        const statusEl = document.getElementById('crm-filter-status');
+        const sortEl = document.getElementById('crm-sort-by');
+
+        const query = searchEl ? searchEl.value.toLowerCase().trim() : '';
+        const typeFilter = typeEl ? typeEl.value : 'ALL';
+        const statusFilter = statusEl ? statusEl.value : 'ALL';
+        const sortBy = sortEl ? sortEl.value : 'points';
+
+        let filtered = rawCustomers.filter(c => {
+            if (!c) return false;
+            const matchQuery = !query || 
+                (c.nickname && c.nickname.toLowerCase().includes(query)) ||
+                (c.phone && c.phone.toLowerCase().includes(query)) ||
+                (c.email && c.email.toLowerCase().includes(query));
+
+            const isEmp = (c.customerType === 'EMPLOYEE');
+            const matchType = (typeFilter === 'ALL') || 
+                (typeFilter === 'KARYAWAN' && isEmp) || 
+                (typeFilter === 'PELANGGAN' && !isEmp);
+
+            const matchStatus = (statusFilter === 'ALL') || (c.status === statusFilter);
+
+            return matchQuery && matchType && matchStatus;
+        });
+
+        // Sorting
+        filtered.sort((a, b) => {
+            if (sortBy === 'latest') return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+            if (sortBy === 'level') return ((b.level || 1) - (a.level || 1)) || ((b.xp || 0) - (a.xp || 0));
+            if (sortBy === 'streak') return (b.streakCount || 0) - (a.streakCount || 0);
+            if (sortBy === 'name') return (a.nickname || '').localeCompare(b.nickname || '');
+            if (sortBy === 'days') return (b.daysSinceLastVisit || 0) - (a.daysSinceLastVisit || 0);
+            return (b.points || 0) - (a.points || 0);
+        });
+
+        renderCustomersTable(filtered);
+    }
+
+    function renderCustomersTable(customers = rawCustomers) {
+        const tbody = document.getElementById('customers-table-body');
+        if (!tbody) return;
+
+        if (!customers || customers.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">Tidak ada data member yang cocok dengan filter.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = customers.map(c => {
+            const isEmp = (c.customerType === 'EMPLOYEE');
+            const typeBadge = isEmp 
+                ? `<span class="badge-chip warning" style="font-weight: 700;">☕ Tipe Karyawan</span><div style="font-size: 10.5px; color: #8D6E63; margin-top: 2px;">Jatah: ${c.dailyQuota || 0} cup/hr</div>`
+                : `<span class="badge-chip success" style="font-weight: 700;">👤 Tipe Pelanggan</span>`;
+
+            const isActive = (c.status === 'AKTIF');
+            const statusBadge = isActive
+                ? `<span class="badge-chip success" title="Berkunjung dalam 30 hari terakhir"><i class="fas fa-circle-check"></i> AKTIF</span>`
+                : `<span class="badge-chip danger" title="Tidak berkunjung >30 hari"><i class="fas fa-user-clock"></i> HILANG (${c.daysSinceLastVisit || 0} hr)</span>`;
+
+            const lastVisit = c.lastVisitDate ? new Date(c.lastVisitDate).toLocaleDateString('id-ID') : 'Belum pernah';
+            const xpPct = ((c.xp || 0) % 100);
+
+            // Contacts with Privacy Masking indicator
+            const phoneDisplay = c.phone || '-';
+            const emailDisplay = c.email || '-';
+            const maskHint = c.isMasked ? '<i class="fas fa-lock" style="font-size: 10px; opacity: 0.6;" title="Disensor untuk hak akses kasir"></i>' : '';
+
+            const safeNickname = (c.nickname || '').replace(/'/g, "\\'");
+
+            return `
+                <tr>
+                    <td>
+                        <strong style="color: var(--text-main); font-size: 13.5px;">${c.nickname || '-'}</strong>
+                        <div style="font-size: 11px; color: var(--text-muted);">Member ID: #${c.id}</div>
+                    </td>
+                    <td>${typeBadge}</td>
+                    <td>${statusBadge}</td>
+                    <td style="font-size: 12px; line-height: 1.4;">
+                        <div><i class="fas fa-phone" style="font-size: 11px; color: var(--text-muted);"></i> ${phoneDisplay} ${maskHint}</div>
+                        ${c.email && c.email !== '-' ? `<div><i class="fas fa-envelope" style="font-size: 11px; color: var(--text-muted);"></i> ${emailDisplay}</div>` : ''}
+                    </td>
+                    <td>
+                        <span class="badge-chip primary" style="font-weight: 800;">Lvl ${c.level || 1}</span>
+                        <div style="width: 80px; height: 5px; background: #EADBCE; border-radius: 3px; margin-top: 4px; overflow: hidden;">
+                            <div style="width: ${xpPct}%; height: 100%; background: var(--color-secondary);"></div>
+                        </div>
+                    </td>
+                    <td><strong style="font-size: 14px; color: var(--color-primary);">${c.points || 0} Pts</strong></td>
+                    <td style="font-size: 12px;">
+                        <div>${lastVisit}</div>
+                        <small style="color: var(--color-accent); font-weight: 700;">${c.streakCount || 0} 🔥 streak</small>
+                    </td>
+                    <td style="text-align: right;">
+                        <button class="btn btn-secondary btn-sm" onclick="editMember(${c.id})" title="Edit Member"><i class="fas fa-edit"></i></button>
+                        <button class="btn btn-secondary btn-sm" onclick="viewMemberDetail(${c.id})" title="Lihat Profil"><i class="fas fa-id-card text-primary"></i></button>
+                        <button class="btn btn-secondary btn-sm text-danger" onclick="deleteMember(${c.id}, '${safeNickname}')" title="Hapus"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function renderQuests() {
+        const container = document.getElementById('quests-list-container');
+        if (!container) return;
+
+        if (questsList.length === 0) {
+            container.innerHTML = `<p class="text-muted text-center" style="padding: 20px;">Belum ada misi aktif.</p>`;
+            return;
+        }
+
+        container.innerHTML = questsList.map(q => `
+            <div style="padding: 12px 14px; background: #FAF8F5; border-radius: var(--radius-md); border: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong style="font-size: 13.5px; color: var(--text-main);">${q.name}</strong>
+                    <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">${q.description || ''}</div>
+                    <div style="margin-top: 4px;">
+                        <span class="badge-chip primary">+${q.rewardPoints} Pts</span>
+                        <span class="badge-chip success">+${q.rewardXp} XP</span>
+                        ${q.isDaily ? '<span class="badge-chip warning">Misi Harian</span>' : ''}
+                    </div>
+                </div>
+                <button class="btn btn-secondary btn-sm text-danger" onclick="deleteQuest(${q.id})" title="Hapus"><i class="fas fa-trash"></i></button>
+            </div>
+        `).join('');
+    }
+
+    function renderBadges() {
+        const container = document.getElementById('badges-list-container');
+        if (!container) return;
+
+        if (badgesList.length === 0) {
+            container.innerHTML = `<p class="text-muted text-center" style="padding: 20px; grid-column: 1/-1;">Belum ada badge.</p>`;
+            return;
+        }
+
+        container.innerHTML = badgesList.map(b => `
+            <div style="padding: 12px; background: #FAF8F5; border-radius: var(--radius-md); border: 1px solid var(--border-light); text-align: center;">
+                <div style="font-size: 28px; color: var(--color-secondary); margin-bottom: 6px;">🏅</div>
+                <strong style="font-size: 12.5px; display: block; color: var(--text-main); line-height: 1.2;">${b.name}</strong>
+                <div style="font-size: 11px; color: var(--color-primary); font-weight: 700; margin-top: 4px;">≥ ${b.requiredTransactions} Order</div>
+            </div>
+        `).join('');
+    }
+
+    function renderRewards() {
+        const container = document.getElementById('rewards-list-container');
+        if (!container) return;
+
+        if (rewardsList.length === 0) {
+            container.innerHTML = `<p class="text-muted text-center" style="padding: 20px; grid-column: 1/-1;">Belum ada reward.</p>`;
+            return;
+        }
+
+        container.innerHTML = rewardsList.map(r => `
+            <div style="padding: 14px; background: #FAF8F5; border-radius: var(--radius-md); border: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong style="font-size: 13.5px; color: var(--color-primary);">${r.name}</strong>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">${r.description || ''}</div>
+                    <div style="margin-top: 6px;">
+                        <span class="badge-chip warning" style="font-weight: 800;">${r.pointsRequired} Poin</span>
+                    </div>
+                </div>
+                <button class="btn btn-secondary btn-sm text-danger" onclick="deleteReward(${r.id})"><i class="fas fa-trash"></i></button>
+            </div>
+        `).join('');
+    }
+
+    function viewMemberDetail(id) {
+        const c = rawCustomers.find(it => it.id === id);
+        if (!c) return;
+
+        document.getElementById('member-detail-title').textContent = `Profil Member: ${c.nickname}`;
+        const unlockedBadges = c.badges || [];
+        const badgesHtml = unlockedBadges.length > 0 
+            ? unlockedBadges.map(b => `<span class="badge-chip success" style="margin: 3px;">🏅 ${b.badge ? b.badge.name : 'Badge'}</span>`).join('')
+            : '<span class="text-muted" style="font-size: 12px;">Belum ada badge yang terbuka.</span>';
+
+        const isEmp = (c.customerType === 'EMPLOYEE');
+
+        document.getElementById('member-modal-body').innerHTML = `
+            <div style="text-align: center; padding-bottom: 16px; border-bottom: 1px solid var(--border-light); margin-bottom: 16px;">
+                <div style="width: 56px; height: 56px; border-radius: 50%; background: var(--color-primary-light); color: var(--color-primary); display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; margin: 0 auto 8px;">
+                    ${(c.nickname || 'U').charAt(0).toUpperCase()}
+                </div>
+                <h4 style="font-family: var(--font-heading); font-size: 18px; color: var(--text-main); margin-bottom: 2px;">${c.nickname}</h4>
+                <div style="display: flex; justify-content: center; gap: 6px; margin-top: 4px;">
+                    <span class="badge-chip ${isEmp ? 'warning' : 'success'}">${isEmp ? 'Tipe Karyawan' : 'Tipe Pelanggan'}</span>
+                    <span class="badge-chip ${c.status === 'AKTIF' ? 'success' : 'danger'}">${c.status === 'AKTIF' ? 'Status: AKTIF' : 'Status: HILANG (>30 hr)'}</span>
+                </div>
+            </div>
+
+            <div style="background: #FAF8F5; padding: 12px 14px; border-radius: var(--radius-sm); margin-bottom: 14px;">
+                <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Kontak Member</div>
+                <div style="margin-top: 4px; font-size: 13px;"><strong>No. HP:</strong> ${c.phone || '-'}</div>
+                <div style="margin-top: 2px; font-size: 13px;"><strong>Email:</strong> ${c.email || '-'}</div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                <div style="background: #FAF8F5; padding: 10px 14px; border-radius: var(--radius-sm);">
+                    <div style="font-size: 11px; color: var(--text-muted);">Poin Aktif</div>
+                    <strong style="font-size: 16px; color: var(--color-primary);">${c.points || 0} Pts</strong>
+                </div>
+                <div style="background: #FAF8F5; padding: 10px 14px; border-radius: var(--radius-sm);">
+                    <div style="font-size: 11px; color: var(--text-muted);">Streak Kunjungan</div>
+                    <strong style="font-size: 16px; color: var(--color-accent);">${c.streakCount || 0} Hari Berturut-turut</strong>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 16px;">
+                <label class="form-label">Lencana Pencapaian (Badges)</label>
+                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                    ${badgesHtml}
+                </div>
+            </div>
+        `;
+
+        openModal('modal-member-detail');
+    }
+
+    // Quest, Badge & Reward Actions
+    function openQuestModal() { document.getElementById('quest-form').reset(); openModal('modal-quest'); }
+    function openBadgeModal() { document.getElementById('badge-form').reset(); openModal('modal-badge'); }
+    function openRewardModal() { document.getElementById('reward-form').reset(); openModal('modal-reward'); }
+
+    async function saveQuest(e) {
+        e.preventDefault();
+        const payload = {
+            name: document.getElementById('quest-name').value.trim(),
+            type: document.getElementById('quest-type').value,
+            targetValue: parseInt(document.getElementById('quest-target').value),
+            isDaily: document.getElementById('quest-is-daily').value === 'true',
+            rewardPoints: parseInt(document.getElementById('quest-reward-pts').value),
+            rewardXp: parseInt(document.getElementById('quest-reward-xp').value),
+            description: document.getElementById('quest-desc').value
+        };
+
+        try {
+            await apiFetch('/gamification/quests', { method: 'POST', body: JSON.stringify(payload) });
+            showToast('Misi baru berhasil dibuat!', 'success');
+            closeModal('modal-quest');
+            loadCrmData();
+        } catch (err) { showToast(err.message, 'error'); }
+    }
+
+    async function saveBadge(e) {
+        e.preventDefault();
+        const payload = {
+            name: document.getElementById('badge-name').value.trim(),
+            requiredTransactions: parseInt(document.getElementById('badge-req-tx').value),
+            description: document.getElementById('badge-desc').value
+        };
+
+        try {
+            await apiFetch('/gamification/badges', { method: 'POST', body: JSON.stringify(payload) });
+            showToast('Badge baru berhasil dibuat!', 'success');
+            closeModal('modal-badge');
+            loadCrmData();
+        } catch (err) { showToast(err.message, 'error'); }
+    }
+
+    async function saveReward(e) {
+        e.preventDefault();
+        const payload = {
+            name: document.getElementById('reward-name').value.trim(),
+            type: document.getElementById('reward-type').value,
+            pointsRequired: parseInt(document.getElementById('reward-points').value),
+            description: document.getElementById('reward-desc').value
+        };
+
+        try {
+            await apiFetch('/gamification/rewards', { method: 'POST', body: JSON.stringify(payload) });
+            showToast('Loyalty reward berhasil dibuat!', 'success');
+            closeModal('modal-reward');
+            loadCrmData();
+        } catch (err) { showToast(err.message, 'error'); }
+    }
+
+    async function deleteQuest(id) {
+        if (!confirm('Hapus quest misi ini?')) return;
+        try {
+            await apiFetch(`/gamification/quests/${id}`, { method: 'DELETE' });
+            showToast('Misi dihapus', 'success');
+            loadCrmData();
+        } catch (err) { showToast(err.message, 'error'); }
+    }
+
+    async function deleteReward(id) {
+        if (!confirm('Hapus loyalty reward ini?')) return;
+        try {
+            await apiFetch(`/gamification/rewards/${id}`, { method: 'DELETE' });
+            showToast('Reward dihapus', 'success');
+            loadCrmData();
+        } catch (err) { showToast(err.message, 'error'); }
+    }
+</script>
+{% endblock %}
