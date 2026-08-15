@@ -5,7 +5,8 @@ plugins {
 
 // Alamat server POS bisa diganti saat build tanpa menyentuh kode:
 //   gradle assembleDebug -PposUrl=https://pos.contoh.com
-val posUrl: String = (project.findProperty("posUrl") as String?) ?: "http://192.168.0.5:3001"
+val posUrl: String = (project.findProperty("posUrl") as String?)
+    ?: "http://phrolova.echidna-carob.ts.net:3001"
 
 android {
     namespace = "com.arunika.pos"

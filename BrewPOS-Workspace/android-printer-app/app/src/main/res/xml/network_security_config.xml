@@ -3,11 +3,16 @@
   Android memblokir HTTP polos sejak API 28. Selama server POS masih HTTP,
   domain/IP-nya harus didaftarkan di sini.
 
-  Begitu server sudah HTTPS, HAPUS blok domain-config di bawah supaya seluruh
-  lalu lintas kembali wajib terenkripsi.
+  - phrolova.echidna-carob.ts.net : alamat Tailscale (MagicDNS) server produksi
+  - 192.168.0.5                   : server saat dikembangkan di jaringan lokal
+
+  Begitu server dilayani lewat HTTPS, HAPUS blok domain-config di bawah beserta
+  baris android:networkSecurityConfig di manifest, supaya seluruh lalu lintas
+  kembali wajib terenkripsi.
 -->
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">phrolova.echidna-carob.ts.net</domain>
         <domain includeSubdomains="true">192.168.0.5</domain>
     </domain-config>
 </network-security-config>
