@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login | Arunika-POS</title>
+    <title>Login | {{ store_name }}</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/favicon.svg') }}">
     <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <!-- Main Style -->
@@ -36,7 +38,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 34px;
+            font-size: 2.125rem;
             color: #FFF;
             margin: 0 auto 20px;
             box-shadow: 0 8px 20px rgba(111, 78, 55, 0.35);
@@ -47,21 +49,21 @@
         }
         .login-header h2 {
             font-family: var(--font-heading);
-            font-size: 24px;
+            font-size: 1.5rem;
             font-weight: 800;
             color: var(--color-primary);
             margin-bottom: 6px;
         }
         .login-header p {
             color: var(--text-muted);
-            font-size: 13px;
+            font-size: 0.8125rem;
         }
         .login-footer-badge {
             margin-top: 24px;
             padding-top: 18px;
             border-top: 1px solid var(--border-light);
             text-align: center;
-            font-size: 11.5px;
+            font-size: 0.7188rem;
             color: var(--text-muted);
         }
     </style>
@@ -70,10 +72,10 @@
     <div class="login-wrapper">
         <div class="login-box">
             <div class="login-logo">
-                ☕
+                <i class="fas fa-mug-hot"></i>
             </div>
             <div class="login-header">
-                <h2>Arunika-POS</h2>
+                <h2>{{ store_name }}</h2>
                 <p>Silakan masuk menggunakan kredensial akun Anda</p>
             </div>
 
@@ -88,7 +90,7 @@
                     <input type="password" id="password" class="form-control" placeholder="Masukkan password" required autocomplete="current-password">
                 </div>
 
-                <button type="submit" class="btn btn-primary btn-lg" style="width: 100%; border-radius: var(--radius-md); font-size: 15px; font-weight: 700;" id="btn-login">
+                <button type="submit" class="btn btn-primary btn-lg" style="width: 100%; border-radius: var(--radius-md); font-size: 0.9375rem; font-weight: 700;" id="btn-login">
                     <i class="fas fa-right-to-bracket"></i> Masuk ke Sistem
                 </button>
             </form>

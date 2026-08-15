@@ -19,9 +19,11 @@ ROLE_LEVELS = {
     'CASHIER': 1
 }
 
+from app.middleware.auth import get_current_user_id
+
 def get_current_actor():
-    user_id = request.headers.get('X-User-Id')
-    if user_id and user_id.isdigit():
+    user_id = get_current_user_id()
+    if user_id:
         user = User.query.get(int(user_id))
         if user:
             return user
@@ -82,6 +84,62 @@ def login():
     except Exception as e:
         print(f"Login error: {e}")
         return jsonify({'error': 'Terjadi kesalahan sistem saat login'}), 500
+
+
+@auth_bp.route('/me', methods=['GET'])
+def get_my_profile():
+    """Own account. Anyone with a valid token may read this, regardless of role."""
+    actor = get_current_actor()
+    if not actor:
+        return jsonify({'error': 'Sesi tidak valid'}), 401
+
+    role = get_actor_role(actor)
+    landing = '/pos'
+    if role in ('SUPERADMIN', 'ADMIN', 'OWNER'):
+        landing = '/dashboard'
+    elif role == 'HEADBAR':
+        landing = '/monitoring'
+
+    data = actor.to_dict()
+    data['landingPage'] = landing
+    return jsonify(data)
+
+
+@auth_bp.route('/me/password', methods=['PUT'])
+def change_my_password():
+    """
+    Self-service password change. PUT /users/<id> is gated to admin roles, so without
+    this a cashier has no way to rotate their own password.
+    """
+    actor = get_current_actor()
+    if not actor:
+        return jsonify({'error': 'Sesi tidak valid'}), 401
+
+    data = request.get_json() or {}
+    current_password = str(data.get('currentPassword') or '')
+    new_password = str(data.get('newPassword') or '').strip()
+
+    if not current_password or not new_password:
+        return jsonify({'error': 'Password lama dan password baru wajib diisi'}), 400
+
+    if len(new_password) < 6:
+        return jsonify({'error': 'Password baru minimal 6 karakter'}), 400
+
+    if not bcrypt.checkpw(current_password.encode('utf-8'), actor.password.encode('utf-8')):
+        return jsonify({'error': 'Password lama tidak cocok'}), 401
+
+    if bcrypt.checkpw(new_password.encode('utf-8'), actor.password.encode('utf-8')):
+        return jsonify({'error': 'Password baru harus berbeda dari password lama'}), 400
+
+    try:
+        actor.password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        db.session.commit()
+        log_activity('CHANGE_PASSWORD', actor.id, f"User {actor.username} mengganti password sendiri", 'User', actor.id)
+        return jsonify({'message': 'Password berhasil diperbarui'})
+    except Exception as e:
+        db.session.rollback()
+        print(f"Change password error: {e}")
+        return jsonify({'error': 'Gagal memperbarui password'}), 500
 
 
 @auth_bp.route('/users', methods=['GET'])

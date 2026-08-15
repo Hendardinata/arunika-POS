@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}POS Terminal Kasir | Arunika-POS{% endblock %}
+{% block title %}POS Terminal Kasir | {{ store_name }}{% endblock %}
 {% block page_title %}Terminal Kasir (POS){% endblock %}
 
 {% block content %}
@@ -24,45 +24,67 @@
         <!-- Menu Product Grid -->
         <div class="menu-grid" id="pos-menu-grid">
             <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
-                <i class="fas fa-spinner fa-spin" style="font-size: 28px;"></i>
+                <i class="fas fa-spinner fa-spin" style="font-size: 1.75rem;"></i>
                 <p style="margin-top: 10px;">Memuat menu kafe...</p>
             </div>
         </div>
     </div>
 
-    <!-- Right: Order Panel & Checkout -->
+    <!-- Right: Member card + Order card, two separate panes in one column -->
     <div class="pos-cart-panel">
-        <div class="cart-header">
-            <h3 style="font-family: var(--font-heading); font-size: 16px; font-weight: 800; color: var(--color-primary); display: flex; align-items: center; gap: 8px;">
+
+    <!-- Card 1: the order lines, nothing else -->
+    <section class="pos-side-card cart-card">
+        <div class="pos-card-head static">
+            <h3 class="pos-card-title">
                 <i class="fas fa-receipt"></i> Pesanan Baru
             </h3>
             <div style="display: flex; gap: 6px; align-items: center;">
+                <span id="cart-count-badge" class="badge-chip primary" style="font-size: 0.6562rem; font-weight: 700;">0 item</span>
                 <button class="btn btn-secondary btn-sm" onclick="clearCart()" title="Kosongkan Keranjang">
                     <i class="fas fa-trash-can text-danger"></i>
                 </button>
-                <button class="btn btn-secondary btn-sm" onclick="toggleMobileCart()" title="Tutup Keranjang" style="border-radius: var(--radius-full);">
+                <button class="btn btn-secondary btn-sm mobile-cart-close" onclick="toggleMobileCart()" title="Tutup Keranjang" style="border-radius: var(--radius-full);">
                     <i class="fas fa-chevron-down"></i>
                 </button>
             </div>
         </div>
 
+        <!-- Line Items -->
+        <div class="cart-items-list" id="cart-items-container">
+            <div style="text-align: center; color: var(--text-muted); margin-top: 40px;">
+                <i class="fas fa-mug-hot" style="font-size: 2.375rem; margin-bottom: 12px; opacity: 0.35; color: var(--color-primary);"></i>
+                <p style="font-size: 0.8125rem; font-weight: 600;">Keranjang Masih Kosong</p>
+                <p style="font-size: 0.7188rem; margin-top: 4px;">Klik menu di sebelah kiri untuk menambahkan pesanan.</p>
+            </div>
+        </div>
+
+    </section>
+
+    <!-- Card 2: who is buying and what they owe. Member details collapse; the
+         totals and the pay button stay pinned at the bottom. -->
+    <section class="pos-side-card checkout-card" id="checkout-card">
+        <div class="pos-card-head" onclick="toggleMemberDetails()" title="Sembunyikan / tampilkan detail member (total tetap terlihat)">
+            <h3 class="pos-card-title">
+                <i class="fas fa-users"></i> Member &amp; Pembayaran
+            </h3>
+            <div style="display: flex; gap: 6px; align-items: center;">
+                <span id="checkout-card-summary" class="badge-chip" style="font-size: 0.6562rem; font-weight: 700;">Guest</span>
+                <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 0.6562rem;" onclick="event.stopPropagation(); resetToGuest()" title="Reset ke Transaksi Guest">
+                    <i class="fas fa-rotate-left"></i>
+                </button>
+                <i class="fas fa-chevron-up pos-card-chevron"></i>
+            </div>
+        </div>
+
         <!-- Customer CRM Lookup with Instant Autocomplete Search & Live Info Box -->
         <div class="customer-selector">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <label class="form-label" style="margin: 0; font-size: 11.5px; font-weight: 700;">
-                    <i class="fas fa-users text-primary"></i> Customer / Member CRM
-                </label>
-                <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 10.5px;" onclick="resetToGuest()" title="Reset ke Transaksi Guest">
-                    <i class="fas fa-rotate-left"></i> Guest
-                </button>
-            </div>
-
             <!-- Instant Search Input & Floating Suggestions Dropdown -->
             <div style="position: relative;">
                 <div style="display: flex; gap: 6px;">
                     <div style="position: relative; flex: 1;">
-                        <i class="fas fa-search" style="position: absolute; left: 10px; top: 9px; font-size: 12px; color: var(--text-muted);"></i>
-                        <input type="text" id="customer-nickname" class="form-control" style="padding-left: 28px; font-size: 12.5px; height: 34px;" placeholder="Cari nama, no. HP, atau email member..." autocomplete="off" oninput="handleMemberLiveSearch(this.value)" onfocus="handleMemberLiveSearch(this.value)">
+                        <i class="fas fa-search" style="position: absolute; left: 10px; top: 9px; font-size: 0.75rem; color: var(--text-muted);"></i>
+                        <input type="text" id="customer-nickname" class="form-control" style="padding-left: 28px; font-size: 0.7812rem; height: 34px;" placeholder="Cari nama, no. HP, atau email member..." autocomplete="off" oninput="handleMemberLiveSearch(this.value)" onfocus="handleMemberLiveSearch(this.value)">
                     </div>
                     <button type="button" class="btn btn-secondary btn-sm" onclick="lookupCustomer(true)" title="Cari / Pilih Member">
                         <i class="fas fa-arrow-right"></i>
@@ -76,135 +98,163 @@
             </div>
 
             <!-- Customer Meta Info Card -->
-            <div id="customer-info-box" style="margin-top: 8px;">
-                <div style="font-size: 11.5px; color: var(--text-secondary); background: #FAF8F5; padding: 8px 10px; border-radius: var(--radius-xs); border: 1px solid var(--border-light);">
+            <div id="customer-info-box">
+                <div style="font-size: 0.7188rem; color: var(--text-secondary); background: #FAF8F5; padding: 8px 10px; border-radius: var(--radius-xs); border: 1px solid var(--border-light);">
                     <i class="fas fa-user-circle"></i> Transaksi sebagai <strong>Guest</strong> (Tanpa Poin Loyalty)
                 </div>
             </div>
 
-            <!-- Employee Quota Benefit Button -->
-            <div id="employee-quota-box" style="display: none; margin-top: 8px; background: #FFF8E1; border: 1px solid #FFE082; padding: 10px; border-radius: var(--radius-sm);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                    <div style="font-size: 11.5px; font-weight: 700; color: #8D6E63;">
-                        <i class="fas fa-id-badge text-warning"></i> Jatah Karyawan:
-                    </div>
-                    <span id="employee-quota-badge" class="badge-chip warning" style="font-weight: 800; font-size: 11px;">0 cup</span>
-                </div>
-                <button type="button" class="btn btn-warning btn-sm" style="width: 100%; font-size: 11.5px; font-weight: 700; padding: 5px 8px;" onclick="applyEmployeeFreeQuota()">
-                    ☕ Pakai Jatah Gratis Karyawan (100% Bebas Menu)
+            <!-- Loyalty actions, one compact row. Each chip is toggled by
+                 applySelectedCustomer(); ids are unchanged so that logic still applies. -->
+            <div class="loyalty-chip-row">
+                <button type="button" id="employee-quota-box" class="loyalty-chip warning" style="display: none;" onclick="applyEmployeeFreeQuota()" title="Pakai jatah gratis karyawan">
+                    <i class="fas fa-id-badge"></i> Jatah
+                    <span id="employee-quota-badge" class="loyalty-chip-value">0 cup</span>
                 </button>
+
+                <button type="button" id="customer-spin-btn-box" class="loyalty-chip warning" style="display: none;" onclick="triggerPosLuckySpin()" title="Main Lucky Spin (50 poin)">
+                    <i class="fas fa-arrows-spin"></i> Spin
+                    <span class="loyalty-chip-value">50 Pts</span>
+                </button>
+
+                <div id="reward-select-box" class="loyalty-reward" style="display: none;">
+                    <i class="fas fa-gift text-warning"></i>
+                    <select id="selected-reward-id" class="loyalty-reward-select" onchange="handleRewardChange()">
+                        <option value="">Tukar reward...</option>
+                    </select>
+                    <span id="member-points-badge" class="loyalty-chip-value">0 Pts</span>
+                </div>
             </div>
 
-            <!-- Gamification Spin Shortcut if points available -->
-            <div id="customer-spin-btn-box" style="display: none; margin-top: 6px;">
-                <button type="button" class="btn btn-warning btn-sm" style="width: 100%; font-size: 11px; padding: 4px 8px;" onclick="triggerPosLuckySpin()">
-                    <i class="fas fa-arrows-spin"></i> Main Lucky Spin (50 Pts)
-                </button>
-            </div>
-
-            <!-- Loyalty Rewards / Point Exchange Dropdown Box -->
-            <div id="reward-select-box" style="display: none; margin-top: 10px; background: #FAF5EE; border: 1px solid #E6D7C8; padding: 10px 12px; border-radius: var(--radius-sm);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                    <label style="font-size: 11.5px; font-weight: 800; color: var(--color-primary); margin: 0;">
-                        <i class="fas fa-gift text-warning"></i> Tukar Poin Loyalty:
-                    </label>
-                    <span id="member-points-badge" class="badge-chip primary" style="font-size: 10.5px; font-weight: 800;">0 Pts</span>
-                </div>
-                <select id="selected-reward-id" class="form-control" style="font-size: 12px; padding: 6px 10px; background: #FFF;" onchange="handleRewardChange()">
-                    <option value="">-- Tidak Menukar Reward --</option>
-                </select>
-                <div id="reward-applied-note" style="display: none; font-size: 11px; color: var(--color-success); font-weight: 700; margin-top: 4px;">
-                    <i class="fas fa-circle-check"></i> Reward aktif: Potongan voucher diterapkan pada transaksi!
-                </div>
+            <div id="reward-applied-note" style="display: none; font-size: 0.6875rem; color: var(--color-success); font-weight: 700;">
+                <i class="fas fa-circle-check"></i> Reward aktif: potongan voucher diterapkan.
             </div>
         </div>
 
-        <!-- Line Items -->
-        <div class="cart-items-list" id="cart-items-container">
-            <div style="text-align: center; color: var(--text-muted); margin-top: 40px;">
-                <i class="fas fa-mug-hot" style="font-size: 38px; margin-bottom: 12px; opacity: 0.35; color: var(--color-primary);"></i>
-                <p style="font-size: 13px; font-weight: 600;">Keranjang Masih Kosong</p>
-                <p style="font-size: 11.5px; margin-top: 4px;">Klik menu di sebelah kiri untuk menambahkan pesanan.</p>
-            </div>
-        </div>
-
-        <!-- Cart Financial Summary -->
+        <!-- Running totals stay visible; settlement happens in the payment modal -->
         <div class="cart-summary">
             <div class="summary-row">
-                <span>Subtotal Menu (Gross)</span>
+                <span>Subtotal Menu</span>
                 <span id="cart-gross">Rp 0</span>
             </div>
 
-            <!-- Item Discounts Summary -->
             <div class="summary-row discount" id="row-item-discount" style="display: none;">
-                <span>Total Diskon Menu / Jatah</span>
+                <span>Diskon Item</span>
                 <span id="cart-item-discount">-Rp 0</span>
             </div>
 
-            <!-- Order Level Discount Input -->
-            <div style="margin: 8px 0; padding: 8px 10px; background: #FFF; border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                    <label style="font-size: 11px; font-weight: 700; color: var(--text-secondary);">Diskon Total / Voucher (Rp)</label>
-                    <span id="order-discount-badge" class="badge-chip danger" style="font-size: 10px; display: none;">Voucher Aktif</span>
-                </div>
-                <input type="number" id="order-discount-input" class="form-control" style="font-size: 12px; padding: 4px 8px;" placeholder="0" value="0" oninput="recalculateTotals()">
+            <div class="summary-row" id="row-order-discount" style="display: none;">
+                <span>Diskon / Voucher</span>
+                <span id="cart-order-discount" style="color: var(--color-danger); font-weight: 600;">-Rp 0</span>
             </div>
 
-            <div class="summary-row">
-                <span>PB1 / PPN (<span id="label-tax-pct">11%</span> inc.)</span>
+            <div class="summary-row total">
+                <span>TOTAL</span>
+                <span id="cart-total">Rp 0</span>
+            </div>
+
+            <!-- Menu prices already include tax, so this is a note, not a charge -->
+            <div class="summary-tax-note" id="row-tax-note">
+                <span>Termasuk PB1/PPN <span id="label-tax-pct">11%</span></span>
                 <span id="cart-tax">Rp 0</span>
             </div>
-            <div class="summary-row total">
-                <span>Total Pembayaran</span>
-                <span id="cart-total" style="color: var(--color-primary);">Rp 0</span>
-            </div>
 
-            <!-- Payment Method & Cash Tendered -->
-            <div style="margin-top: 10px;">
-                <label class="form-label" style="font-size: 11.5px; margin-bottom: 4px;">Metode Pembayaran</label>
-                <select id="payment-method" class="form-control" style="font-size: 12.5px; padding: 6px 10px;" onchange="handlePaymentMethodChange()">
-                    <option value="CASH">💵 Uang Tunai (Cash)</option>
-                    <option value="QRIS">📱 QRIS / E-Wallet</option>
-                    <option value="TRANSFER">🏦 Transfer Bank</option>
-                    <option value="DEBIT">💳 Kartu Debit / EDC</option>
-                </select>
-            </div>
-
-            <!-- Cash Tendered & Presets -->
-            <div id="cash-tendered-section" style="margin-top: 8px;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <label class="form-label" style="font-size: 11px; margin-bottom: 2px;">Uang Tunai Diterima (Rp)</label>
-                    <span id="change-display" style="font-size: 11.5px; font-weight: 700; color: var(--color-success);">Kembalian: Rp 0</span>
-                </div>
-                <input type="number" id="cash-received-input" class="form-control" style="font-size: 13px; padding: 5px 10px;" placeholder="0" oninput="calculateChange()">
-                <div class="cash-preset-grid">
-                    <button class="cash-preset-btn" onclick="setCashPreset('exact')">Pas</button>
-                    <button class="cash-preset-btn" onclick="setCashPreset(20000)">20k</button>
-                    <button class="cash-preset-btn" onclick="setCashPreset(50000)">50k</button>
-                    <button class="cash-preset-btn" onclick="setCashPreset(100000)">100k</button>
-                </div>
-            </div>
-
-            <!-- Checkout Action Button -->
-            <button class="btn btn-primary btn-lg" style="width: 100%; margin-top: 8px; border-radius: var(--radius-md);" id="btn-checkout" onclick="processCheckout()">
-                <i class="fas fa-check-circle"></i> Selesaikan Transaksi
+            <button class="btn btn-primary btn-lg" style="width: 100%; margin-top: 14px; border-radius: var(--radius-md);" id="btn-open-payment" onclick="openPaymentModal()">
+                <i class="fas fa-cash-register"></i> Bayar
             </button>
         </div>
+    </section>
+
     </div>
 </div>
+
+<!-- Backdrop bottom sheet keranjang (mobile) -->
+<div class="pos-sheet-backdrop no-print" id="pos-sheet-backdrop" onclick="toggleMobileCart()"></div>
 
 <!-- Floating Mobile Cart Bar Trigger (Visible on mobile screens) -->
 <div class="mobile-cart-bar no-print" onclick="toggleMobileCart()">
     <div style="display: flex; align-items: center; gap: 10px;">
-        <i class="fas fa-shopping-bag" style="font-size: 20px;"></i>
+        <i class="fas fa-shopping-bag" style="font-size: 1.25rem;"></i>
         <div>
             <span id="mobile-cart-badge" class="cart-badge">0 item</span>
-            <strong id="mobile-cart-total" style="font-size: 15px; margin-left: 6px;">Rp 0</strong>
+            <strong id="mobile-cart-total" style="font-size: 0.9375rem; margin-left: 6px;">Rp 0</strong>
         </div>
     </div>
     <button class="btn btn-secondary btn-sm" style="color: var(--text-main); font-weight: 700; border-radius: var(--radius-full);">
         Buka Keranjang <i class="fas fa-chevron-up"></i>
     </button>
+</div>
+
+<!-- Modal Pembayaran: everything needed to settle, and nothing else. Opens from the
+     Bayar button so the order screen stays lean. -->
+<div id="modal-payment" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 460px;">
+        <div class="modal-header">
+            <h3 class="modal-title"><i class="fas fa-cash-register text-primary"></i> Pembayaran</h3>
+            <button class="modal-close" onclick="closeModal('modal-payment')">&times;</button>
+        </div>
+
+        <div class="modal-body">
+            <div class="pay-total-box">
+                <span class="pay-total-label">Total Tagihan</span>
+                <span class="pay-total-value" id="pay-total-display">Rp 0</span>
+            </div>
+
+            <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label class="form-label" style="margin: 0;">Diskon Total / Voucher (Rp)</label>
+                    <span id="order-discount-badge" class="badge-chip danger" style="font-size: 0.625rem; display: none;">Voucher Aktif</span>
+                </div>
+                <input type="number" id="order-discount-input" class="form-control" placeholder="0" value="0" oninput="onPaymentInputChanged()">
+                <small id="order-discount-locked-note" style="display: none; font-size: 0.6875rem; color: var(--text-muted);">
+                    <i class="fas fa-lock"></i> Diskon manual butuh otorisasi Head Barista ke atas. Gunakan penukaran reward.
+                </small>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Metode Pembayaran</label>
+                <input type="hidden" id="payment-method" value="CASH">
+                <div class="pay-method-grid">
+                    <button type="button" class="pay-method-btn active" data-method="CASH" onclick="setPaymentMethod('CASH', this)">
+                        <i class="fas fa-money-bill-wave"></i> Tunai
+                    </button>
+                    <button type="button" class="pay-method-btn" data-method="QRIS" onclick="setPaymentMethod('QRIS', this)">
+                        <i class="fas fa-qrcode"></i> QRIS
+                    </button>
+                    <button type="button" class="pay-method-btn" data-method="TRANSFER" onclick="setPaymentMethod('TRANSFER', this)">
+                        <i class="fas fa-building-columns"></i> Transfer
+                    </button>
+                    <button type="button" class="pay-method-btn" data-method="DEBIT" onclick="setPaymentMethod('DEBIT', this)">
+                        <i class="fas fa-credit-card"></i> Debit / EDC
+                    </button>
+                </div>
+            </div>
+
+            <div id="cash-tendered-section">
+                <label class="form-label">Uang Tunai Diterima (Rp)</label>
+                <input type="number" id="cash-received-input" class="form-control" style="font-size: 1.25rem; font-weight: 800; padding: 10px 12px;" placeholder="0" oninput="calculateChange()">
+                <div class="cash-preset-grid">
+                    <button type="button" class="cash-preset-btn" onclick="setCashPreset('exact')">Uang Pas</button>
+                    <button type="button" class="cash-preset-btn" onclick="setCashPreset(20000)">20rb</button>
+                    <button type="button" class="cash-preset-btn" onclick="setCashPreset(50000)">50rb</button>
+                    <button type="button" class="cash-preset-btn" onclick="setCashPreset(100000)">100rb</button>
+                </div>
+                <div class="pay-change-box">
+                    <span class="pay-total-label">Kembalian</span>
+                    <span class="pay-change-value" id="change-display">Rp 0</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('modal-payment')">
+                <i class="fas fa-arrow-left"></i> Kembali
+            </button>
+            <button class="btn btn-primary btn-lg" style="flex: 1;" id="btn-checkout" onclick="processCheckout()">
+                <i class="fas fa-check-circle"></i> Selesaikan Transaksi
+            </button>
+        </div>
+    </div>
 </div>
 
 <!-- Modal Thermal Receipt -->
@@ -217,14 +267,51 @@
         <div class="modal-body" id="receipt-modal-body" style="padding: 16px;">
             <!-- Rendered dynamically -->
         </div>
-        <div class="modal-footer no-print" style="justify-content: space-between;">
-            <button class="btn btn-secondary" onclick="closeModal('modal-receipt')">
+        <div class="modal-footer no-print" style="justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+<div style="font-size: 0.6875rem; color: var(--text-muted); line-height: 1.5; text-align: left; flex: 1 1 100%; margin-bottom: 8px;"><i class="fas fa-circle-info"></i> Di dialog cetak pilih <strong>Margins: None</strong>, <strong>Scale: 100</strong>, dan paper size printer thermal Anda. Kalau masih meleset, kalibrasi di Pengaturan &rarr; Kalibrasi Ukuran Cetak Struk.</div>
+                        <button class="btn btn-secondary" onclick="closeModal('modal-receipt')">
                 <i class="fas fa-arrow-left"></i> Selesai
             </button>
-            <button class="btn btn-primary" onclick="printReceipt()">
-                <i class="fas fa-print"></i> Cetak Struk
-            </button>
+            <div style="display: flex; gap: 6px;">
+                <button class="btn btn-primary" onclick="printReceipt('receipt-modal-body')" title="Cetak otomatis sesuai printer kasir">
+                    <i class="fas fa-print"></i> Cetak Struk
+                </button>
+            </div>
         </div>
+    </div>
+</div>
+
+<!-- Modal Daftar Member Cepat -->
+<div id="modal-quick-register" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 400px;">
+        <div class="modal-header">
+            <h3 class="modal-title"><i class="fas fa-user-plus text-primary"></i> Daftar Member Baru</h3>
+            <button class="modal-close" onclick="closeModal('modal-quick-register')">&times;</button>
+        </div>
+        <form onsubmit="submitQuickRegister(event)">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Nama Panggilan</label>
+                    <input type="text" id="quick-reg-nickname" class="form-control" placeholder="Contoh: Budi" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Nomor HP</label>
+                    <input type="tel" id="quick-reg-phone" class="form-control" placeholder="Contoh: 0812xxxxxxx">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" id="quick-reg-email" class="form-control" placeholder="Contoh: budi@email.com">
+                </div>
+                <p style="font-size: 0.7188rem; color: var(--text-muted);">
+                    <i class="fas fa-circle-info"></i> Cukup isi salah satu antara nomor HP atau email &mdash; itu yang jadi identitas member.
+                </p>
+                <div id="quick-reg-warning" class="text-danger" style="display: none; font-size: 0.75rem; margin-top: 8px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('modal-quick-register')">Batal</button>
+                <button type="submit" class="btn btn-primary" id="btn-quick-register">Daftarkan & Pakai</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -252,21 +339,15 @@
 <div id="modal-mystery-box" class="modal-backdrop">
     <div class="modal-dialog" style="max-width: 360px; text-align: center;">
         <div class="modal-body" style="padding: 30px 20px;">
-            <div class="mystery-box-anim" id="mystery-box-icon" onclick="openMysteryBox()">🎁</div>
+            <div class="mystery-box-anim" id="mystery-box-icon" onclick="openMysteryBox()"><i class="fas fa-gift"></i></div>
             <h3 id="mystery-box-title" style="font-family: var(--font-heading); color: var(--color-primary); margin-top: 14px;">Surprise Mystery Drop!</h3>
-            <p id="mystery-box-desc" style="font-size: 13px; color: var(--text-secondary); margin-top: 6px;">Ketuk kotak kado di atas untuk membuka bonus spesial Anda!</p>
-    </div>
-</div>
-
-<!-- Mobile Floating Bottom Bar for Cart Drawer -->
-<div class="mobile-cart-bar no-print" onclick="toggleMobileCart()">
-    <div style="display: flex; align-items: center; gap: 10px;">
-        <i class="fas fa-shopping-cart"></i>
-        <span class="cart-badge" id="mobile-cart-badge">0 item</span>
-    </div>
-    <div style="display: flex; align-items: center; gap: 8px;">
-        <span id="mobile-cart-total" style="font-weight: 800; font-family: var(--font-heading);">Rp 0</span>
-        <i class="fas fa-chevron-up"></i>
+            <p id="mystery-box-desc" style="font-size: 0.8125rem; color: var(--text-secondary); margin-top: 6px;">Ketuk kotak kado di atas untuk membuka bonus spesial Anda!</p>
+        </div>
+        <div class="modal-footer" style="justify-content: center;">
+            <button class="btn btn-primary" id="btn-close-box" style="display: none;" onclick="closeModal('modal-mystery-box')">
+                <i class="fas fa-check"></i> Tutup
+            </button>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -284,8 +365,21 @@
 
     document.addEventListener('DOMContentLoaded', async () => {
         currentStoreSettings = await getStoreSettings();
-        const taxPct = currentStoreSettings.TAX_PERCENT || '11';
-        document.getElementById('label-tax-pct').textContent = taxPct + '%';
+        const rawTax = (currentStoreSettings.TAX_PERCENT !== undefined && currentStoreSettings.TAX_PERCENT !== '') 
+            ? currentStoreSettings.TAX_PERCENT 
+            : ((currentStoreSettings.TAX_PERCENTAGE !== undefined && currentStoreSettings.TAX_PERCENTAGE !== '') ? currentStoreSettings.TAX_PERCENTAGE : '11');
+        document.getElementById('label-tax-pct').textContent = rawTax + '%';
+
+        // The server refuses a manual order discount below HEADBAR, so don't offer the
+        // field to cashiers and let them hit a 403 at checkout.
+        const posUser = getUser();
+        const posRole = posUser ? (posUser.role || 'CASHIER').toUpperCase() : 'CASHIER';
+        if (!['SUPERADMIN', 'ADMIN', 'OWNER', 'HEADBAR'].includes(posRole)) {
+            const discountInput = document.getElementById('order-discount-input');
+            discountInput.readOnly = true;
+            discountInput.style.background = '#F5F5F5';
+            document.getElementById('order-discount-locked-note').style.display = 'block';
+        }
 
         await loadCategories();
         await loadMenus();
@@ -295,7 +389,13 @@
 
     function toggleMobileCart() {
         const cartPanel = document.querySelector('.pos-cart-panel');
-        if (cartPanel) cartPanel.classList.toggle('open');
+        if (!cartPanel) return;
+        const isOpen = cartPanel.classList.toggle('open');
+        // Backdrop: ketuk di luar panel untuk menutup, dan halaman di belakang
+        // tidak ikut ter-scroll saat keranjang dibuka.
+        const backdrop = document.getElementById('pos-sheet-backdrop');
+        if (backdrop) backdrop.classList.toggle('show', isOpen);
+        document.body.classList.toggle('scroll-locked', isOpen);
     }
 
     async function loadCategories() {
@@ -354,7 +454,7 @@
         if (filtered.length === 0) {
             grid.innerHTML = `
                 <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
-                    <i class="fas fa-mug-saucer" style="font-size: 32px; opacity: 0.4;"></i>
+                    <i class="fas fa-mug-saucer" style="font-size: 2rem; opacity: 0.4;"></i>
                     <p style="margin-top: 8px;">Tidak ada menu yang sesuai.</p>
                 </div>
             `;
@@ -385,7 +485,7 @@
                     ${descHtml}
                     <div class="menu-card-footer">
                         <span class="menu-card-price">${formatRp(m.price)}</span>
-                        <span class="badge-chip primary" style="font-size: 10px; padding: 2px 7px;">${m.category ? m.category.name : 'Menu'}</span>
+                        <span class="badge-chip primary" style="font-size: 0.625rem; padding: 2px 7px;">${m.category ? m.category.name : 'Menu'}</span>
                     </div>
                 </div>
             `;
@@ -448,21 +548,37 @@
         renderCart();
     }
 
+    // The member pane collapses so it never competes with the order list for height.
+    function toggleMemberDetails() {
+        document.getElementById('checkout-card').classList.toggle('collapsed');
+    }
+
+    // Keeps the collapsed member pane readable at a glance
+    function setMemberCardSummary(label, tone = '') {
+        const badge = document.getElementById('checkout-card-summary');
+        if (!badge) return;
+        badge.textContent = label;
+        badge.className = 'badge-chip ' + tone;
+        badge.style.fontSize = '0.6562rem';
+        badge.style.fontWeight = '700';
+    }
+
     function renderCart() {
         const container = document.getElementById('cart-items-container');
         const totalItemsCount = cart.reduce((sum, it) => sum + it.quantity, 0);
         const grossTotal = cart.reduce((sum, it) => sum + (it.price * it.quantity), 0);
 
-        // Update mobile bottom bar badge
+        // Update mobile bottom bar badge and the order card head badge
         document.getElementById('mobile-cart-badge').textContent = `${totalItemsCount} item`;
+        document.getElementById('cart-count-badge').textContent = `${totalItemsCount} item`;
         document.getElementById('mobile-cart-total').textContent = formatRp(grossTotal);
 
         if (cart.length === 0) {
             container.innerHTML = `
                 <div style="text-align: center; color: var(--text-muted); margin-top: 40px;">
-                    <i class="fas fa-mug-hot" style="font-size: 38px; margin-bottom: 12px; opacity: 0.35; color: var(--color-primary);"></i>
-                    <p style="font-size: 13px; font-weight: 600;">Keranjang Masih Kosong</p>
-                    <p style="font-size: 11.5px; margin-top: 4px;">Klik menu di sebelah kiri untuk menambahkan pesanan.</p>
+                    <i class="fas fa-mug-hot" style="font-size: 2.375rem; margin-bottom: 12px; opacity: 0.35; color: var(--color-primary);"></i>
+                    <p style="font-size: 0.8125rem; font-weight: 600;">Keranjang Masih Kosong</p>
+                    <p style="font-size: 0.7188rem; margin-top: 4px;">Klik menu di sebelah kiri untuk menambahkan pesanan.</p>
                 </div>
             `;
             recalculateTotals();
@@ -484,7 +600,7 @@
                         </div>
                         <div class="qty-stepper">
                             <button class="qty-btn" onclick="updateQty(${item.menuId}, -1)">-</button>
-                            <span style="font-weight: 800; font-size: 12.5px; min-width: 16px; text-align: center;">${item.quantity}</span>
+                            <span style="font-weight: 800; font-size: 0.7812rem; min-width: 16px; text-align: center;">${item.quantity}</span>
                             <button class="qty-btn" onclick="updateQty(${item.menuId}, 1)">+</button>
                         </div>
                     </div>
@@ -498,6 +614,11 @@
         }).join('');
 
         recalculateTotals();
+    }
+
+    function syncPaymentModalTotal() {
+        const el = document.getElementById('pay-total-display');
+        if (el) el.textContent = formatRp(getFinalTotal());
     }
 
     function recalculateTotals() {
@@ -515,17 +636,34 @@
 
         const totalFinal = Math.max(0, grossTotal - totalItemDiscount - orderDiscount);
 
-        const settings = currentStoreSettings || { TAX_PERCENT: '11' };
-        const taxPercent = parseFloat(settings.TAX_PERCENT) || 11.0;
+        const settings = currentStoreSettings || {};
+        const rawTax = (settings.TAX_PERCENT !== undefined && settings.TAX_PERCENT !== '') 
+            ? settings.TAX_PERCENT 
+            : ((settings.TAX_PERCENTAGE !== undefined && settings.TAX_PERCENTAGE !== '') ? settings.TAX_PERCENTAGE : '11');
+        const parsedTax = parseFloat(rawTax);
+        const taxPercent = !isNaN(parsedTax) ? parsedTax : 11.0;
         const taxMult = 1.0 + (taxPercent / 100.0);
-        const subTotalClean = (totalFinal > 0) ? Math.round(totalFinal / taxMult) : 0;
-        const taxAmount = Math.max(0, totalFinal - subTotalClean);
+        const subTotalClean = (totalFinal > 0) ? (taxPercent === 0 ? totalFinal : Math.round(totalFinal / taxMult)) : 0;
+        const taxAmount = (taxPercent === 0) ? 0 : Math.max(0, totalFinal - subTotalClean);
+
+        // The order discount is entered in the payment modal, so mirror it in the pane
+        const rowOrderDisc = document.getElementById('row-order-discount');
+        if (orderDiscount > 0) {
+            rowOrderDisc.style.display = 'flex';
+            document.getElementById('cart-order-discount').textContent = `-${formatRp(orderDiscount)}`;
+        } else {
+            rowOrderDisc.style.display = 'none';
+        }
+
+        // Tax is informational only; at 0% there is nothing to disclose
+        document.getElementById('row-tax-note').style.display = (taxPercent === 0) ? 'none' : 'flex';
 
         document.getElementById('cart-gross').textContent = formatRp(grossTotal);
         document.getElementById('cart-tax').textContent = formatRp(taxAmount);
         document.getElementById('cart-total').textContent = formatRp(totalFinal);
         document.getElementById('mobile-cart-total').textContent = formatRp(totalFinal);
 
+        syncPaymentModalTotal();
         calculateChange();
     }
 
@@ -547,14 +685,22 @@
             return;
         }
 
+        // Quota is counted in cups and a line is only waived in full, mirroring the
+        // server rule in _resolve_line_items(). Keeps the displayed total honest.
         let quotaToApply = remainingQuota;
         let applied = 0;
 
         for (const it of cart) {
             if (quotaToApply <= 0) break;
+            if (it.quantity > quotaToApply) continue;
             it.discountAmount = it.price; // 100% Free
-            applied += 1;
-            quotaToApply -= 1;
+            applied += it.quantity;
+            quotaToApply -= it.quantity;
+        }
+
+        if (applied === 0) {
+            showToast(`Sisa jatah ${remainingQuota} cup tidak cukup untuk item mana pun di keranjang.`, 'warning');
+            return;
         }
 
         employeeQuotaAppliedCount = applied;
@@ -598,12 +744,40 @@
         const changeDisplay = document.getElementById('change-display');
 
         if (cashInput >= total) {
-            changeDisplay.textContent = `Kembalian: ${formatRp(cashInput - total)}`;
+            changeDisplay.textContent = formatRp(cashInput - total);
             changeDisplay.style.color = 'var(--color-success)';
         } else {
-            changeDisplay.textContent = `Kurang: ${formatRp(total - cashInput)}`;
+            changeDisplay.textContent = `Kurang ${formatRp(total - cashInput)}`;
             changeDisplay.style.color = 'var(--color-danger)';
         }
+    }
+
+    // The payment method is a button group backed by a hidden input, so every existing
+    // reader of #payment-method.value keeps working unchanged.
+    function setPaymentMethod(method, btn) {
+        document.getElementById('payment-method').value = method;
+        document.querySelectorAll('.pay-method-btn').forEach(b => b.classList.remove('active'));
+        if (btn) btn.classList.add('active');
+        handlePaymentMethodChange();
+    }
+
+    function openPaymentModal() {
+        if (cart.length === 0) {
+            showToast('Pilih menu terlebih dahulu!', 'warning');
+            return;
+        }
+        onPaymentInputChanged();
+        document.getElementById('cash-received-input').value = '';
+        handlePaymentMethodChange();
+        openModal('modal-payment');
+    }
+
+    // Order discount lives in the modal now: changing it has to refresh both the
+    // modal's own figures and the running totals in the checkout pane behind it.
+    function onPaymentInputChanged() {
+        recalculateTotals();
+        document.getElementById('pay-total-display').textContent = formatRp(getFinalTotal());
+        calculateChange();
     }
 
     // -------------------------------------------------------------
@@ -626,8 +800,8 @@
                 const results = await apiFetch(`/customers/autocomplete?q=${encodeURIComponent(trimmed)}`);
                 if (!results || results.length === 0) {
                     dropdown.innerHTML = `
-                        <div style="padding: 10px; text-align: center; color: var(--text-muted); font-size: 11.5px;">
-                            Member tidak ditemukan. Tekan ➡️ untuk daftarkan "${trimmed}".
+                        <div style="padding: 10px; text-align: center; color: var(--text-muted); font-size: 0.7188rem;">
+                            Member tidak ditemukan. Tekan <i class="fas fa-arrow-right"></i> untuk daftarkan "${trimmed}".
                         </div>
                     `;
                     dropdown.style.display = 'block';
@@ -642,14 +816,20 @@
                             <div class="member-search-avatar">${initial}</div>
                             <div style="flex: 1; min-width: 0;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <strong style="font-size: 12.5px; color: var(--text-main);">${c.nickname}</strong>
-                                    <span class="badge-chip ${isEmp ? 'warning' : 'success'}" style="font-size: 9.5px; padding: 1px 6px;">
-                                        ${isEmp ? '☕ Karyawan' : '👤 Pelanggan'}
+                                    <strong style="font-size: 0.7812rem; color: var(--text-main);">${c.nickname}</strong>
+                                    <span class="badge-chip ${isEmp ? 'warning' : 'success'}" style="font-size: 0.5938rem; padding: 1px 6px;">
+                                        ${isEmp ? '<i class="fas fa-mug-hot"></i> Karyawan' : '<i class="fas fa-user"></i> Pelanggan'}
                                     </span>
                                 </div>
-                                <div style="font-size: 11px; color: var(--text-muted); display: flex; gap: 8px; margin-top: 2px;">
-                                    <span><i class="fas fa-phone" style="font-size: 10px;"></i> ${c.phone || '-'}</span>
-                                    <span>⭐ <strong>${c.points || 0} Pts</strong></span>
+                                <div style="font-size: 0.6875rem; color: var(--text-muted); display: flex; gap: 8px; margin-top: 2px; flex-wrap: wrap;">
+                                    <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                        ${c.phone && c.phone !== '-'
+                                            ? `<i class="fas fa-phone" style="font-size: 0.625rem;"></i> ${c.phone}`
+                                            : (c.email && c.email !== '-'
+                                                ? `<i class="fas fa-envelope" style="font-size: 0.625rem;"></i> ${c.email}`
+                                                : '<i class="fas fa-user-slash" style="font-size: 0.625rem;"></i> Tanpa kontak')}
+                                    </span>
+                                    <span><i class="fas fa-star"></i> <strong>${c.points || 0} Pts</strong></span>
                                     <span style="color: ${c.status === 'AKTIF' ? 'var(--color-success)' : 'var(--color-danger)'}; font-weight: 700;">● ${c.status || 'AKTIF'}</span>
                                 </div>
                             </div>
@@ -700,9 +880,18 @@
             applySelectedCustomer(customer);
         } catch (e) {
             currentCustomer = null;
+            setMemberCardSummary(`${nickname} (belum terdaftar)`, 'warning');
             document.getElementById('customer-info-box').innerHTML = `
-                <div style="background: #FFF9C4; border: 1px solid #FFE082; padding: 8px 10px; border-radius: var(--radius-xs); font-size: 11.5px; color: #8D6E63;">
-                    <i class="fas fa-user-plus text-warning"></i> Member baru <strong>"${nickname}"</strong> akan otomatis didaftarkan saat checkout!
+                <div style="background: #FFF9C4; border: 1px solid #FFE082; padding: 8px 10px; border-radius: var(--radius-xs); font-size: 0.7188rem; color: #8D6E63;">
+                    <i class="fas fa-user-plus text-warning"></i> <strong>"${nickname}"</strong> belum terdaftar sebagai member.
+                    <div style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
+                        <button type="button" class="btn btn-primary btn-sm" onclick="openQuickRegisterModal()">
+                            <i class="fas fa-user-plus"></i> Daftar Member Baru
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="resetToGuest()">
+                            Lanjut sebagai Guest
+                        </button>
+                    </div>
                 </div>
             `;
             document.getElementById('reward-select-box').style.display = 'none';
@@ -715,6 +904,8 @@
     function applySelectedCustomer(customer) {
         currentCustomer = customer;
         document.getElementById('customer-nickname').value = customer.nickname;
+        setMemberCardSummary(customer.nickname,
+            customer.customerType === 'EMPLOYEE' ? 'warning' : 'success');
 
         const isEmp = (customer.customerType === 'EMPLOYEE');
         const infoBox = document.getElementById('customer-info-box');
@@ -725,8 +916,8 @@
 
         // Render Rich Member Card Info
         const statusBadge = (customer.status === 'AKTIF')
-            ? '<span class="badge-chip success" style="font-size: 9.5px; padding: 1px 6px;"><i class="fas fa-circle-check"></i> AKTIF</span>'
-            : `<span class="badge-chip danger" style="font-size: 9.5px; padding: 1px 6px;"><i class="fas fa-user-clock"></i> HILANG (${customer.daysSinceLastVisit || 0} hr)</span>`;
+            ? '<span class="badge-chip success" style="font-size: 0.5938rem; padding: 1px 6px;"><i class="fas fa-circle-check"></i> AKTIF</span>'
+            : `<span class="badge-chip danger" style="font-size: 0.5938rem; padding: 1px 6px;"><i class="fas fa-user-clock"></i> HILANG (${customer.daysSinceLastVisit || 0} hr)</span>`;
 
         const contactStr = customer.phone || customer.email || 'Tanpa Kontak';
 
@@ -736,18 +927,18 @@
                     <div style="display: flex; gap: 8px; align-items: center;">
                         <div class="member-avatar-mini">${(customer.nickname || 'U').charAt(0).toUpperCase()}</div>
                         <div>
-                            <strong style="font-size: 13px; color: var(--text-main);">${customer.nickname}</strong>
-                            <div style="font-size: 10.5px; color: var(--text-muted);">${contactStr}</div>
+                            <strong style="font-size: 0.8125rem; color: var(--text-main);">${customer.nickname}</strong>
+                            <div style="font-size: 0.6562rem; color: var(--text-muted);">${contactStr}</div>
                         </div>
                     </div>
                     <div style="display: flex; gap: 4px; align-items: center;">
-                        <span class="badge-chip ${isEmp ? 'warning' : 'success'}" style="font-size: 9.5px; padding: 1px 6px;">${isEmp ? '☕ Karyawan' : '👤 Pelanggan'}</span>
+                        <span class="badge-chip ${isEmp ? 'warning' : 'success'}" style="font-size: 0.5938rem; padding: 1px 6px;">${isEmp ? '<i class="fas fa-mug-hot"></i> Karyawan' : '<i class="fas fa-user"></i> Pelanggan'}</span>
                         ${statusBadge}
                     </div>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; background: #FFF; padding: 6px 8px; border-radius: var(--radius-xs); font-size: 11px; border: 1px solid var(--border-light);">
-                    <div>⭐ Poin: <strong style="color: var(--color-primary); font-size: 12px;">${customer.points || 0} Pts</strong></div>
-                    <div>🏆 Level: <strong>Lvl ${customer.level || 1}</strong> (${customer.streakCount || 0}🔥)</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; background: #FFF; padding: 6px 8px; border-radius: var(--radius-xs); font-size: 0.6875rem; border: 1px solid var(--border-light);">
+                    <div><i class="fas fa-star"></i> Poin: <strong style="color: var(--color-primary); font-size: 0.75rem;">${customer.points || 0} Pts</strong></div>
+                    <div><i class="fas fa-trophy"></i> Level: <strong>Lvl ${customer.level || 1}</strong> (${customer.streakCount || 0} <i class="fas fa-fire"></i>)</div>
                 </div>
             </div>
         `;
@@ -775,7 +966,7 @@
             availableRewards.forEach(r => {
                 const canAfford = (customer.points >= r.pointsRequired);
                 if (canAfford) {
-                    rewardSelect.innerHTML += `<option value="${r.id}" data-points="${r.pointsRequired}" data-type="${r.type}">🎁 ${r.name} (Tukar ${r.pointsRequired} Pts)</option>`;
+                    rewardSelect.innerHTML += `<option value="${r.id}" data-points="${r.pointsRequired}" data-type="${r.type}">${r.name} (Tukar ${r.pointsRequired} Pts)</option>`;
                 } else {
                     rewardSelect.innerHTML += `<option value="${r.id}" disabled style="color: #999;">${r.name} (Butuh ${r.pointsRequired} Pts - Poin kurang)</option>`;
                 }
@@ -788,9 +979,10 @@
 
     function resetToGuest() {
         currentCustomer = null;
+        setMemberCardSummary('Guest');
         document.getElementById('customer-nickname').value = 'Guest';
         document.getElementById('customer-info-box').innerHTML = `
-            <div style="font-size: 11.5px; color: var(--text-secondary); background: #FAF8F5; padding: 8px 10px; border-radius: var(--radius-xs); border: 1px solid var(--border-light);">
+            <div style="font-size: 0.7188rem; color: var(--text-secondary); background: #FAF8F5; padding: 8px 10px; border-radius: var(--radius-xs); border: 1px solid var(--border-light);">
                 <i class="fas fa-user-circle"></i> Transaksi sebagai <strong>Guest</strong> (Tanpa Poin Loyalty)
             </div>
         `;
@@ -822,12 +1014,11 @@
         if (rewardId) {
             const selectedReward = availableRewards.find(r => r.id === parseInt(rewardId));
             if (selectedReward) {
-                let discountVal = 10000;
-                if (selectedReward.name.toLowerCase().includes('20')) discountVal = 20000;
-                else if (selectedReward.name.toLowerCase().includes('15')) discountVal = 15000;
-                else if (selectedReward.name.toLowerCase().includes('50')) discountVal = 50000;
+                // Server decides the real discount from Reward.discountValue; this is display only
+                const discountVal = selectedReward.discountValue || 0;
 
                 discountInput.value = discountVal;
+                syncPaymentModalTotal();
                 discountBadge.style.display = 'inline-block';
                 discountBadge.textContent = `Reward: ${selectedReward.name} (-${selectedReward.pointsRequired} Pts)`;
 
@@ -843,6 +1034,64 @@
             discountInput.value = '0';
         }
         recalculateTotals();
+    }
+
+    // Pendaftaran member cepat dari POS. Member wajib punya HP atau email, jadi
+    // tidak ada lagi member yang lahir diam-diam saat checkout.
+    function openQuickRegisterModal() {
+        const typed = document.getElementById('customer-nickname').value.trim();
+        document.getElementById('quick-reg-nickname').value = (typed && typed.toLowerCase() !== 'guest') ? typed : '';
+        document.getElementById('quick-reg-phone').value = '';
+        document.getElementById('quick-reg-email').value = '';
+        document.getElementById('quick-reg-warning').style.display = 'none';
+        openModal('modal-quick-register');
+    }
+
+    async function submitQuickRegister(e) {
+        e.preventDefault();
+        const nickname = document.getElementById('quick-reg-nickname').value.trim();
+        const phone = document.getElementById('quick-reg-phone').value.trim();
+        const email = document.getElementById('quick-reg-email').value.trim();
+        const warning = document.getElementById('quick-reg-warning');
+        const btn = document.getElementById('btn-quick-register');
+
+        if (!phone && !email) {
+            warning.textContent = 'Isi minimal salah satu: nomor HP atau email.';
+            warning.style.display = 'block';
+            return;
+        }
+
+        btn.disabled = true;
+        try {
+            const customer = await apiFetch('/customers', {
+                method: 'POST',
+                body: JSON.stringify({ nickname, phone: phone || null, email: email || null })
+            });
+            showToast(`Member "${customer.nickname}" berhasil didaftarkan!`, 'success');
+            closeModal('modal-quick-register');
+            applySelectedCustomer(customer);
+        } catch (err) {
+            // 409: kontaknya sudah dipakai member lain -> tawarkan memakai yang ada
+            const existing = err.data && err.data.existingCustomer;
+            if (existing) {
+                warning.innerHTML = `${err.message}. <a href="#" onclick="useExistingFromQuickRegister(${existing.id}); return false;"><strong>Pakai member itu</strong></a>`;
+            } else {
+                warning.textContent = err.message;
+            }
+            warning.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    async function useExistingFromQuickRegister(customerId) {
+        try {
+            const customer = await apiFetch(`/customers/search?id=${customerId}`);
+            closeModal('modal-quick-register');
+            applySelectedCustomer(customer);
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
     }
 
     // Checkout Execution
@@ -869,21 +1118,14 @@
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...';
 
         try {
-            let shiftId = null;
-            try {
-                const shiftData = await apiFetch('/shift/current');
-                if (shiftData && shiftData.currentShift) {
-                    shiftId = shiftData.currentShift.id;
-                }
-            } catch (e) {}
-
+            // shiftId & kasir ditentukan server dari sesi kas toko yang terbuka.
             const payload = {
+                customerId: currentCustomer ? currentCustomer.id : null,
                 nickname,
                 totalAmount,
                 discountAmount: orderDiscount,
                 paymentMethod,
                 rewardId,
-                shiftId,
                 employeeQuotaUsed: employeeQuotaAppliedCount,
                 items: cart.map(it => ({
                     menuId: it.menuId,
@@ -898,6 +1140,7 @@
                 body: JSON.stringify(payload)
             });
 
+            closeModal('modal-payment');
             showToast('Transaksi berhasil!', 'success');
 
             // Render Thermal Receipt with live store settings
@@ -953,7 +1196,7 @@
             wheel.style.transform = `rotate(${randomRot}deg)`;
 
             setTimeout(() => {
-                document.getElementById('spin-result-text').innerHTML = `🎉 <strong>${res.rewardName}</strong> (+${res.bonusPoints} Pts / +${res.bonusXp} XP)`;
+                document.getElementById('spin-result-text').innerHTML = `<i class="fas fa-trophy"></i> <strong>${res.rewardName}</strong> (+${res.bonusPoints} Pts / +${res.bonusXp} XP)`;
                 showToast(`Lucky Spin Berhasil! Mendapat ${res.rewardName}`, 'success');
                 lookupCustomer();
                 btn.disabled = false;
@@ -969,7 +1212,7 @@
     function openMysteryBox() {
         const icon = document.getElementById('mystery-box-icon');
         icon.style.animation = 'none';
-        icon.textContent = '🎉';
+        icon.innerHTML = '<i class="fas fa-trophy"></i>';
         document.getElementById('mystery-box-title').textContent = 'Hadiah Terbuka!';
         document.getElementById('btn-close-box').style.display = 'block';
     }

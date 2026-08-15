@@ -18,18 +18,15 @@ function getToken() {
 // Global API Fetch helper with JWT & Error handling
 async function apiFetch(endpoint, options = {}) {
     const token = getToken();
-    const user = getUser();
-    
+
     const headers = {
         'Accept': 'application/json',
         ...(options.headers || {})
     };
 
+    // Identity comes from the JWT payload server-side; no X-User-Id header needed
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
-    }
-    if (user && user.id) {
-        headers['X-User-Id'] = user.id.toString();
     }
 
     if (!(options.body instanceof FormData) && !headers['Content-Type']) {
@@ -43,7 +40,9 @@ async function apiFetch(endpoint, options = {}) {
             headers
         });
 
-        if (res.status === 401 && !endpoint.includes('/auth/login')) {
+        // Never bounce from the login page itself, otherwise a 401 here reloads /login forever
+        const onLoginPage = window.location.pathname.includes('/login');
+        if (res.status === 401 && !endpoint.includes('/auth/login') && !onLoginPage) {
             showToast('Sesi telah berakhir, silakan login kembali.', 'error');
             setTimeout(() => {
                 localStorage.removeItem('token');
@@ -59,7 +58,11 @@ async function apiFetch(endpoint, options = {}) {
 
         const data = await res.json();
         if (!res.ok) {
-            throw new Error(data.error || data.message || 'Terjadi kesalahan pada server');
+            const err = new Error(data.error || data.message || 'Terjadi kesalahan pada server');
+            // Body error dibawa serta: 409 duplikat kontak menyertakan member yang bentrok.
+            err.status = res.status;
+            err.data = data;
+            throw err;
         }
         return data;
     } catch (err) {
@@ -84,11 +87,18 @@ async function getStoreSettings(forceRefresh = false) {
             STORE_INSTAGRAM: '@arunika.coffee',
             RECEIPT_FOOTER: 'Terima kasih atas kunjungannya! Wifi: arunika_free | Pass: ngopidulu',
             TAX_PERCENT: '11',
-            PARKING_FEE: '2000'
+            PARKING_FEE: '2000',
+            RECEIPT_PAPER_SIZE: '58mm',
+            RECEIPT_PRINT_SCALE: '100'
         };
         list.forEach(s => {
             if (s.key) map[s.key] = s.value;
         });
+        if (map.TAX_PERCENT !== undefined && map.TAX_PERCENT !== '') {
+            map.TAX_PERCENTAGE = map.TAX_PERCENT;
+        } else if (map.TAX_PERCENTAGE !== undefined && map.TAX_PERCENTAGE !== '') {
+            map.TAX_PERCENT = map.TAX_PERCENTAGE;
+        }
         cachedStoreSettings = map;
         return map;
     } catch (e) {
@@ -101,7 +111,9 @@ async function getStoreSettings(forceRefresh = false) {
             STORE_INSTAGRAM: '@arunika.coffee',
             RECEIPT_FOOTER: 'Terima kasih atas kunjungannya!',
             TAX_PERCENT: '11',
-            PARKING_FEE: '2000'
+            PARKING_FEE: '2000',
+            RECEIPT_PAPER_SIZE: '58mm',
+            RECEIPT_PRINT_SCALE: '100'
         };
     }
 }
@@ -179,13 +191,21 @@ async function updateShiftStatusWidget() {
         const data = await apiFetch('/shift/current');
         if (data && data.currentShift) {
             const s = data.currentShift;
+            const keeper = s.currentUser ? s.currentUser.username : 'Kasir';
+            const stale = s.status === 'NEEDS_REVIEW';
             widget.className = 'shift-status-pill open';
-            widget.innerHTML = `<span class="status-dot"></span> Shift ${s.type} (Kasir Aktif)`;
-            widget.title = `Modal Awal: ${formatRp(s.startingCash)}`;
+            // Nama penjaga dibungkus .shift-text: di layar sempit bagian itu
+            // disembunyikan CSS supaya pill tidak terpotong di tepi layar.
+            widget.innerHTML = stale
+                ? `<span class="status-dot"></span> ${s.label}<span class="shift-text"> &middot; perlu ditutup</span>`
+                : `<span class="status-dot"></span> ${s.label}<span class="shift-text"> &middot; ${keeper}</span>`;
+            widget.title = stale
+                ? `Sesi ini sudah lebih dari 18 jam terbuka. Modal Awal: ${formatRp(s.startingCash)}`
+                : `Modal Awal: ${formatRp(s.startingCash)}`;
         } else {
             widget.className = 'shift-status-pill closed';
-            widget.innerHTML = `<span class="status-dot"></span> Shift Tutup`;
-            widget.title = `Belum ada shift terbuka`;
+            widget.innerHTML = `<span class="status-dot"></span> Tutup<span class="shift-text"> &middot; Sesi Kas</span>`;
+            widget.title = `Belum ada sesi kas terbuka`;
         }
     } catch (e) {
         widget.className = 'shift-status-pill closed';
@@ -204,51 +224,71 @@ async function openShiftModal() {
         const data = await apiFetch('/shift/current');
         if (data && data.currentShift) {
             const s = data.currentShift;
+            const me = getUser() || {};
             const startTimeStr = new Date(s.startTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            const openedBy = s.openedByUser ? s.openedByUser.username : '-';
+            const keeper = s.currentUser ? s.currentUser.username : '-';
+            const isMine = s.currentUserId && me.id === s.currentUserId;
+            const stale = s.status === 'NEEDS_REVIEW';
+
+            const handoverBtn = isMine ? '' : `
+                <button class="btn btn-secondary" style="width: 100%; margin-bottom: 8px;" onclick="submitShiftHandover()">
+                    <i class="fas fa-people-arrows"></i> Ganti Penjaga (Saya yang jaga sekarang)
+                </button>
+            `;
+            const staleWarn = stale ? `
+                <div style="background: var(--color-danger-bg); border: 1px solid rgba(211, 47, 47, 0.25); padding: 10px 14px; border-radius: var(--radius-sm); margin-bottom: 14px; font-size: 12.5px;">
+                    <i class="fas fa-triangle-exclamation text-danger"></i>
+                    Sesi ini sudah terbuka lebih dari 18 jam dan ditandai <strong>perlu ditinjau</strong>. Tutup dan cocokkan kasnya.
+                </div>
+            ` : '';
+
             content.innerHTML = `
+                ${staleWarn}
                 <div style="background: var(--color-success-bg); border: 1px solid rgba(46, 125, 50, 0.3); padding: 18px; border-radius: var(--radius-md); margin-bottom: 20px;">
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
                         <i class="fas fa-check-circle text-success" style="font-size: 20px;"></i>
-                        <h4 style="color: var(--color-success); font-size: 16px; margin: 0;">Shift ${s.type} Aktif</h4>
+                        <h4 style="color: var(--color-success); font-size: 16px; margin: 0;">${s.label} Aktif</h4>
                     </div>
                     <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
                         <p><strong>Modal Awal:</strong> ${formatRp(s.startingCash)}</p>
                         <p><strong>Mulai Sejak:</strong> Jam ${startTimeStr} WIB</p>
+                        <p><strong>Dibuka oleh:</strong> ${openedBy}</p>
+                        <p><strong>Penjaga sekarang:</strong> ${keeper}${isMine ? ' (Anda)' : ''}</p>
+                        ${s.handovers && s.handovers.length ? `<p><strong>Pergantian penjaga:</strong> ${s.handovers.length}x</p>` : ''}
                     </div>
                 </div>
-                
+
+                ${handoverBtn}
+
                 <div class="form-group">
                     <label class="form-label">Total Uang Tunai di Laci Kasir (Rp)</label>
                     <input type="number" id="shift-ending-cash" class="form-control" placeholder="Contoh: 1250000" required>
                     <small class="text-muted" style="font-size: 11.5px; margin-top: 4px; display: block;">
-                        Hitung seluruh uang fisik di laci kasir saat ini untuk rekonsiliasi akhir shift.
+                        Hitung seluruh uang fisik di laci kasir saat ini untuk rekonsiliasi akhir sesi.
                     </small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Catatan Penutupan (Opsional)</label>
+                    <input type="text" id="shift-closing-note" class="form-control" placeholder="Contoh: selisih karena kembalian kurang">
                 </div>
 
                 <button class="btn btn-danger" style="width: 100%; margin-top: 8px;" onclick="submitCloseShift()">
-                    <i class="fas fa-door-closed"></i> Tutup & Rekonsiliasi Shift
+                    <i class="fas fa-door-closed"></i> Tutup & Rekonsiliasi Sesi Kas
                 </button>
             `;
         } else {
-            const user = getUser();
-            const defaultShift = (user && user.assignedShift) ? user.assignedShift : 'MORNING';
             content.innerHTML = `
                 <p style="margin-bottom: 18px; font-size: 13px; color: var(--text-secondary);">
-                    Tidak ada shift kasir yang aktif saat ini. Masukkan modal uang awal di laci kasir untuk mulai transaksi.
+                    Belum ada sesi kas yang terbuka. Masukkan modal uang awal di laci kasir untuk mulai transaksi.
+                    Sesi ini dipakai bersama semua kasir yang bertugas hari ini.
                 </p>
-                <div class="form-group">
-                    <label class="form-label">Pilih Sesi Shift</label>
-                    <select id="shift-type-select" class="form-control">
-                        <option value="MORNING" ${defaultShift === 'MORNING' ? 'selected' : ''}>Shift Pagi (Morning)</option>
-                        <option value="NIGHT" ${defaultShift === 'NIGHT' ? 'selected' : ''}>Shift Malam (Night)</option>
-                    </select>
-                </div>
                 <div class="form-group">
                     <label class="form-label">Modal Kas Awal di Laci (Rp)</label>
                     <input type="number" id="shift-starting-cash" class="form-control" placeholder="Contoh: 200000" value="200000" required>
                 </div>
                 <button class="btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="submitOpenShift()">
-                    <i class="fas fa-door-open"></i> Buka Shift Kasir Baru
+                    <i class="fas fa-door-open"></i> Buka Sesi Kas Baru
                 </button>
             `;
         }
@@ -264,8 +304,19 @@ async function submitOpenShift() {
             method: 'POST',
             body: JSON.stringify({ startingCash })
         });
-        showToast('Shift kasir berhasil dibuka!', 'success');
+        showToast('Sesi kas berhasil dibuka!', 'success');
         closeModal('modal-shift');
+        updateShiftStatusWidget();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function submitShiftHandover() {
+    try {
+        await apiFetch('/shift/handover', { method: 'POST', body: JSON.stringify({}) });
+        showToast('Anda tercatat sebagai penjaga sesi kas sekarang.', 'success');
+        openShiftModal();
         updateShiftStatusWidget();
     } catch (err) {
         showToast(err.message, 'error');
@@ -280,16 +331,17 @@ async function submitCloseShift() {
     }
 
     try {
+        const noteEl = document.getElementById('shift-closing-note');
         const res = await apiFetch('/shift/close', {
             method: 'POST',
-            body: JSON.stringify({ endingCash })
+            body: JSON.stringify({ endingCash, closingNote: noteEl ? noteEl.value : '' })
         });
         const diff = res.endingCash - res.expectedEndingCash;
         let diffMsg = 'Kas pas!';
         if (diff > 0) diffMsg = `Lebih kas: ${formatRp(diff)}`;
         if (diff < 0) diffMsg = `Kurang kas: ${formatRp(Math.abs(diff))}`;
 
-        showToast(`Shift ditutup. Ekspektasi: ${formatRp(res.expectedEndingCash)} (${diffMsg})`, 'success');
+        showToast(`Sesi kas ditutup. Ekspektasi: ${formatRp(res.expectedEndingCash)} (${diffMsg})`, 'success');
         closeModal('modal-shift');
         updateShiftStatusWidget();
     } catch (err) {
@@ -358,9 +410,16 @@ function renderThermalReceiptHtml(txData, storeInfo = null) {
 
     const totalAmount = (tx.totalAmount !== undefined) ? tx.totalAmount : (txData.totalAmount || 0);
     const orderDiscount = (tx.discountAmount !== undefined) ? tx.discountAmount : (txData.discountAmount || 0);
-    const taxPercent = parseFloat(info.TAX_PERCENT || '11');
-    const taxAmount = (tx.taxAmount !== undefined) ? tx.taxAmount : (txData.taxAmount || 0);
-    const subTotal = (tx.subTotal !== undefined && tx.subTotal > 0) ? tx.subTotal : Math.round(totalAmount / (1 + (taxPercent / 100)));
+    const rawTax = (info.TAX_PERCENT !== undefined && info.TAX_PERCENT !== '') 
+        ? info.TAX_PERCENT 
+        : ((info.TAX_PERCENTAGE !== undefined && info.TAX_PERCENTAGE !== '') ? info.TAX_PERCENTAGE : '11');
+    const parsedTax = parseFloat(rawTax);
+    const taxPercent = !isNaN(parsedTax) ? parsedTax : 11.0;
+    const taxAmount = (tx.taxAmount !== undefined) ? tx.taxAmount : (txData.taxAmount !== undefined ? txData.taxAmount : 0);
+    // Menu prices are tax-inclusive, so the honest subtotal is the pre-discount gross.
+    // Using the stored DPP made the column fail to add up whenever a discount applied:
+    // 45.045 - 10.000 + 4.955 != 50.000.
+    const grossBeforeDiscount = totalAmount + orderDiscount + totalItemDiscount;
     const cashTendered = txData.cashReceived || tx.cashReceived || totalAmount;
     const changeAmount = (cashTendered > totalAmount) ? (cashTendered - totalAmount) : 0;
     const pointsEarned = (tx.pointsEarned !== undefined) ? tx.pointsEarned : (txData.pointsEarned || 0);
@@ -368,7 +427,6 @@ function renderThermalReceiptHtml(txData, storeInfo = null) {
     return `
         <div class="thermal-receipt-card" id="printable-receipt">
             <div class="receipt-header">
-                <div class="receipt-logo">☕</div>
                 <div class="receipt-store-title">${info.STORE_NAME || 'ARUNIKA COFFEE'}</div>
                 <div style="font-size: 11px; color: #555; font-style: italic; margin-top: 2px;">${info.TAGLINE || 'Every Cup Has A Story'}</div>
                 <div class="receipt-meta-info">
@@ -413,7 +471,7 @@ function renderThermalReceiptHtml(txData, storeInfo = null) {
 
             <div class="receipt-row">
                 <span>Subtotal Menu</span>
-                <span>${formatRp(subTotal)}</span>
+                <span>${formatRp(grossBeforeDiscount)}</span>
             </div>
 
             ${totalItemDiscount > 0 ? `
@@ -428,17 +486,18 @@ function renderThermalReceiptHtml(txData, storeInfo = null) {
                 <span>-${formatRp(orderDiscount)}</span>
             </div>` : ''}
 
-            <div class="receipt-row">
-                <span>PB1 / PPN (${taxPercent}% inc.)</span>
-                <span>${formatRp(taxAmount)}</span>
-            </div>
-
             <div class="receipt-divider double"></div>
 
             <div class="receipt-row bold" style="font-size: 14.5px;">
                 <span>TOTAL AKHIR</span>
                 <span>${formatRp(totalAmount)}</span>
             </div>
+
+            ${taxPercent > 0 ? `
+            <div class="receipt-row" style="font-size: 9.5px;">
+                <span>Termasuk PB1/PPN ${taxPercent}%</span>
+                <span>${formatRp(taxAmount)}</span>
+            </div>` : ''}
 
             ${(tx.paymentMethod || txData.paymentMethod) === 'CASH' ? `
             <div class="receipt-row" style="margin-top: 4px;">
@@ -453,7 +512,7 @@ function renderThermalReceiptHtml(txData, storeInfo = null) {
             ${pointsEarned > 0 ? `
             <div class="receipt-divider"></div>
             <div class="receipt-row" style="font-weight: 700; color: #6F4E37;">
-                <span>⭐ Poin Loyalitas</span>
+                <span>Poin Loyalitas</span>
                 <span>+${pointsEarned} Pts</span>
             </div>` : ''}
 
@@ -474,15 +533,174 @@ function toggleMobileSidebar() {
     const backdrop = document.getElementById('sidebar-backdrop');
     if (sidebar) sidebar.classList.toggle('open');
     if (backdrop) backdrop.classList.toggle('show');
+    // Tanpa ini halaman di belakang ikut ter-scroll saat menu dibuka di HP.
+    document.body.classList.toggle('scroll-locked', !!(sidebar && sidebar.classList.contains('open')));
 }
 
-// Thermal Receipt Print Mode
-function printReceipt() {
-    document.body.classList.add('printing-receipt');
-    window.print();
+// Esc menutup panel melayang mana pun yang sedang terbuka
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const sidebar = document.querySelector('.sidebar.open');
+    if (sidebar) {
+        toggleMobileSidebar();
+        return;
+    }
+    if (typeof toggleMobileCart === 'function' && document.querySelector('.pos-cart-panel.open')) {
+        toggleMobileCart();
+    }
+});
+
+// Sidebar collapse (desktop only; below 1024px the sidebar is an off-canvas drawer)
+function toggleSidebarCollapse() {
+    const sidebar = document.querySelector('.sidebar');
+    if (!sidebar) return;
+    const collapsed = sidebar.classList.toggle('collapsed');
+    localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
+}
+
+function initSidebarCollapse() {
+    const sidebar = document.querySelector('.sidebar');
+    if (!sidebar) return;
+
+    // Give every nav item a tooltip so the collapsed rail stays readable
+    sidebar.querySelectorAll('.nav-item').forEach(item => {
+        const label = item.querySelector('span');
+        if (label && !item.title) item.title = label.textContent.trim();
+    });
+
+    if (document.documentElement.classList.contains('sidebar-collapsed-init')) {
+        sidebar.classList.add('no-transition', 'collapsed');
+        // Re-enable the transition only after the first frame has painted
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            sidebar.classList.remove('no-transition');
+            document.documentElement.classList.remove('sidebar-collapsed-init');
+        }));
+    }
+}
+
+// Thermal Receipt Isolated Print Mode (Prints only the receipt slip with auto paper-size detection)
+async function printReceipt(containerId = null, forcedPaperSize = null) {
+    const targetEl = containerId 
+        ? (document.getElementById(containerId) ? document.getElementById(containerId).querySelector('.thermal-receipt-card') || document.getElementById(containerId) : null)
+        : (document.getElementById('printable-receipt') || document.querySelector('.thermal-receipt-card'));
+
+    if (!targetEl) {
+        window.print();
+        return;
+    }
+
+    const settings = await getStoreSettings();
+    const paperSize = forcedPaperSize || (settings ? settings.RECEIPT_PAPER_SIZE : '58mm') || '58mm';
+    const is58mm = (paperSize === '58mm' || paperSize === '58');
+
+    // Create or reuse hidden iframe to print ONLY the receipt without full-page layout
+    let iframe = document.getElementById('receipt-print-frame');
+    if (!iframe) {
+        iframe = document.createElement('iframe');
+        iframe.id = 'receipt-print-frame';
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        document.body.appendChild(iframe);
+    }
+
+    // --- Thermal geometry, expressed in millimetres so it does not depend on the
+    // browser's 96dpi px assumption ---
+    // A cheap 203dpi thermal head prints 384 dots on 58mm paper (48.0mm) and 576 dots
+    // on 80mm paper (72.1mm). Those are the real printable widths; the rest of the
+    // roll is dead margin. Standard line length is 32 characters on 58mm and 48 on
+    // 80mm, and a monospace glyph advances 0.6em, which fixes the body font size:
+    //   58mm -> 46.5mm usable / 32 chars / 0.6 = 2.42mm
+    //   80mm -> 70.5mm usable / 48 chars / 0.6 = 2.45mm
+    // Near enough to share one value. RECEIPT_PRINT_SCALE is the calibration knob for
+    // printers whose driver does not hit the nominal size exactly.
+    const scalePct = parseFloat(settings && settings.RECEIPT_PRINT_SCALE) || 100;
+    const scale = Math.min(200, Math.max(50, scalePct)) / 100;
+    const mm = (v) => (v * scale).toFixed(2) + 'mm';
+
+    const pageSizeCss = is58mm ? '58mm auto' : '80mm auto';
+    const bodyWidthCss = is58mm ? '48mm' : '72mm';
+    const sidePaddingCss = is58mm ? '0.75mm' : '0.75mm';
+
+    const fontSizeCss = mm(2.42);
+    const titleSizeCss = mm(3.4);
+    const boldSizeCss = mm(2.9);
+    const metaSizeCss = mm(2.1);
+    const lineHeightCss = '1.3';
+    const dividerMargin = mm(1.1) + ' 0';
+    const doubleMargin = mm(1.5) + ' 0';
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>Struk Transaksi</title>
+            <style>
+                @page {
+                    size: ${pageSizeCss};
+                    margin: 0;
+                }
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                    -webkit-print-color-adjust: exact;
+                    print-color-adjust: exact;
+                }
+                body {
+                    background: #FFF;
+                    /* Pure black only: thermal heads have no greyscale, and dithered
+                       grey comes out as faint speckle on cheap paper. */
+                    color: #000;
+                    font-family: 'Courier New', Courier, monospace;
+                    font-size: ${fontSizeCss};
+                    line-height: ${lineHeightCss};
+                    width: ${bodyWidthCss};
+                    /* Left-aligned, not centred: the printable area starts at the paper
+                       edge, so centring inside the sheet pushes content off the head. */
+                    margin: 0;
+                    padding: 1mm ${sidePaddingCss};
+                }
+                .thermal-receipt-card {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    box-shadow: none !important;
+                    border: none !important;
+                    padding: 0 !important;
+                    margin: 0 !important;
+                    background: transparent !important;
+                    font-size: inherit !important;
+                }
+                .receipt-header { text-align: center; margin-bottom: ${mm(1.5)}; }
+                .receipt-store-title { font-weight: 700; font-size: ${titleSizeCss}; text-transform: uppercase; }
+                .receipt-meta-info { font-size: ${metaSizeCss}; color: #000; margin-top: ${mm(0.5)}; line-height: 1.25; }
+                .receipt-divider { border-top: 1px dashed #000; margin: ${dividerMargin}; }
+                .receipt-divider.double { border-top: 1px solid #000; margin: ${doubleMargin}; }
+                .receipt-row { display: flex; justify-content: space-between; gap: ${mm(1)}; margin-bottom: ${mm(0.4)}; font-size: ${fontSizeCss}; }
+                .receipt-row.bold { font-weight: 700; font-size: ${boldSizeCss}; }
+                .receipt-footer { text-align: center; font-size: ${metaSizeCss}; margin-top: ${mm(2)}; }
+                .receipt-logo { display: none !important; }
+                /* Long menu names must wrap inside the slip, never widen it */
+                * { word-break: break-word; overflow-wrap: anywhere; }
+            </style>
+        </head>
+        <body>
+            ${targetEl.outerHTML}
+        </body>
+        </html>
+    `);
+    doc.close();
+
     setTimeout(() => {
-        document.body.classList.remove('printing-receipt');
-    }, 500);
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+    }, 200);
 }
 
 // Report Print Mode
@@ -573,11 +791,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Initialize RBAC navigation filtering & route protection
     if (!isLoginPage) {
+        initSidebarCollapse();
         initRbacNavigation();
     }
 
-    // Fetch store settings in background
-    await getStoreSettings();
+    // Fetch store settings in background (needs a token: /api/settings is auth-guarded)
+    if (token) {
+        const settings = await getStoreSettings();
+        const paperBadge = document.getElementById('topbar-paper-size');
+        if (paperBadge && settings) {
+            paperBadge.innerHTML = `<i class="fas fa-receipt"></i> ${settings.RECEIPT_PAPER_SIZE || '58mm'}`;
+        }
+    }
 
     // Initialize shift status widget if present
     updateShiftStatusWidget();

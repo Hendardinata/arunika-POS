@@ -1,33 +1,40 @@
 {% extends 'base.html' %}
 
-{% block title %}Pusat Laporan Lengkap | Arunika-POS{% endblock %}
+{% block title %}Pusat Laporan Lengkap | {{ store_name }}{% endblock %}
 {% block page_title %}Pusat Laporan Keuangan & Inventori{% endblock %}
 
 {% block content %}
 <!-- Top Action Bar & Tabs Navigation -->
 <div class="no-print" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; flex-wrap: wrap; gap: 12px;">
-    <div style="display: flex; gap: 6px; flex-wrap: wrap;" id="report-tabs-nav">
+    <!-- flex-wrap diatur di style.css: di layar sempit deretan tab jadi strip geser -->
+    <div style="display: flex; gap: 6px;" id="report-tabs-nav">
         <button class="btn btn-primary btn-sm rep-tab-btn" id="btn-rep-sales" onclick="switchReportSection('sales')">
-            <i class="fas fa-receipt"></i> 1. Penjualan
+            <i class="fas fa-receipt"></i> 1. Penjualan Sah
+        </button>
+        <button class="btn btn-secondary btn-sm rep-tab-btn" id="btn-rep-voids" onclick="switchReportSection('voids')">
+            <i class="fas fa-ban text-danger"></i> 2. Transaksi Void / Batal
         </button>
         <button class="btn btn-secondary btn-sm rep-tab-btn" id="btn-rep-cogs" onclick="switchReportSection('cogs')">
-            <i class="fas fa-calculator"></i> 2. HPP & Margin Menu
+            <i class="fas fa-calculator"></i> 3. HPP & Margin Menu
         </button>
         <button class="btn btn-secondary btn-sm rep-tab-btn" id="btn-rep-purchases" onclick="switchReportSection('purchases')">
-            <i class="fas fa-cart-shopping"></i> 3. Pembelian & Biaya
+            <i class="fas fa-cart-shopping"></i> 4. Pembelian & Biaya
         </button>
         <button class="btn btn-secondary btn-sm rep-tab-btn" id="btn-rep-variance" onclick="switchReportSection('variance')">
-            <i class="fas fa-boxes-stacked"></i> 4. Stok Bahan
+            <i class="fas fa-boxes-stacked"></i> 5. Stok Bahan
         </button>
         <button class="btn btn-secondary btn-sm rep-tab-btn" id="btn-rep-pnl" onclick="switchReportSection('pnl')">
-            <i class="fas fa-file-invoice-dollar"></i> 5. Laba Rugi (P&L)
+            <i class="fas fa-file-invoice-dollar"></i> 6. Laba Rugi (P&L)
         </button>
         <button class="btn btn-secondary btn-sm rep-tab-btn" id="btn-rep-shifts" onclick="switchReportSection('shifts')">
-            <i class="fas fa-clock-rotate-left"></i> 6. Rekap Shift
+            <i class="fas fa-clock-rotate-left"></i> 7. Sesi Kas & Kasir
+        </button>
+        <button class="btn btn-secondary btn-sm rep-tab-btn" id="btn-rep-attendance" onclick="switchReportSection('attendance')">
+            <i class="fas fa-user-clock"></i> 8. Absensi Karyawan
         </button>
     </div>
 
-    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+    <div class="report-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
         <button class="btn btn-success btn-sm" onclick="downloadExcelFull()" title="Download seluruh lembar laporan dalam satu file Excel">
             <i class="fas fa-file-excel"></i> Download Buku Laporan (.xlsx)
         </button>
@@ -44,29 +51,29 @@
 <div class="report-printable-area">
     <!-- Official Report Header -->
     <div class="card" id="report-official-header" style="margin-bottom: 20px; padding: 20px;">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid var(--border-color); padding-bottom: 16px; margin-bottom: 16px;">
+        <div class="report-doc-header" style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid var(--border-color); padding-bottom: 16px; margin-bottom: 16px;">
             <div style="display: flex; align-items: center; gap: 16px;">
-                <div class="brand-logo" style="width: 52px; height: 52px; font-size: 26px;">☕</div>
+                <div class="brand-logo" style="width: 52px; height: 52px; font-size: 1.625rem;"><i class="fas fa-mug-hot"></i></div>
                 <div>
-                    <h2 id="rep-store-name" style="font-family: var(--font-heading); font-size: 20px; font-weight: 800; color: var(--color-primary); margin: 0;">
+                    <h2 id="rep-store-name" style="font-family: var(--font-heading); font-size: 1.25rem; font-weight: 800; color: var(--color-primary); margin: 0;">
                         ARUNIKA COFFEE & LOUNGE
                     </h2>
-                    <p id="rep-store-tagline" style="font-size: 12px; color: var(--color-secondary); font-style: italic; margin-top: 2px;">
+                    <p id="rep-store-tagline" style="font-size: 0.75rem; color: var(--color-secondary); font-style: italic; margin-top: 2px;">
                         Every Cup Has A Story
                     </p>
-                    <p id="rep-store-address" style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
+                    <p id="rep-store-address" style="font-size: 0.7188rem; color: var(--text-muted); margin-top: 2px;">
                         Jl. Melati Kopi No. 12, City Center | Telp: 0812-3456-7890
                     </p>
                 </div>
             </div>
             <div style="text-align: right;">
-                <h3 id="rep-active-title" style="font-family: var(--font-heading); font-size: 16px; font-weight: 700; color: var(--text-main); margin: 0;">
-                    LAPORAN PENJUALAN KAFE
+                <h3 id="rep-active-title" style="font-family: var(--font-heading); font-size: 1rem; font-weight: 700; color: var(--text-main); margin: 0;">
+                    LAPORAN PENJUALAN SAH KAFE
                 </h3>
-                <p id="rep-period-label" style="font-size: 12px; color: var(--text-secondary); margin-top: 4px; font-weight: 600;">
+                <p id="rep-period-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px; font-weight: 600;">
                     Periode: Semua Riwayat
                 </p>
-                <p style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                <p style="font-size: 0.6875rem; color: var(--text-muted); margin-top: 2px;">
                     Dicetak pada: <span id="rep-printed-date">-</span>
                 </p>
             </div>
@@ -80,38 +87,38 @@
                 <button class="btn btn-secondary btn-sm filter-period-btn" onclick="loadReportData('7', this)">7 Hari</button>
                 <button class="btn btn-secondary btn-sm filter-period-btn" onclick="loadReportData('1', this)">Hari Ini</button>
             </div>
-            <div id="rep-section-subinfo" style="font-size: 12.5px; color: var(--text-secondary); font-weight: 600;">
+            <div id="rep-section-subinfo" style="font-size: 0.7812rem; color: var(--text-secondary); font-weight: 600;">
                 Memuat data laporan...
             </div>
         </div>
     </div>
 
-    <!-- TAB 1: LAPORAN PENJUALAN (SALES) -->
+    <!-- TAB 1: LAPORAN PENJUALAN SAH (SALES) -->
     <div id="rep-sec-sales" class="rep-section-content">
         <!-- Sales KPI Summary -->
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px;">
             <div class="card" style="padding: 14px 18px; border-left: 4px solid var(--color-primary);">
-                <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Penjualan Kotor</div>
-                <div id="kpi-sales-gross" style="font-family: var(--font-heading); font-size: 18px; font-weight: 800; color: var(--text-main); margin-top: 2px;">Rp 0</div>
+                <div style="font-size: 0.6875rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Penjualan Kotor</div>
+                <div id="kpi-sales-gross" style="font-family: var(--font-heading); font-size: 1.125rem; font-weight: 800; color: var(--text-main); margin-top: 2px;">Rp 0</div>
             </div>
             <div class="card" style="padding: 14px 18px; border-left: 4px solid var(--color-danger);">
-                <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Diskon Diberikan</div>
-                <div id="kpi-sales-discount" style="font-family: var(--font-heading); font-size: 18px; font-weight: 800; color: var(--color-danger); margin-top: 2px;">-Rp 0</div>
+                <div style="font-size: 0.6875rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Diskon Diberikan</div>
+                <div id="kpi-sales-discount" style="font-family: var(--font-heading); font-size: 1.125rem; font-weight: 800; color: var(--color-danger); margin-top: 2px;">-Rp 0</div>
             </div>
             <div class="card" style="padding: 14px 18px; border-left: 4px solid var(--color-success);">
-                <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Penjualan Bersih (Net Sales)</div>
-                <div id="kpi-sales-net" style="font-family: var(--font-heading); font-size: 18px; font-weight: 800; color: var(--color-success); margin-top: 2px;">Rp 0</div>
+                <div style="font-size: 0.6875rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Penjualan Bersih (Net Sales)</div>
+                <div id="kpi-sales-net" style="font-family: var(--font-heading); font-size: 1.125rem; font-weight: 800; color: var(--color-success); margin-top: 2px;">Rp 0</div>
             </div>
             <div class="card" style="padding: 14px 18px; border-left: 4px solid var(--color-secondary);">
-                <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total PPN Resto (PB1)</div>
-                <div id="kpi-sales-tax" style="font-family: var(--font-heading); font-size: 18px; font-weight: 800; color: var(--color-secondary); margin-top: 2px;">Rp 0</div>
+                <div style="font-size: 0.6875rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total PPN Resto (PB1)</div>
+                <div id="kpi-sales-tax" style="font-family: var(--font-heading); font-size: 1.125rem; font-weight: 800; color: var(--color-secondary); margin-top: 2px;">Rp 0</div>
             </div>
         </div>
 
-        <!-- Transactions Table -->
+        <!-- Transactions Table (Completed Only) -->
         <div class="card">
             <div class="card-header no-print">
-                <h3 class="card-title"><i class="fas fa-list-check text-primary"></i> Rincian Seluruh Transaksi Penjualan</h3>
+                <h3 class="card-title"><i class="fas fa-circle-check text-success"></i> Rincian Transaksi Penjualan Sah (Completed)</h3>
             </div>
             <div class="table-responsive">
                 <table class="custom-table" id="table-sales-export">
@@ -137,13 +144,55 @@
         </div>
     </div>
 
-    <!-- TAB 2: LAPORAN HPP & MARGIN MENU (COGS & PROFITABILITY) -->
+    <!-- TAB 2: LAPORAN TRANSAKSI BATAL (VOID) -->
+    <div id="rep-sec-voids" class="rep-section-content" style="display: none;">
+        <!-- Void KPI Summary -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px;">
+            <div class="card" style="padding: 14px 18px; border-left: 4px solid var(--color-danger);">
+                <div style="font-size: 0.6875rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Transaksi Batal (Void)</div>
+                <div id="kpi-void-count" style="font-family: var(--font-heading); font-size: 1.125rem; font-weight: 800; color: var(--color-danger); margin-top: 2px;">0 Transaksi</div>
+            </div>
+            <div class="card" style="padding: 14px 18px; border-left: 4px solid var(--color-danger);">
+                <div style="font-size: 0.6875rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Nilai Nominal Void</div>
+                <div id="kpi-void-amount" style="font-family: var(--font-heading); font-size: 1.125rem; font-weight: 800; color: var(--color-danger); margin-top: 2px;">Rp 0</div>
+            </div>
+        </div>
+
+        <!-- Void Transactions Table -->
+        <div class="card">
+            <div class="card-header no-print">
+                <h3 class="card-title" style="color: var(--color-danger);"><i class="fas fa-ban text-danger"></i> Daftar Seluruh Transaksi yang Dibatalkan (VOID)</h3>
+            </div>
+            <div class="table-responsive">
+                <table class="custom-table" id="table-voids-export">
+                    <thead>
+                        <tr>
+                            <th>Kode Transaksi</th>
+                            <th>Waktu Order</th>
+                            <th>Pelanggan</th>
+                            <th>Rincian Menu</th>
+                            <th>Nominal Void</th>
+                            <th>Metode Bayar</th>
+                            <th>Alasan Pembatalan</th>
+                            <th>Status</th>
+                            <th class="no-print" style="text-align: right;">Struk</th>
+                        </tr>
+                    </thead>
+                    <tbody id="voids-table-body">
+                        <tr><td colspan="9" class="text-center text-muted" style="padding: 30px;">Memuat data transaksi void...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: LAPORAN HPP & MARGIN MENU (COGS & PROFITABILITY) -->
     <div id="rep-sec-cogs" class="rep-section-content" style="display: none;">
         <div class="card">
             <div class="card-header">
                 <div>
                     <h3 class="card-title"><i class="fas fa-calculator text-primary"></i> Analisis HPP, Omset & Margin Keuntungan per Menu</h3>
-                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Evaluasi profitabilitas setiap cup minuman dan makanan yang terjual.</p>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Evaluasi profitabilitas setiap cup minuman dan makanan yang terjual.</p>
                 </div>
             </div>
             <div class="table-responsive">
@@ -171,13 +220,59 @@
 
     <!-- TAB 3: LAPORAN PEMBELIAN & BIAYA (PURCHASES & OPEX) -->
     <div id="rep-sec-purchases" class="rep-section-content" style="display: none;">
+        <!-- OPEX KPI Summary -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px;">
+            <div class="card" style="padding: 14px 18px;">
+                <div style="font-size: 0.6875rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Total Pengeluaran</div>
+                <div id="kpi-opex-total" style="font-family: var(--font-heading); font-size: 1.125rem; font-weight: 800; color: var(--color-danger); margin-top: 2px;">Rp 0</div>
+            </div>
+            <div class="card" style="padding: 14px 18px;">
+                <div style="font-size: 0.6875rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Jumlah Nota Biaya</div>
+                <div id="kpi-opex-count" style="font-family: var(--font-heading); font-size: 1.125rem; font-weight: 800; color: var(--text-main); margin-top: 2px;">0 Nota</div>
+            </div>
+            <div class="card" style="padding: 14px 18px;">
+                <div style="font-size: 0.6875rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Rata-rata Biaya / Hari</div>
+                <div id="kpi-opex-daily" style="font-family: var(--font-heading); font-size: 1.125rem; font-weight: 800; color: var(--text-main); margin-top: 2px;">Rp 0</div>
+            </div>
+            <div class="card" style="padding: 14px 18px;">
+                <div style="font-size: 0.6875rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Pos Biaya Terbesar</div>
+                <div id="kpi-opex-top" style="font-family: var(--font-heading); font-size: 1.125rem; font-weight: 800; color: var(--text-main); margin-top: 2px;">-</div>
+            </div>
+        </div>
+
+        <!-- OPEX Breakdown per Category -->
+        <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header">
+                <div>
+                    <h3 class="card-title"><i class="fas fa-chart-pie text-primary"></i> Rincian Pengeluaran per Pos Biaya</h3>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Ke mana uang toko keluar pada periode ini, beserta porsinya terhadap omset bersih.</p>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="custom-table" id="table-opex-breakdown-export">
+                    <thead>
+                        <tr>
+                            <th>Pos / Kategori Biaya</th>
+                            <th>Jumlah Nota</th>
+                            <th>Total Biaya (Rp)</th>
+                            <th>% dari Total Biaya</th>
+                            <th>% dari Omset Bersih</th>
+                        </tr>
+                    </thead>
+                    <tbody id="opex-breakdown-body">
+                        <tr><td colspan="5" class="text-center text-muted" style="padding: 30px;">Memuat rincian pos biaya...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <div class="card" style="margin-bottom: 20px;">
             <div class="card-header">
                 <div>
                     <h3 class="card-title"><i class="fas fa-cart-shopping text-primary"></i> Biaya Operasional & Pembelian Bahan (OPEX)</h3>
-                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Rekapitulasi seluruh pengeluaran belanja bahan, sewa, gaji, dan utilitas.</p>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Rekapitulasi seluruh pengeluaran belanja bahan, sewa, gaji, dan utilitas.</p>
                 </div>
-                <div style="font-family: var(--font-heading); font-size: 18px; font-weight: 800; color: var(--color-danger);" id="rep-total-opex-display">
+                <div style="font-family: var(--font-heading); font-size: 1.125rem; font-weight: 800; color: var(--color-danger);" id="rep-total-opex-display">
                     Rp 0
                 </div>
             </div>
@@ -207,7 +302,7 @@
             <div class="card-header">
                 <div>
                     <h3 class="card-title"><i class="fas fa-boxes-stacked text-primary"></i> Status & Tingkat Persediaan Bahan Baku</h3>
-                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Monitoring sisa stok fisik di bar dan peringatan batas aman pemakaian.</p>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Monitoring sisa stok fisik di bar dan peringatan batas aman pemakaian.</p>
                 </div>
             </div>
             <div class="table-responsive">
@@ -235,16 +330,16 @@
         <div class="card" style="max-width: 720px; margin: 0 auto;">
             <div class="card-header" style="text-align: center; border-bottom: 2px solid var(--border-color);">
                 <div style="width: 100%;">
-                    <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 800; color: var(--color-primary);">
+                    <h3 style="font-family: var(--font-heading); font-size: 1.125rem; font-weight: 800; color: var(--color-primary);">
                         LAPORAN LABA RUGI OPERASIONAL (P&L)
                     </h3>
-                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
                         Statement of Comprehensive Income
                     </p>
                 </div>
             </div>
 
-            <div style="padding: 10px 0; font-size: 13.5px;" id="pnl-statement-container">
+            <div style="padding: 10px 0; font-size: 0.8438rem;" id="pnl-statement-container">
                 <table style="width: 100%; border-collapse: collapse;">
                     <tbody>
                         <tr style="border-bottom: 1px solid var(--border-light);">
@@ -257,13 +352,15 @@
                         </tr>
                         <tr style="background: var(--bg-main); border-bottom: 2px solid var(--border-color); font-weight: 800;">
                             <td style="padding: 14px 12px;">= LABA KOTOR (GROSS PROFIT) <span id="pnl-gross-margin" class="badge-chip primary" style="margin-left: 8px;">0%</span></td>
-                            <td style="padding: 14px 12px; text-align: right; font-size: 15px; color: var(--color-primary);" id="pnl-gross-profit">Rp 0</td>
+                            <td style="padding: 14px 12px; text-align: right; font-size: 0.9375rem; color: var(--color-primary);" id="pnl-gross-profit">Rp 0</td>
                         </tr>
                         <tr style="border-bottom: 1px solid var(--border-light); color: var(--text-secondary);">
                             <td style="padding: 12px; padding-left: 28px;">3. Total Beban Biaya Operasional (OPEX)</td>
                             <td style="padding: 12px; text-align: right; color: var(--color-danger);" id="pnl-opex">-Rp 0</td>
                         </tr>
-                        <tr style="background: #FFF5F0; border-top: 2px solid var(--color-primary); font-weight: 800; font-size: 16px;">
+                        <!-- Rincian pos biaya, diisi renderPnlOpexDetail() -->
+                        <tr id="pnl-opex-detail-anchor" style="display: none;"></tr>
+                        <tr style="background: #FFF5F0; border-top: 2px solid var(--color-primary); font-weight: 800; font-size: 1rem;">
                             <td style="padding: 16px 12px; color: var(--color-primary);">= LABA BERSIH BERJALAN (NET OPERATING PROFIT) <span id="pnl-net-margin" class="badge-chip success" style="margin-left: 8px;">0%</span></td>
                             <td style="padding: 16px 12px; text-align: right; color: var(--color-success);" id="pnl-net-profit">Rp 0</td>
                         </tr>
@@ -279,15 +376,17 @@
             <div class="card-header">
                 <div>
                     <h3 class="card-title"><i class="fas fa-user-clock text-primary"></i> Audit & Rekonsiliasi Shift Kasir</h3>
-                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Pencocokan modal awal, penjualan tunai, dan uang fisik di laci kasir.</p>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Pencocokan modal awal, penjualan tunai, dan uang fisik di laci kasir.</p>
                 </div>
             </div>
             <div class="table-responsive">
                 <table class="custom-table" id="table-shifts-export">
                     <thead>
                         <tr>
-                            <th>Sesi Shift</th>
-                            <th>Nama Kasir</th>
+                            <th>Sesi</th>
+                            <th>Dibuka Oleh</th>
+                            <th>Ditutup Oleh</th>
+                            <th>Penjaga Terakhir</th>
                             <th>Waktu Mulai</th>
                             <th>Waktu Selesai</th>
                             <th>Modal Awal</th>
@@ -298,7 +397,60 @@
                         </tr>
                     </thead>
                     <tbody id="shifts-table-body">
-                        <tr><td colspan="9" class="text-center text-muted" style="padding: 30px;">Memuat data shift...</td></tr>
+                        <tr><td colspan="11" class="text-center text-muted" style="padding: 30px;">Memuat data sesi kas...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Penjualan per Kasir -->
+        <div class="card" style="margin-top: 20px;">
+            <div class="card-header">
+                <div>
+                    <h3 class="card-title"><i class="fas fa-user-tag text-primary"></i> Penjualan per Kasir</h3>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Diambil dari kasir yang memproses tiap transaksi, bukan dari pemilik sesi kas.</p>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="custom-table" id="table-cashier-sales-export">
+                    <thead>
+                        <tr>
+                            <th>Nama Kasir</th>
+                            <th>Jumlah Transaksi</th>
+                            <th>Total Penjualan</th>
+                            <th>Penjualan Tunai</th>
+                            <th>Rata-rata per Transaksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cashier-sales-body">
+                        <tr><td colspan="5" class="text-center text-muted" style="padding: 30px;">Memuat data kasir...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 8: ABSENSI KARYAWAN -->
+    <div id="rep-sec-attendance" class="rep-section-content" style="display: none;">
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h3 class="card-title"><i class="fas fa-clock text-primary"></i> Rekap Jam Kerja Karyawan</h3>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Catatan absen masuk &amp; pulang untuk penggajian. Terpisah dari rekonsiliasi laci kas.</p>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="custom-table" id="table-attendance-export">
+                    <thead>
+                        <tr>
+                            <th>Nama Karyawan</th>
+                            <th>Jumlah Sesi Kerja</th>
+                            <th>Total Jam Kerja</th>
+                            <th>Kelengkapan</th>
+                        </tr>
+                    </thead>
+                    <tbody id="attendance-report-body">
+                        <tr><td colspan="4" class="text-center text-muted" style="padding: 30px;">Memuat rekap absensi...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -316,7 +468,7 @@
         <form id="void-form" onsubmit="submitVoidTransaction(event)">
             <div class="modal-body">
                 <input type="hidden" id="void-tx-id">
-                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+                <p style="font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 12px;">
                     Transaksi <strong>#<span id="void-tx-number">-</span></strong> akan dibatalkan. Poin loyalitas dan stok bahan baku akan otomatis di-rollback.
                 </p>
                 <div class="form-group">
@@ -342,10 +494,16 @@
         <div class="modal-body" id="report-receipt-body" style="padding: 16px;">
             <!-- Rendered dynamically -->
         </div>
-        <div class="modal-footer no-print">
-            <button class="btn btn-primary" style="width: 100%;" onclick="printReceipt()">
-                <i class="fas fa-print"></i> Cetak Struk Ulang
+        <div class="modal-footer no-print" style="justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+<div style="font-size: 0.6875rem; color: var(--text-muted); line-height: 1.5; text-align: left; flex: 1 1 100%; margin-bottom: 8px;"><i class="fas fa-circle-info"></i> Di dialog cetak pilih <strong>Margins: None</strong>, <strong>Scale: 100</strong>, dan paper size printer thermal Anda. Kalau masih meleset, kalibrasi di Pengaturan &rarr; Kalibrasi Ukuran Cetak Struk.</div>
+                        <button class="btn btn-secondary" onclick="closeModal('modal-report-receipt')">
+                <i class="fas fa-arrow-left"></i> Tutup
             </button>
+            <div style="display: flex; gap: 6px;">
+                <button class="btn btn-primary" onclick="printReceipt('report-receipt-body')" title="Cetak ulang struk">
+                    <i class="fas fa-print"></i> Cetak Struk Ulang
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -380,17 +538,22 @@
         document.getElementById(`btn-rep-${sec}`).className = 'btn btn-primary btn-sm rep-tab-btn';
 
         const titles = {
-            'sales': 'LAPORAN PENJUALAN KAFE',
+            'sales': 'LAPORAN PENJUALAN SAH KAFE',
+            'voids': 'LAPORAN TRANSAKSI DIBATALKAN (VOID)',
             'cogs': 'LAPORAN HPP & MARGIN KEUNTUNGAN MENU',
             'purchases': 'LAPORAN PEMBELIAN & BIAYA OPERASIONAL',
             'variance': 'LAPORAN STATUS & TINGKAT STOK BAHAN',
             'pnl': 'LAPORAN LABA RUGI OPERASIONAL (P&L)',
-            'shifts': 'LAPORAN REKAPITULASI SHIFT KASIR'
+            'shifts': 'LAPORAN SESI KAS & PENJUALAN PER KASIR',
+            'attendance': 'LAPORAN ABSENSI JAM KERJA KARYAWAN'
         };
         document.getElementById('rep-active-title').textContent = titles[sec] || 'LAPORAN KAFE';
 
         if (sec === 'shifts' && shiftsData.length === 0) {
             loadShiftsData();
+        }
+        if (sec === 'attendance') {
+            loadAttendanceReport();
         }
     }
 
@@ -413,6 +576,7 @@
             const data = await apiFetch(`/analytics/comprehensive-reports?days=${period}`);
             reportData = data;
             renderAllReportSections(data);
+            if (activeSection === 'attendance') loadAttendanceReport();
         } catch (e) {
             showToast('Gagal memuat laporan: ' + e.message, 'error');
         }
@@ -427,67 +591,99 @@
         document.getElementById('kpi-sales-tax').textContent = formatRp(sales.totalTax || 0);
 
         renderSalesTable(data.transactions || []);
+        renderCashierSalesTable(data.transactions || []);
 
-        // 2. COGS & Menu Profitability
+        // 2. Void Transactions
+        document.getElementById('kpi-void-count').textContent = (sales.totalVoid || 0) + ' Transaksi';
+        document.getElementById('kpi-void-amount').textContent = formatRp(sales.totalVoidAmount || 0);
+        renderVoidTable(data.voidTransactions || []);
+
+        // 3. COGS & Menu Profitability
         renderCogsTable(data.cogsReport || []);
 
-        // 3. Purchases & Expenses
+        // 4. Purchases & Expenses
         const purchases = data.purchasesReport || {};
         document.getElementById('rep-total-opex-display').textContent = formatRp(purchases.totalOpex || 0);
+        renderExpenseBreakdown(purchases, sales.totalNet || 0);
         renderPurchasesTable(purchases.expensesList || []);
 
-        // 4. Inventory Variance
+        // 5. Inventory Variance
         renderVarianceTable(data.inventoryVariance || []);
 
-        // 5. P&L Statement
+        // 6. P&L Statement
         const pnl = data.pnlStatement || {};
         document.getElementById('pnl-revenue').textContent = formatRp(pnl.netRevenue || 0);
         document.getElementById('pnl-cogs').textContent = '-' + formatRp(pnl.totalCogs || 0);
         document.getElementById('pnl-gross-profit').textContent = formatRp(pnl.grossProfit || 0);
         document.getElementById('pnl-gross-margin').textContent = `${pnl.grossMarginPct || 0}%`;
         document.getElementById('pnl-opex').textContent = '-' + formatRp(pnl.totalOpex || 0);
+        renderPnlOpexDetail(purchases.byCategory || {});
         document.getElementById('pnl-net-profit').textContent = formatRp(pnl.netOperatingProfit || 0);
         document.getElementById('pnl-net-margin').textContent = `${pnl.netMarginPct || 0}%`;
 
-        document.getElementById('rep-section-subinfo').textContent = `Total Transaksi: ${sales.totalOrders || 0} | Omset Bersih: ${formatRp(sales.totalNet || 0)}`;
+        document.getElementById('rep-section-subinfo').textContent = `Total Penjualan Sah: ${sales.totalOrders || 0} | Omset Bersih: ${formatRp(sales.totalNet || 0)} | Void: ${sales.totalVoid || 0}`;
     }
 
     function renderSalesTable(transactions) {
         const tbody = document.getElementById('sales-table-body');
         if (transactions.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada data transaksi pada periode ini.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada data transaksi penjualan sah pada periode ini.</td></tr>`;
             return;
         }
 
         tbody.innerHTML = transactions.map(t => {
             const dateStr = new Date(t.createdAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' });
             const itemsSummary = (t.items || []).map(i => `${i.quantity}x ${i.menu ? i.menu.name : 'Menu'}`).join(', ');
-            const isVoid = t.status === 'VOID';
             const txCode = t.transactionCode || t.code || ('TRX-' + String(t.id).padStart(4, '0'));
-            const statusBadge = isVoid 
-                ? '<span class="badge-chip danger"><i class="fas fa-ban"></i> VOID</span>'
-                : '<span class="badge-chip success"><i class="fas fa-check"></i> Sukses</span>';
-
-            const voidBtn = isVoid 
-                ? `<span style="font-size: 11px; color: var(--color-danger);">${t.voidReason || 'Dibatalkan'}</span>`
-                : `<button class="btn btn-secondary btn-sm text-danger" onclick="openVoidModal(${t.id}, '${txCode}')" title="Void Transaksi"><i class="fas fa-ban"></i> Void</button>`;
-
+            const statusBadge = '<span class="badge-chip success"><i class="fas fa-check"></i> Sukses</span>';
+            const voidBtn = `<button class="btn btn-secondary btn-sm text-danger" onclick="openVoidModal(${t.id}, '${txCode}')" title="Void Transaksi"><i class="fas fa-ban"></i> Void</button>`;
             const totalDisc = (t.discountAmount || 0) + (t.items || []).reduce((s, it) => s + ((it.discountAmount || 0) * it.quantity), 0);
 
             return `
-                <tr style="${isVoid ? 'opacity: 0.6; background: #FFF5F5;' : ''}">
-                    <td><strong style="color: var(--color-primary); font-family: var(--font-mono); font-size: 13px;">${txCode}</strong></td>
+                <tr>
+                    <td><strong style="color: var(--color-primary); font-family: var(--font-mono); font-size: 0.8125rem;">${txCode}</strong></td>
                     <td>${dateStr}</td>
                     <td><strong>${t.customer ? t.customer.nickname : 'Guest'}</strong></td>
-                    <td style="max-width: 220px; font-size: 12px; color: var(--text-secondary);">${itemsSummary || '-'}</td>
+                    <td style="max-width: 220px; font-size: 0.75rem; color: var(--text-secondary);">${itemsSummary || '-'}</td>
                     <td><span style="color: ${totalDisc > 0 ? 'var(--color-danger)' : 'var(--text-muted)'}; font-weight: 600;">${totalDisc > 0 ? '-' + formatRp(totalDisc) : '-'}</span></td>
                     <td>${formatRp(t.taxAmount || 0)}</td>
-                    <td><strong style="color: ${isVoid ? 'var(--text-muted)' : 'var(--color-primary)'}; font-size: 14px;">${formatRp(t.totalAmount)}</strong></td>
+                    <td><strong style="color: var(--color-primary); font-size: 0.875rem;">${formatRp(t.totalAmount)}</strong></td>
                     <td><span class="badge-chip primary">${t.paymentMethod || 'CASH'}</span></td>
                     <td>${statusBadge}</td>
                     <td class="no-print" style="text-align: right;">
                         <button class="btn btn-secondary btn-sm" onclick="viewTransactionReceipt(${t.id})" title="Cetak Struk"><i class="fas fa-receipt text-primary"></i></button>
                         ${voidBtn}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function renderVoidTable(voidTransactions) {
+        const tbody = document.getElementById('voids-table-body');
+        if (voidTransactions.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 30px;">Tidak ada transaksi yang dibatalkan (VOID) pada periode ini.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = voidTransactions.map(t => {
+            const dateStr = new Date(t.createdAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' });
+            const itemsSummary = (t.items || []).map(i => `${i.quantity}x ${i.menu ? i.menu.name : 'Menu'}`).join(', ');
+            const txCode = t.transactionCode || t.code || ('TRX-' + String(t.id).padStart(4, '0'));
+            const statusBadge = '<span class="badge-chip danger"><i class="fas fa-ban"></i> VOID</span>';
+
+            return `
+                <tr style="background: #FFF5F5;">
+                    <td><strong style="color: var(--color-danger); font-family: var(--font-mono); font-size: 0.8125rem;">${txCode}</strong></td>
+                    <td>${dateStr}</td>
+                    <td><strong>${t.customer ? t.customer.nickname : 'Guest'}</strong></td>
+                    <td style="max-width: 240px; font-size: 0.75rem; color: var(--text-secondary);">${itemsSummary || '-'}</td>
+                    <td><strong style="color: var(--color-danger); font-size: 0.875rem;">${formatRp(t.totalAmount)}</strong></td>
+                    <td><span class="badge-chip primary">${t.paymentMethod || 'CASH'}</span></td>
+                    <td><span style="font-weight: 600; color: var(--color-danger);">${t.voidReason || 'Tanpa Keterangan'}</span></td>
+                    <td>${statusBadge}</td>
+                    <td class="no-print" style="text-align: right;">
+                        <button class="btn btn-secondary btn-sm" onclick="viewTransactionReceipt(${t.id})" title="Cetak Struk"><i class="fas fa-receipt text-primary"></i></button>
                     </td>
                 </tr>
             `;
@@ -503,7 +699,7 @@
 
         tbody.innerHTML = cogsList.map(c => `
             <tr>
-                <td><strong style="color: var(--text-main); font-size: 13.5px;">${c.name}</strong></td>
+                <td><strong style="color: var(--text-main); font-size: 0.8438rem;">${c.name}</strong></td>
                 <td><span class="badge-chip primary">${c.category}</span></td>
                 <td>${formatRp(c.price)}</td>
                 <td><strong style="color: var(--text-secondary);">${formatRp(c.unitHpp)}</strong></td>
@@ -514,6 +710,75 @@
                 <td><span class="badge-chip success" style="font-weight: 800;">${c.marginPct}%</span></td>
             </tr>
         `).join('');
+    }
+
+    // Breakdown per pos biaya. byCategory sudah dihitung backend; jumlah nota
+    // dan rata-rata harian diturunkan dari expensesList supaya tidak perlu endpoint baru.
+    function renderExpenseBreakdown(purchases, netSales) {
+        const list = purchases.expensesList || [];
+        const byCategory = purchases.byCategory || {};
+        const total = purchases.totalOpex || 0;
+
+        const countByCat = {};
+        const activeDays = new Set();
+        list.forEach(e => {
+            const name = e.category ? e.category.name : 'Lain-lain';
+            countByCat[name] = (countByCat[name] || 0) + 1;
+            activeDays.add(new Date(e.date).toISOString().slice(0, 10));
+        });
+
+        const rows = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
+        const dailyAvg = activeDays.size > 0 ? Math.round(total / activeDays.size) : 0;
+
+        document.getElementById('kpi-opex-total').textContent = formatRp(total);
+        document.getElementById('kpi-opex-count').textContent = `${list.length} Nota`;
+        document.getElementById('kpi-opex-daily').textContent = formatRp(dailyAvg);
+        document.getElementById('kpi-opex-top').textContent = rows.length > 0
+            ? `${rows[0][0]} (${formatRp(rows[0][1])})`
+            : '-';
+
+        const tbody = document.getElementById('opex-breakdown-body');
+        if (rows.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada pengeluaran tercatat pada periode ini.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = rows.map(([name, amount]) => {
+            const shareOpex = total > 0 ? (amount / total * 100) : 0;
+            const shareSales = netSales > 0 ? (amount / netSales * 100) : 0;
+            return `
+                <tr>
+                    <td><strong style="color: var(--text-main); font-size: 0.8438rem;">${name}</strong></td>
+                    <td>${countByCat[name] || 0}</td>
+                    <td><strong style="color: var(--color-danger); font-size: 0.875rem;">${formatRp(amount)}</strong></td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div style="flex: 1; min-width: 60px; height: 6px; background: var(--bg-main); border-radius: var(--radius-full); overflow: hidden;">
+                                <div style="width: ${shareOpex.toFixed(1)}%; height: 100%; background: var(--color-danger);"></div>
+                            </div>
+                            <span style="font-weight: 700;">${shareOpex.toFixed(1)}%</span>
+                        </div>
+                    </td>
+                    <td>${netSales > 0 ? shareSales.toFixed(1) + '%' : '-'}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // Pecahan OPEX langsung di bawah baris beban operasional pada P&L
+    function renderPnlOpexDetail(byCategory) {
+        document.querySelectorAll('.pnl-opex-detail-row').forEach(el => el.remove());
+        const anchor = document.getElementById('pnl-opex-detail-anchor');
+        if (!anchor) return;
+
+        const rows = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
+        const html = rows.map(([name, amount]) => `
+            <tr class="pnl-opex-detail-row" style="color: var(--text-muted); font-size: 0.7812rem;">
+                <td style="padding: 6px 12px 6px 44px;">&bull; ${name}</td>
+                <td style="padding: 6px 12px; text-align: right;">-${formatRp(amount)}</td>
+            </tr>
+        `).join('');
+        anchor.insertAdjacentHTML('afterend', html);
     }
 
     function renderPurchasesTable(expenses) {
@@ -533,7 +798,7 @@
                 <tr>
                     <td><strong>${dateStr}</strong></td>
                     <td><span class="badge-chip danger">${e.category ? e.category.name : '-'}</span></td>
-                    <td><strong style="color: var(--color-danger); font-size: 14px;">${formatRp(e.amount)}</strong></td>
+                    <td><strong style="color: var(--color-danger); font-size: 0.875rem;">${formatRp(e.amount)}</strong></td>
                     <td>${e.notes || '-'}</td>
                     <td>${e.recordedBy ? e.recordedBy.username : 'Staff'}</td>
                     <td>${receiptLink}</td>
@@ -552,9 +817,9 @@
         tbody.innerHTML = invList.map(it => `
             <tr>
                 <td>#${it.id}</td>
-                <td><strong style="color: var(--text-main); font-size: 13.5px;">${it.name}</strong></td>
+                <td><strong style="color: var(--text-main); font-size: 0.8438rem;">${it.name}</strong></td>
                 <td><span class="badge-chip primary">${it.unit}</span></td>
-                <td><strong style="font-size: 15px; color: ${it.isLowStock ? 'var(--color-danger)' : 'var(--color-primary)'};">${it.currentStock} ${it.unit}</strong></td>
+                <td><strong style="font-size: 0.9375rem; color: ${it.isLowStock ? 'var(--color-danger)' : 'var(--color-primary)'};">${it.currentStock} ${it.unit}</strong></td>
                 <td>${it.minStock} ${it.unit}</td>
                 <td>${it.isLowStock ? '<span class="badge-chip danger">Stok Menipis</span>' : '<span class="badge-chip success">Aman</span>'}</td>
             </tr>
@@ -587,22 +852,90 @@
                     }
                 }
 
+                const openedBy = s.openedByUser ? s.openedByUser.username : (s.user ? s.user.username : '-');
+                const closedBy = s.closedByUser ? s.closedByUser.username : '-';
+                const keeper = s.currentUser ? s.currentUser.username : openedBy;
+                const handoverCount = (s.handovers || []).length;
+                const statusClass = s.status === 'CLOSED' ? 'success' : (s.status === 'NEEDS_REVIEW' ? 'danger' : 'warning');
+                const statusLabel = s.status === 'NEEDS_REVIEW' ? 'PERLU DITINJAU' : s.status;
+
                 return `
                     <tr>
-                        <td><span class="badge-chip primary">${s.type}</span></td>
-                        <td><strong>${s.user ? s.user.username : 'Kasir'}</strong></td>
+                        <td><span class="badge-chip primary">${s.label || s.type}</span></td>
+                        <td><strong>${openedBy}</strong></td>
+                        <td>${closedBy}</td>
+                        <td>${keeper}${handoverCount ? ` <span class="badge-chip" style="font-size: 0.5938rem;">${handoverCount}x ganti</span>` : ''}</td>
                         <td>${startTime}</td>
                         <td>${endTime}</td>
                         <td>${formatRp(s.startingCash)}</td>
                         <td><strong>${s.expectedEndingCash !== null ? formatRp(s.expectedEndingCash) : '-'}</strong></td>
                         <td><strong>${s.endingCash !== null ? formatRp(s.endingCash) : '-'}</strong></td>
                         <td>${diffTag}</td>
-                        <td><span class="badge-chip ${isClosed ? 'success' : 'warning'}">${s.status}</span></td>
+                        <td><span class="badge-chip ${statusClass}">${statusLabel}</span></td>
                     </tr>
                 `;
             }).join('');
         } catch (e) {
-            tbody.innerHTML = `<tr><td colspan="9" class="text-danger text-center">Gagal memuat shift: ${e.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="11" class="text-danger text-center">Gagal memuat shift: ${e.message}</td></tr>`;
+        }
+    }
+
+    // Penjualan per kasir dihitung dari Transaction.userId, bukan dari pemilik shift:
+    // satu sesi kas kini dipakai bersama beberapa kasir.
+    function renderCashierSalesTable(transactions) {
+        const tbody = document.getElementById('cashier-sales-body');
+        if (!tbody) return;
+
+        const byCashier = {};
+        transactions.forEach(t => {
+            const name = t.cashierName || 'Tidak tercatat';
+            const row = byCashier[name] || (byCashier[name] = { name, orders: 0, total: 0, cash: 0 });
+            row.orders += 1;
+            row.total += t.totalAmount || 0;
+            if (t.paymentMethod === 'CASH') row.cash += t.totalAmount || 0;
+        });
+
+        const rows = Object.values(byCashier).sort((a, b) => b.total - a.total);
+        if (rows.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada transaksi pada periode ini.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = rows.map(r => `
+            <tr>
+                <td><strong style="color: var(--text-main); font-size: 0.8438rem;">${r.name}</strong></td>
+                <td>${r.orders}</td>
+                <td><strong style="color: var(--color-primary);">${formatRp(r.total)}</strong></td>
+                <td>${formatRp(r.cash)}</td>
+                <td>${formatRp(Math.round(r.total / r.orders))}</td>
+            </tr>
+        `).join('');
+    }
+
+    async function loadAttendanceReport() {
+        const tbody = document.getElementById('attendance-report-body');
+        if (!tbody) return;
+        try {
+            const data = await apiFetch(`/attendance/report?days=${currentPeriod}`);
+            const summary = data.summary || [];
+            if (summary.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada catatan absensi pada periode ini.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = summary.map(r => {
+                const hours = Math.floor(r.minutes / 60);
+                const mins = r.minutes % 60;
+                return `
+                    <tr>
+                        <td><strong style="color: var(--text-main); font-size: 0.8438rem;">${r.username}</strong></td>
+                        <td>${r.sessions}</td>
+                        <td><strong>${hours} jam ${mins} mnt</strong></td>
+                        <td>${r.openSessions ? `<span class="badge-chip warning">${r.openSessions} belum absen pulang</span>` : '<span class="badge-chip success">Lengkap</span>'}</td>
+                    </tr>
+                `;
+            }).join('');
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="4" class="text-danger text-center">Gagal memuat absensi: ${e.message}</td></tr>`;
         }
     }
 
@@ -645,41 +978,50 @@
                     XLSX.utils.book_append_sheet(wb, wsPnl, "1. Laba Rugi");
                 }
 
-                // 2. Sales Sheet
+                // 2. Sales Sheet (Completed)
                 const salesTable = document.getElementById('table-sales-export');
                 if (salesTable) {
                     const clone = salesTable.cloneNode(true);
                     clone.querySelectorAll('.no-print').forEach(el => el.remove());
                     const wsSales = XLSX.utils.table_to_sheet(clone);
-                    XLSX.utils.book_append_sheet(wb, wsSales, "2. Penjualan");
+                    XLSX.utils.book_append_sheet(wb, wsSales, "2. Penjualan Sah");
                 }
 
-                // 3. COGS Sheet
+                // 3. Void Sheet
+                const voidTable = document.getElementById('table-voids-export');
+                if (voidTable) {
+                    const clone = voidTable.cloneNode(true);
+                    clone.querySelectorAll('.no-print').forEach(el => el.remove());
+                    const wsVoid = XLSX.utils.table_to_sheet(clone);
+                    XLSX.utils.book_append_sheet(wb, wsVoid, "3. Transaksi Void");
+                }
+
+                // 4. COGS Sheet
                 const cogsTable = document.getElementById('table-cogs-export');
                 if (cogsTable) {
                     const wsCogs = XLSX.utils.table_to_sheet(cogsTable);
-                    XLSX.utils.book_append_sheet(wb, wsCogs, "3. HPP & Margin");
+                    XLSX.utils.book_append_sheet(wb, wsCogs, "4. HPP & Margin");
                 }
 
-                // 4. Purchases Sheet
+                // 5. Purchases Sheet
                 const purchasesTable = document.getElementById('table-purchases-export');
                 if (purchasesTable) {
                     const wsPurchases = XLSX.utils.table_to_sheet(purchasesTable);
-                    XLSX.utils.book_append_sheet(wb, wsPurchases, "4. Biaya & Pembelian");
+                    XLSX.utils.book_append_sheet(wb, wsPurchases, "5. Biaya & Pembelian");
                 }
 
-                // 5. Variance Sheet
+                // 6. Variance Sheet
                 const varianceTable = document.getElementById('table-variance-export');
                 if (varianceTable) {
                     const wsVariance = XLSX.utils.table_to_sheet(varianceTable);
-                    XLSX.utils.book_append_sheet(wb, wsVariance, "5. Stok Bahan");
+                    XLSX.utils.book_append_sheet(wb, wsVariance, "6. Stok Bahan");
                 }
 
-                // 6. Shift Sheet
+                // 7. Shift Sheet
                 const shiftsTable = document.getElementById('table-shifts-export');
                 if (shiftsTable) {
                     const wsShifts = XLSX.utils.table_to_sheet(shiftsTable);
-                    XLSX.utils.book_append_sheet(wb, wsShifts, "6. Rekap Shift");
+                    XLSX.utils.book_append_sheet(wb, wsShifts, "7. Rekap Shift");
                 }
 
                 const fileName = `Buku_Laporan_Arunika_POS_${new Date().toISOString().slice(0,10)}.xlsx`;
@@ -695,11 +1037,13 @@
     // 2. Export Current Active Tab Directly to Native .xlsx via SheetJS
     function exportCurrentTabToExcel() {
         let tableId = 'table-sales-export';
-        let sheetName = 'Penjualan';
-        if (activeSection === 'cogs') { tableId = 'table-cogs-export'; sheetName = 'HPP & Margin'; }
-        else if (activeSection === 'purchases') { tableId = 'table-purchases-export'; sheetName = 'Biaya & Pembelian'; }
-        else if (activeSection === 'variance') { tableId = 'table-variance-export'; sheetName = 'Stok Bahan'; }
-        else if (activeSection === 'shifts') { tableId = 'table-shifts-export'; sheetName = 'Rekap Shift'; }
+        let sheetName = 'Penjualan_Sah';
+        if (activeSection === 'voids') { tableId = 'table-voids-export'; sheetName = 'Transaksi_Void'; }
+        else if (activeSection === 'cogs') { tableId = 'table-cogs-export'; sheetName = 'HPP_Margin'; }
+        else if (activeSection === 'purchases') { tableId = 'table-purchases-export'; sheetName = 'Biaya_Pembelian'; }
+        else if (activeSection === 'variance') { tableId = 'table-variance-export'; sheetName = 'Stok_Bahan'; }
+        else if (activeSection === 'shifts') { tableId = 'table-shifts-export'; sheetName = 'Rekap_Sesi_Kas'; }
+        else if (activeSection === 'attendance') { tableId = 'table-attendance-export'; sheetName = 'Absensi_Karyawan'; }
         else if (activeSection === 'pnl') {
             downloadExcelFull();
             return;
@@ -769,7 +1113,11 @@
     }
 
     async function viewTransactionReceipt(id) {
-        const tx = (reportData && reportData.transactions) ? reportData.transactions.find(t => t.id === id) : null;
+        let tx = null;
+        if (reportData) {
+            if (reportData.transactions) tx = reportData.transactions.find(t => t.id === id);
+            if (!tx && reportData.voidTransactions) tx = reportData.voidTransactions.find(t => t.id === id);
+        }
         if (!tx) return;
         const settings = await getStoreSettings();
         document.getElementById('report-receipt-body').innerHTML = renderThermalReceiptHtml(tx, settings);

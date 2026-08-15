@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Live Monitoring & Bar KDS | Arunika-POS{% endblock %}
+{% block title %}Live Monitoring & Bar KDS | {{ store_name }}{% endblock %}
 {% block page_title %}Live Monitoring & Bar Display (KDS){% endblock %}
 
 {% block content %}
@@ -62,7 +62,7 @@
     </div>
 
     <div style="display: flex; align-items: center; gap: 10px;">
-        <span style="font-size: 11.5px; color: var(--text-muted);">
+        <span style="font-size: 0.7188rem; color: var(--text-muted);">
             <i class="fas fa-rotate fa-spin" id="spin-refresh" style="display: none;"></i>
             Auto-refresh setiap 10 detik
         </span>
@@ -74,10 +74,10 @@
 <div id="mon-tab-kds" class="mon-tab-content">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
         <div>
-            <h3 style="font-family: var(--font-heading); font-size: 16px; font-weight: 800; color: var(--color-primary);">
+            <h3 style="font-family: var(--font-heading); font-size: 1rem; font-weight: 800; color: var(--color-primary);">
                 <i class="fas fa-mug-saucer"></i> Antrean Racikan Bar & Kitchen
             </h3>
-            <p style="font-size: 12px; color: var(--text-muted);">Pantau pesanan yang masuk dari kasir dan update status pembuatan kopi.</p>
+            <p style="font-size: 0.75rem; color: var(--text-muted);">Pantau pesanan yang masuk dari kasir dan update status pembuatan kopi.</p>
         </div>
         <div style="display: flex; gap: 6px;">
             <button class="btn btn-secondary btn-sm filter-kds-btn active" onclick="filterKds('all', this)">Semua Antrean</button>
@@ -89,7 +89,7 @@
 
     <div id="kds-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
         <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
-            <i class="fas fa-spinner fa-spin" style="font-size: 28px;"></i>
+            <i class="fas fa-spinner fa-spin" style="font-size: 1.75rem;"></i>
             <p style="margin-top: 10px;">Memuat antrean racikan...</p>
         </div>
     </div>
@@ -101,7 +101,7 @@
         <div class="card-header">
             <div>
                 <h3 class="card-title text-danger"><i class="fas fa-triangle-exclamation"></i> Peringatan Bahan Baku Menipis / Kritis</h3>
-                <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Bahan baku yang berada di bawah atau mendekati batas minimum stok.</p>
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Bahan baku yang berada di bawah atau mendekati batas minimum stok.</p>
             </div>
             <a href="/inventory" class="btn btn-primary btn-sm"><i class="fas fa-boxes-stacked"></i> Kelola di Inventori</a>
         </div>
@@ -131,7 +131,7 @@
         <div class="card-header">
             <div>
                 <h3 class="card-title"><i class="fas fa-shield-halved text-primary"></i> Stream Log Audit Aktivitas Staff</h3>
-                <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Rekam jejak tindakan kasir, void transaksi, pergeseran stok, dan login.</p>
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Rekam jejak tindakan kasir, void transaksi, pergeseran stok, dan login.</p>
             </div>
             <button class="btn btn-secondary btn-sm" onclick="fetchRecentActivities()"><i class="fas fa-rotate-right"></i> Refresh Log</button>
         </div>
@@ -228,9 +228,9 @@
         if (filtered.length === 0) {
             grid.innerHTML = `
                 <div style="grid-column: 1/-1; text-align: center; padding: 40px; background: #FFF; border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
-                    <i class="fas fa-circle-check text-success" style="font-size: 36px; margin-bottom: 8px;"></i>
-                    <h4 style="color: var(--text-main); font-size: 16px; margin-bottom: 4px;">Tidak Ada Antrean Menunggu</h4>
-                    <p style="font-size: 12px; color: var(--text-muted);">Semua pesanan kafe hari ini telah selesai disajikan.</p>
+                    <i class="fas fa-circle-check text-success" style="font-size: 2.25rem; margin-bottom: 8px;"></i>
+                    <h4 style="color: var(--text-main); font-size: 1rem; margin-bottom: 4px;">Tidak Ada Antrean Menunggu</h4>
+                    <p style="font-size: 0.75rem; color: var(--text-muted);">Semua pesanan kafe hari ini telah selesai disajikan.</p>
                 </div>
             `;
             return;
@@ -255,10 +255,10 @@
             }
 
             const itemsHtml = (order.items || []).map(it => `
-                <div style="padding: 6px 0; border-bottom: 1px dashed var(--border-light); font-size: 12.5px;">
+                <div style="padding: 6px 0; border-bottom: 1px dashed var(--border-light); font-size: 0.7812rem;">
                     <div style="display: flex; justify-content: space-between; font-weight: 700; color: var(--text-main);">
                         <span>${it.quantity}x ${it.name}</span>
-                        <span class="badge-chip primary" style="font-size: 10px;">${it.category}</span>
+                        <span class="badge-chip primary" style="font-size: 0.625rem;">${it.category}</span>
                     </div>
                     ${it.recipeNotes ? `<div style="font-size: 11px; color: var(--color-primary); margin-top: 2px;"><i class="fas fa-receipt"></i> SOP: ${it.recipeNotes}</div>` : ''}
                 </div>
@@ -268,12 +268,12 @@
                 <div class="card" style="border-top: 4px solid ${isLate ? 'var(--color-danger)' : (isWarning ? 'var(--color-warning)' : 'var(--color-primary)')}; padding: 16px;">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
                         <div>
-                            <strong style="font-size: 15px; color: var(--text-main);">#${order.id}</strong>
-                            <div style="font-size: 11.5px; color: var(--text-muted);">${order.customerName}</div>
+                            <strong style="font-size: 0.9375rem; color: var(--text-main);">#${order.id}</strong>
+                            <div style="font-size: 0.7188rem; color: var(--text-muted);">${order.customerName}</div>
                         </div>
                         <div style="text-align: right;">
                             ${statusBadge}
-                            <div style="font-size: 11px; font-weight: 700; color: ${isLate ? 'var(--color-danger)' : 'var(--text-secondary)'}; margin-top: 4px;">
+                            <div style="font-size: 0.6875rem; font-weight: 700; color: ${isLate ? 'var(--color-danger)' : 'var(--text-secondary)'}; margin-top: 4px;">
                                 <i class="fas fa-clock"></i> ${order.elapsedMinutes} mnt lalu
                             </div>
                         </div>
@@ -320,8 +320,8 @@
 
         tbody.innerHTML = lowStockItems.map(it => `
             <tr>
-                <td><strong style="color: var(--text-main); font-size: 13.5px;">${it.name}</strong></td>
-                <td><strong style="color: var(--color-danger); font-size: 14px;">${it.stock} ${it.unit}</strong></td>
+                <td><strong style="color: var(--text-main); font-size: 0.8438rem;">${it.name}</strong></td>
+                <td><strong style="color: var(--color-danger); font-size: 0.875rem;">${it.stock} ${it.unit}</strong></td>
                 <td>${it.minStock} ${it.unit}</td>
                 <td><span class="badge-chip danger">Kurang ${it.deficit} ${it.unit}</span></td>
                 <td>
@@ -348,7 +348,7 @@
                         <td><span class="badge-chip primary">${l.user ? l.user.username : 'System'}</span></td>
                         <td><strong style="color: var(--color-primary);">${l.action}</strong></td>
                         <td>${l.entity || '-'} #${l.entityId || '-'}</td>
-                        <td style="max-width: 300px; font-size: 12px; color: var(--text-secondary);">${l.details || '-'}</td>
+                        <td style="max-width: 300px; font-size: 0.75rem; color: var(--text-secondary);">${l.details || '-'}</td>
                     </tr>
                 `;
             }).join('');

@@ -72,6 +72,15 @@
   box-sizing: border-box;
 }
 
+/* Global type scale.
+   Every font-size in this stylesheet and in the templates is written in rem, so this
+   single value scales all UI text at once. Bump it to enlarge the whole interface.
+   Receipt and @media print rules deliberately stay in physical px/mm: they have to
+   match the paper, not the screen. */
+html {
+  font-size: 18px;
+}
+
 body {
   font-family: var(--font-body);
   background-color: var(--bg-main);
@@ -120,14 +129,14 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
+  font-size: 1.375rem;
   color: #FFF;
   box-shadow: 0 4px 12px rgba(111, 78, 55, 0.3);
 }
 
 .brand-info h1 {
   font-family: var(--font-heading);
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 800;
   color: var(--color-primary);
   letter-spacing: -0.2px;
@@ -135,7 +144,7 @@ body {
 }
 
 .brand-info p {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--color-secondary);
   font-weight: 600;
   letter-spacing: 0.5px;
@@ -152,7 +161,7 @@ body {
 }
 
 .nav-section-title {
-  font-size: 11px;
+  font-size: 0.6875rem;
   text-transform: uppercase;
   color: var(--text-muted);
   padding: 14px 12px 6px;
@@ -168,13 +177,13 @@ body {
   color: var(--text-secondary);
   text-decoration: none;
   border-radius: var(--radius-md);
-  font-size: 13.5px;
+  font-size: 0.8438rem;
   font-weight: 600;
   transition: all 0.2s ease;
 }
 
 .nav-item i {
-  font-size: 17px;
+  font-size: 1.0625rem;
   width: 22px;
   text-align: center;
   color: var(--text-muted);
@@ -219,6 +228,7 @@ body {
 .user-avatar {
   width: 38px;
   height: 38px;
+  flex-shrink: 0;
   border-radius: var(--radius-full);
   background: var(--color-primary-light);
   color: var(--color-primary);
@@ -226,7 +236,7 @@ body {
   align-items: center;
   justify-content: center;
   font-weight: 800;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .user-meta {
@@ -235,7 +245,7 @@ body {
 }
 
 .user-name {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: var(--text-main);
   white-space: nowrap;
@@ -244,10 +254,165 @@ body {
 }
 
 .user-role {
-  font-size: 10.5px;
+  font-size: 0.6562rem;
   font-weight: 700;
   color: var(--color-secondary);
   text-transform: uppercase;
+}
+
+/* Collapsed sidebar: icon rail. Only meaningful >=1024px, since below that the
+   sidebar is already off-canvas and those rules sit later in this file. */
+.sidebar.collapsed {
+  width: 76px;
+}
+
+.sidebar.collapsed .brand-info,
+.sidebar.collapsed .nav-section-title,
+.sidebar.collapsed .nav-item span,
+.sidebar.collapsed .user-meta {
+  display: none;
+}
+
+.sidebar.collapsed .sidebar-header,
+.sidebar.collapsed .user-profile-badge {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* The 76px rail cannot fit avatar + logout side by side, so stack them. */
+.sidebar.collapsed .sidebar-footer {
+  padding: 12px 8px;
+}
+
+.sidebar.collapsed .user-profile-badge {
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.sidebar.collapsed .nav-item {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.sidebar.collapsed .sidebar-toggle {
+  display: none;
+}
+
+/* Suppress the width transition on first paint so a restored collapsed state does
+   not animate open then snap shut on every page load. */
+.sidebar.no-transition {
+  transition: none;
+}
+
+.sidebar-toggle {
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--radius-xs);
+  font-size: 0.875rem;
+  transition: all 0.15s ease;
+}
+
+.sidebar-toggle:hover {
+  background: var(--bg-surface);
+  color: var(--color-primary);
+}
+
+/* Floating re-expand handle, the only affordance left once the rail is collapsed */
+.sidebar-expand {
+  display: none;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--radius-xs);
+  font-size: 0.875rem;
+}
+
+.sidebar.collapsed .sidebar-expand {
+  display: block;
+  margin: 8px auto 0;
+}
+
+.sidebar-expand:hover {
+  background: var(--bg-surface);
+  color: var(--color-primary);
+}
+
+/* Profile page */
+.profile-layout {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 22px;
+  align-items: start;
+}
+
+.profile-identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.profile-avatar {
+  width: 68px;
+  height: 68px;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, var(--color-primary), #8F6647);
+  color: #FFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-size: 1.75rem;
+  font-weight: 800;
+}
+
+.profile-username {
+  font-family: var(--font-heading);
+  font-size: 1.375rem;
+  font-weight: 800;
+  color: var(--text-main);
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.profile-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-light);
+}
+
+.profile-facts dt {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.profile-facts dd {
+  font-size: 0.8438rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.profile-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 /* Main Wrapper */
@@ -275,7 +440,7 @@ body {
 
 .page-title h2 {
   font-family: var(--font-heading);
-  font-size: 20px;
+  font-size: 1.25rem;
   font-weight: 700;
   color: var(--text-main);
 }
@@ -292,7 +457,7 @@ body {
   gap: 8px;
   padding: 6px 14px;
   border-radius: var(--radius-full);
-  font-size: 12.5px;
+  font-size: 0.7812rem;
   font-weight: 700;
   border: 1px solid transparent;
 }
@@ -344,7 +509,7 @@ body {
 
 .card-title {
   font-family: var(--font-heading);
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--text-main);
   display: flex;
@@ -379,7 +544,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
+  font-size: 1.375rem;
   flex-shrink: 0;
 }
 
@@ -388,7 +553,7 @@ body {
 }
 
 .stat-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
   font-weight: 600;
   text-transform: uppercase;
@@ -398,7 +563,7 @@ body {
 
 .stat-value {
   font-family: var(--font-heading);
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 800;
   color: var(--text-main);
   line-height: 1.1;
@@ -412,7 +577,7 @@ body {
   gap: 8px;
   padding: 10px 18px;
   border-radius: var(--radius-sm);
-  font-size: 13.5px;
+  font-size: 0.8438rem;
   font-weight: 700;
   cursor: pointer;
   border: 1px solid transparent;
@@ -470,13 +635,13 @@ body {
 
 .btn-sm {
   padding: 7px 13px;
-  font-size: 12px;
+  font-size: 0.75rem;
   border-radius: var(--radius-xs);
 }
 
 .btn-lg {
   padding: 14px 24px;
-  font-size: 16px;
+  font-size: 1rem;
   border-radius: var(--radius-md);
 }
 
@@ -501,7 +666,7 @@ body {
 
 .form-label {
   display: block;
-  font-size: 12.5px;
+  font-size: 0.7812rem;
   font-weight: 700;
   color: var(--text-secondary);
   margin-bottom: 6px;
@@ -514,7 +679,7 @@ body {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   color: var(--text-main);
-  font-size: 13.5px;
+  font-size: 0.8438rem;
   font-family: var(--font-body);
   transition: all 0.2s ease;
 }
@@ -539,7 +704,7 @@ body {
 .custom-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 0.8125rem;
   text-align: left;
 }
 
@@ -550,7 +715,7 @@ body {
   padding: 12px 16px;
   border-bottom: 2px solid var(--border-color);
   text-transform: uppercase;
-  font-size: 11px;
+  font-size: 0.6875rem;
   letter-spacing: 0.5px;
 }
 
@@ -572,7 +737,7 @@ body {
   gap: 5px;
   padding: 4px 10px;
   border-radius: var(--radius-full);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
 }
 
@@ -617,7 +782,8 @@ body {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s ease;
-  padding: 20px;
+  padding: 16px;
+  box-sizing: border-box;
 }
 
 .modal-backdrop.show {
@@ -631,7 +797,9 @@ body {
   width: 100%;
   max-width: 520px;
   max-height: 90vh;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   box-shadow: var(--shadow-modal);
   border: 1px solid var(--border-color);
   transform: scale(0.96);
@@ -643,16 +811,17 @@ body {
 }
 
 .modal-header {
-  padding: 20px 24px;
+  padding: 18px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
 .modal-title {
   font-family: var(--font-heading);
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   color: var(--color-primary);
 }
@@ -660,7 +829,7 @@ body {
 .modal-close {
   background: transparent;
   border: none;
-  font-size: 24px;
+  font-size: 1.5rem;
   color: var(--text-muted);
   cursor: pointer;
   line-height: 1;
@@ -674,17 +843,24 @@ body {
 }
 
 .modal-body {
-  padding: 24px;
+  padding: 20px 24px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1 1 auto;
+  max-height: calc(90vh - 130px);
 }
 
 .modal-footer {
-  padding: 16px 24px;
+  padding: 14px 24px;
   border-top: 1px solid var(--border-color);
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
   gap: 10px;
   background-color: #FAF8F5;
   border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  flex-shrink: 0;
 }
 
 /* Toast Notifications */
@@ -707,7 +883,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 13.5px;
+  font-size: 0.8438rem;
   font-weight: 600;
   color: var(--text-main);
   min-width: 280px;
@@ -720,13 +896,13 @@ body {
 }
 
 .toast.success { border-left: 4px solid var(--color-success); }
-.toast.success i { color: var(--color-success); font-size: 18px; }
+.toast.success i { color: var(--color-success); font-size: 1.125rem; }
 .toast.error { border-left: 4px solid var(--color-danger); }
-.toast.error i { color: var(--color-danger); font-size: 18px; }
+.toast.error i { color: var(--color-danger); font-size: 1.125rem; }
 .toast.warning { border-left: 4px solid var(--color-warning); }
-.toast.warning i { color: var(--color-warning); font-size: 18px; }
+.toast.warning i { color: var(--color-warning); font-size: 1.125rem; }
 .toast.info { border-left: 4px solid var(--color-info); }
-.toast.info i { color: var(--color-info); font-size: 18px; }
+.toast.info i { color: var(--color-info); font-size: 1.125rem; }
 
 /* ==========================================================================
    POS Specific Styles (Product Cards, Split Cart Panel, Cash Presets)
@@ -734,7 +910,8 @@ body {
 
 .pos-layout {
   display: grid;
-  grid-template-columns: 1fr 410px;
+  /* Katalog | Member | Keranjang. The right region holds the last two side by side. */
+  grid-template-columns: 1fr 728px;
   gap: 22px;
   height: calc(100vh - 116px);
 }
@@ -761,7 +938,7 @@ body {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-full);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
@@ -825,7 +1002,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
+  font-size: 1.75rem;
   color: #FFF;
   margin-bottom: 8px;
   object-fit: cover;
@@ -835,7 +1012,7 @@ body {
 
 .menu-card-title {
   font-family: var(--font-heading);
-  font-size: 13.5px;
+  font-size: 0.8438rem;
   font-weight: 700;
   color: var(--text-main);
   margin-bottom: 2px;
@@ -843,7 +1020,7 @@ body {
 }
 
 .menu-card-desc {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-muted);
   margin-bottom: 6px;
   display: -webkit-box;
@@ -868,37 +1045,113 @@ body {
 
 .menu-card-price {
   font-family: var(--font-heading);
-  font-size: 13.5px;
+  font-size: 0.8438rem;
   font-weight: 800;
   color: var(--color-primary);
+  /* "Rp 28.000" tidak boleh pecah jadi dua baris saat kartunya menyempit */
+  white-space: nowrap;
 }
 
 /* POS Cart Sidebar Panel */
+/* The right column is no longer one card: it holds two independent panes, side by
+   side, so the member panel can never push the order list out of view. */
 .pos-cart-panel {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 14px;
+  height: 100%;
+  min-height: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.pos-side-card {
   background-color: #FFF;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;
-  height: 100%;
-  box-shadow: var(--shadow-md);
   overflow: hidden;
 }
 
-.cart-header {
-  padding: 16px 20px;
+.mobile-cart-close {
+  display: none;
+}
+
+/* Checkout pane: fixed right column holding member, totals and the pay button */
+.pos-side-card.checkout-card {
+  flex: 0 0 348px;
+  min-width: 0;
+}
+
+/* Order lines pane: takes the remaining width and scrolls internally.
+   min-height/min-width 0 is what actually lets the inner list scroll in a flex child. */
+.pos-side-card.cart-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+.pos-card-head {
+  padding: 14px 18px;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   background-color: #FAF8F5;
+  cursor: pointer;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.pos-card-head.static {
+  cursor: default;
+}
+
+.pos-card-title {
+  font-family: var(--font-heading);
+  font-size: 0.9375rem;
+  font-weight: 800;
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pos-card-chevron {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  transition: transform 0.2s ease;
+}
+
+.checkout-card.collapsed .pos-card-chevron {
+  transform: rotate(180deg);
+}
+
+.checkout-card.collapsed .customer-selector {
+  display: none;
+}
+
+/* Totals + payment sit at the bottom of the checkout pane and never scroll away */
+.checkout-card .cart-summary {
+  margin-top: auto;
 }
 
 .customer-selector {
-  padding: 12px 16px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   background-color: #FCFBF9;
-  border-bottom: 1px solid var(--border-color);
   position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .member-search-dropdown {
@@ -917,7 +1170,7 @@ body {
 }
 
 .member-search-item {
-  padding: 8px 12px;
+  padding: 11px 13px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -944,7 +1197,7 @@ body {
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 13px;
+  font-size: 0.8125rem;
   flex-shrink: 0;
 }
 
@@ -952,8 +1205,7 @@ body {
   background: #FAF5EE;
   border: 1px solid #E6D7C8;
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  margin-top: 6px;
+  padding: 13px 14px;
 }
 
 .member-avatar-mini {
@@ -966,24 +1218,27 @@ body {
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 0.75rem;
   flex-shrink: 0;
 }
 
 .cart-items-list {
-  flex: 1;
+  flex: 1 1 auto;
+  /* Guarantee the order list keeps room even when the member/loyalty boxes above
+     are all expanded, instead of being squeezed to a couple of visible rows. */
+  min-height: 180px;
   overflow-y: auto;
-  padding: 12px 16px;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .cart-item-row {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
+  gap: 9px;
+  padding: 14px 14px;
   background-color: #FAF8F5;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-light);
@@ -996,14 +1251,14 @@ body {
 }
 
 .cart-item-info h5 {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: var(--text-main);
   margin-bottom: 2px;
 }
 
 .cart-item-info span {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   color: var(--color-primary);
 }
@@ -1016,13 +1271,13 @@ body {
   padding: 4px 8px;
   border-radius: var(--radius-xs);
   border: 1px dashed #EADBCE;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .cart-item-discount-input {
   width: 90px;
   padding: 2px 6px;
-  font-size: 11.5px;
+  font-size: 0.7188rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xs);
   text-align: right;
@@ -1047,7 +1302,7 @@ body {
   align-items: center;
   justify-content: center;
   font-weight: 800;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--color-primary);
   cursor: pointer;
   border-radius: 50%;
@@ -1059,17 +1314,18 @@ body {
 }
 
 .cart-summary {
-  padding: 14px 18px;
+  padding: 18px 20px;
+  flex-shrink: 0;
   border-top: 1px solid var(--border-color);
   background-color: #FAF8F5;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .summary-row {
   display: flex;
   justify-content: space-between;
   color: var(--text-secondary);
-  margin-bottom: 5px;
+  margin-bottom: 8px;
 }
 
 .summary-row.discount {
@@ -1077,15 +1333,177 @@ body {
   font-weight: 600;
 }
 
+/* Tax disclosure sits under the total in a lighter weight: menu prices are
+   tax-inclusive, so this is information, not another line on the bill. */
+.summary-tax-note {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 6px;
+  padding-left: 10px;
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+
 .summary-row.total {
   font-family: var(--font-heading);
-  font-size: 17px;
+  font-size: 1.1875rem;
   font-weight: 800;
   color: var(--color-primary);
   border-top: 1px dashed var(--border-color);
-  padding-top: 8px;
-  margin-top: 8px;
+  padding-top: 12px;
+  margin-top: 12px;
   margin-bottom: 0;
+}
+
+/* Loyalty actions collapsed into one chip row instead of three stacked cards */
+.loyalty-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.loyalty-chip-row:empty {
+  display: none;
+}
+
+.loyalty-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-color);
+  background: #FFF;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.loyalty-chip:hover {
+  border-color: var(--color-secondary);
+  background: var(--color-secondary-light);
+}
+
+.loyalty-chip.warning {
+  border-color: #FFE082;
+  background: #FFF8E1;
+  color: #8D6E63;
+}
+
+.loyalty-chip-value {
+  font-weight: 800;
+  color: var(--color-primary);
+}
+
+.loyalty-reward {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid #E6D7C8;
+  background: #FAF5EE;
+  font-size: 0.6875rem;
+  min-width: 0;
+  flex: 1 1 160px;
+}
+
+.loyalty-reward-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  cursor: pointer;
+  outline: none;
+}
+
+/* Payment modal: figures a cashier can read at arm's length */
+.pay-total-box,
+.pay-change-box {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+
+.pay-total-box {
+  background: var(--color-primary-light);
+  border: 1px solid var(--border-color);
+}
+
+.pay-change-box {
+  background: var(--color-success-bg);
+  border: 1px solid rgba(46, 125, 50, 0.25);
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+.pay-total-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.pay-total-value,
+.pay-change-value {
+  font-family: var(--font-heading);
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.pay-total-value {
+  color: var(--color-primary);
+}
+
+.pay-change-value {
+  color: var(--color-success);
+}
+
+.pay-method-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.pay-method-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: #FFF;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pay-method-btn:hover {
+  border-color: var(--color-secondary);
+  background: var(--color-secondary-light);
+}
+
+.pay-method-btn.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #FFF;
+  box-shadow: 0 4px 12px rgba(111, 78, 55, 0.25);
 }
 
 /* Quick Cash Presets */
@@ -1097,11 +1515,11 @@ body {
 }
 
 .cash-preset-btn {
-  padding: 6px 4px;
+  padding: 12px 6px;
   background-color: #FFF;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xs);
-  font-size: 11.5px;
+  font-size: 0.7188rem;
   font-weight: 700;
   color: var(--color-primary);
   cursor: pointer;
@@ -1119,11 +1537,13 @@ body {
    ========================================================================== */
 
 .thermal-receipt-card {
-  width: 320px;
+  width: 100%;
+  max-width: 330px;
+  box-sizing: border-box;
   background-color: #FFFFFF;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: 24px 18px;
+  padding: 20px 16px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
   font-family: var(--font-mono);
   font-size: 11.5px;
@@ -1131,6 +1551,7 @@ body {
   color: #111111;
   margin: 0 auto;
   position: relative;
+  word-break: break-word;
 }
 
 .receipt-header {
@@ -1139,8 +1560,7 @@ body {
 }
 
 .receipt-logo {
-  font-size: 26px;
-  margin-bottom: 2px;
+  display: none !important;
 }
 
 .receipt-store-title {
@@ -1199,7 +1619,44 @@ body {
    Comprehensive Mobile & Tablet Responsive Layout
    ========================================================================== */
 
+/* Three columns need roughly 1400px of viewport: 728px for the two right panes, plus
+   a catalog wide enough to still show two menu columns. Below that they stack again
+   rather than all three going too narrow to use. Move this breakpoint if your terminal
+   screen is wider or narrower than that. */
+@media (max-width: 1400px) {
+  .pos-layout {
+    grid-template-columns: 1fr 452px;
+  }
+
+  .pos-cart-panel {
+    flex-direction: column;
+  }
+
+  /* Stacked: the order lines keep the flexible height, checkout sizes to content */
+  .pos-side-card.cart-card {
+    flex: 1 1 auto;
+  }
+
+  .pos-side-card.checkout-card {
+    flex: 0 0 auto;
+  }
+
+  .customer-selector {
+    flex: 0 1 auto;
+    max-height: 32vh;
+  }
+}
+
 @media (max-width: 1024px) {
+  .profile-layout {
+    grid-template-columns: 1fr;
+  }
+
+  /* Tablets are usually the touch terminal — give the whole UI another notch */
+  html {
+    font-size: 19px;
+  }
+
   .app-container {
     overflow-x: hidden;
   }
@@ -1255,7 +1712,7 @@ body {
 
 @media (max-width: 768px) {
   .page-title h2 {
-    font-size: 17px;
+    font-size: 1.0625rem;
   }
 
   .topbar-actions .shift-text {
@@ -1276,71 +1733,41 @@ body {
   }
 
   .stat-value {
-    font-size: 16px;
+    font-size: 1rem;
+  }
+
+  .modal-backdrop {
+    padding: 8px !important;
   }
 
   .modal-dialog {
-    width: 95vw !important;
-    max-width: 95vw !important;
-    margin: 10px auto !important;
-    max-height: 90vh !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: auto !important;
+    max-height: 94vh !important;
+    border-radius: var(--radius-lg) !important;
   }
 
-  /* POS Mobile Layout: Product Catalog + Floating Bottom Sheet Cart */
-  .pos-layout {
-    grid-template-columns: 1fr;
-    height: auto;
-    min-height: calc(100vh - 65px);
-    padding-bottom: 75px;
+  .modal-header {
+    padding: 14px 18px !important;
   }
 
-  .pos-cart-panel {
-    position: fixed;
-    bottom: -120%;
-    left: 0;
-    right: 0;
-    height: 85vh;
-    max-height: 85vh;
-    z-index: 1000;
-    background: #FFF;
-    border-top-left-radius: var(--radius-lg);
-    border-top-right-radius: var(--radius-lg);
-    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.25);
-    transition: bottom 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-    display: flex;
-    flex-direction: column;
-    border-left: none;
-    border-top: 3px solid var(--color-primary);
+  .modal-footer {
+    padding: 12px 18px !important;
   }
 
-  .pos-cart-panel.open {
-    bottom: 0;
+  .modal-body {
+    padding: 12px !important;
+    max-height: calc(94vh - 110px) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
   }
 
-  .mobile-cart-bar {
-    display: flex !important;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 60px;
-    background: var(--color-primary);
-    color: #FFF;
-    padding: 0 18px;
-    align-items: center;
-    justify-content: space-between;
-    z-index: 990;
-    box-shadow: 0 -4px 16px rgba(111, 78, 55, 0.35);
-    cursor: pointer;
-  }
-
-  .mobile-cart-bar .cart-badge {
-    background: var(--color-secondary);
-    color: #FFF;
-    padding: 3px 8px;
-    border-radius: var(--radius-full);
-    font-size: 11.5px;
-    font-weight: 700;
+  .thermal-receipt-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 14px 10px !important;
+    font-size: 11px !important;
   }
 
   /* Grid collapsing on mobile for all multi-column pages */
@@ -1373,6 +1800,12 @@ body {
 }
 
 @media (max-width: 480px) {
+  /* Turun dari skala tablet: di HP, teks 19.5px membuat judul menu pecah dua baris
+     dan hanya menyisakan satu setengah baris kartu yang terlihat. */
+  html {
+    font-size: 18px;
+  }
+
   .stats-grid {
     grid-template-columns: 1fr !important;
   }
@@ -1397,11 +1830,386 @@ body {
 }
 
 /* ==========================================================================
+   Touch & Small-Screen Refinements
+
+   Dipisah dari blok @media di atas supaya jelas mana aturan layout dan mana
+   aturan kenyamanan sentuh. Urutannya sengaja setelah semua breakpoint agar
+   menang tanpa perlu !important.
+   ========================================================================== */
+
+/* Scroll dikunci saat sidebar / bottom sheet terbuka: tanpa ini halaman di
+   belakang ikut ter-scroll dan posisi baca pengguna hilang. */
+body.scroll-locked {
+  overflow: hidden;
+}
+
+/* Target sentuh. Jari butuh sekitar 44px; btn-sm sebelumnya hanya ~33px,
+   dan itu tombol yang paling sering dipakai (filter, aksi di tabel). */
+@media (pointer: coarse) {
+  .btn {
+    min-height: 44px;
+  }
+
+  .btn-sm {
+    min-height: 38px;
+    padding: 8px 14px;
+  }
+
+  .btn-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .form-control,
+  select.form-control {
+    min-height: 44px;
+  }
+
+  .modal-close {
+    width: 42px;
+    height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .nav-item {
+    min-height: 46px;
+  }
+
+  /* Baris tabel lebih longgar supaya tidak salah tekan */
+  .custom-table td {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+}
+
+@media (max-width: 1024px) {
+  /* Tinggi viewport dinamis: bar alamat browser mobile yang muncul-hilang
+     membuat 100vh memotong isi modal dan bottom sheet. */
+  .modal-dialog {
+    max-height: 90dvh;
+  }
+
+  .modal-body {
+    max-height: calc(90dvh - 120px);
+  }
+
+  /* Tabel lebar (laporan sesi kas punya 11 kolom) tidak boleh digencet sampai
+     tiap kata pecah per huruf. Biarkan menggeser horizontal dengan header lengket. */
+  .table-responsive {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  .table-responsive .custom-table {
+    min-width: 680px;
+  }
+
+  .custom-table th,
+  .custom-table td {
+    white-space: nowrap;
+  }
+
+  /* Kolom keterangan tetap boleh membungkus, kalau tidak barisnya jadi sangat panjang */
+  .custom-table td.wrap,
+  .custom-table th.wrap {
+    white-space: normal;
+    min-width: 180px;
+  }
+
+  /* Deretan tab laporan (8 tab) jadi strip geser, bukan tembok tombol setinggi layar.
+     Kepala dokumen laporan ikut menumpuk supaya alamat toko tidak jadi kolom sempit. */
+  .report-doc-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .report-doc-header > div:last-child {
+    text-align: left !important;
+  }
+
+  #report-tabs-nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+  }
+
+  #report-tabs-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  #report-tabs-nav .rep-tab-btn {
+    flex: 0 0 auto;
+  }
+}
+
+/* Tablet lanskap: POS tetap dua kolom, panel keranjang dirampingkan supaya katalog
+   menu tidak tersisa sesempit satu setengah kartu. */
+@media (min-width: 769px) and (max-width: 1024px) and (orientation: landscape) {
+  .pos-layout {
+    grid-template-columns: 1fr 380px;
+  }
+
+  .content-area {
+    padding: 18px 20px;
+  }
+}
+
+/* ==========================================================================
+   POS sebagai bottom sheet.
+
+   Berlaku di HP dan juga di tablet PORTRAIT: pada iPad tegak, panel keranjang
+   yang menetap hanya menyisakan dua kolom menu: katalog jadi sempit padahal
+   layarnya lebar. Sebagai bottom sheet, katalog dapat lebar penuh.
+   ========================================================================== */
+@media (max-width: 768px),
+       (max-width: 1024px) and (orientation: portrait) {
+  .pos-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: calc(100vh - 65px);
+    padding-bottom: calc(75px + env(safe-area-inset-bottom));
+  }
+
+  .pos-cart-panel {
+    position: fixed;
+    bottom: -120%;
+    left: 0;
+    right: 0;
+    /* Setinggi isinya, bukan selalu 85% layar: pesanan satu item tidak lagi
+       menyisakan area kosong besar di bawah tombol Bayar. */
+    height: auto;
+    max-height: 88dvh;
+    z-index: 1000;
+    background: #FFF;
+    border-top-left-radius: var(--radius-lg);
+    border-top-right-radius: var(--radius-lg);
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.25);
+    transition: bottom 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    border-left: none;
+    border-top: 3px solid var(--color-primary);
+    /* As a bottom sheet the two panes read as one continuous surface: drop their
+       individual card chrome and let the sheet own the scrolling. */
+    gap: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .pos-cart-panel.open {
+    bottom: 0;
+  }
+
+  /* Pegangan visual bahwa panel ini bisa ditutup */
+  .pos-cart-panel::before {
+    content: '';
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: block;
+    width: 44px;
+    height: 4px;
+    margin: 8px auto 4px;
+    border-radius: var(--radius-full);
+    background: var(--border-color);
+    flex: 0 0 auto;
+  }
+
+  .pos-sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 999;
+    display: none;
+  }
+
+  .pos-sheet-backdrop.show {
+    display: block;
+  }
+
+  .pos-side-card {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .pos-side-card + .pos-side-card {
+    border-top: 1px solid var(--border-color);
+  }
+
+  .pos-side-card.checkout-card,
+  .pos-side-card.cart-card {
+    flex: 0 0 auto;
+  }
+
+  .customer-selector {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .cart-items-list {
+    overflow: visible;
+    min-height: 0;
+  }
+
+  .mobile-cart-close {
+    display: inline-flex;
+  }
+
+  .mobile-cart-bar {
+    display: flex !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: calc(60px + env(safe-area-inset-bottom));
+    background: var(--color-primary);
+    color: #FFF;
+    padding: 0 18px env(safe-area-inset-bottom);
+    align-items: center;
+    justify-content: space-between;
+    z-index: 990;
+    box-shadow: 0 -4px 16px rgba(111, 78, 55, 0.35);
+    cursor: pointer;
+  }
+
+  .mobile-cart-bar .cart-badge {
+    background: var(--color-secondary);
+    color: #FFF;
+    padding: 3px 8px;
+    border-radius: var(--radius-full);
+    font-size: 0.7188rem;
+    font-weight: 700;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Topbar ringkas: judul satu baris, status sesi tidak melipat jadi dua baris.
+     Sebelumnya "Terminal Kasir (POS)" + pill sesi memakan hampir seperlima layar. */
+  .topbar {
+    gap: 10px;
+  }
+
+  .page-title h2 {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 42vw;
+  }
+
+  .shift-status-pill {
+    white-space: nowrap;
+    max-width: 45vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.6875rem;
+    padding: 6px 10px;
+  }
+
+  /* Grup judul yang boleh menyusut, grup status yang dipertahankan: tanpa ini
+     pill sesi terdorong keluar layar dan terpotong di tepi kanan. */
+  .topbar > div:first-child {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .topbar-actions {
+    gap: 8px;
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  /* Hasil pencarian member: mengalir di dalam panel, bukan mengambang.
+     Sebagai dropdown mengambang di bottom sheet, daftarnya menutupi tombol Bayar
+     dan terpotong tepi panel sehingga hasil terakhir tidak bisa diketuk. */
+  .member-search-dropdown {
+    position: static;
+    max-height: 260px;
+    box-shadow: none;
+    margin-top: 6px;
+  }
+
+  .menu-card-footer {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  /* Tombol di header kartu memenuhi lebar: lebih mudah ditekan, lebih rapi */
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .card-header > .btn,
+  .card-header > div > .btn {
+    width: 100%;
+  }
+
+  /* Baris filter periode / aksi laporan: geser horizontal daripada menumpuk */
+  .filter-period-btn,
+  .filter-exp-btn {
+    flex: 0 0 auto;
+  }
+
+  /* Toolbar aksi laporan (Excel/PDF) menumpuk penuh supaya tidak terpotong */
+  .report-actions {
+    width: 100%;
+  }
+
+  .report-actions .btn {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Ukuran kertas struk tidak dipakai saat kerja di HP; ruang topbar lebih berharga */
+  #topbar-paper-size {
+    display: none;
+  }
+
+  .page-title h2 {
+    max-width: 50vw;
+  }
+
+  /* "Member & Pembayaran" jangan sampai melipat dua baris dan memakan tinggi
+     panel yang justru dibutuhkan untuk daftar pesanan. */
+  .pos-card-title {
+    font-size: 0.8125rem;
+  }
+
+  /* Gambar kartu menu dipendekkan: di layar 360px tingginya membuat hanya dua
+     baris menu yang terlihat, padahal kasir butuh cepat memindai katalog. */
+  .menu-card-img {
+    height: 62px;
+    font-size: 1.5rem;
+  }
+
+  .badge-chip {
+    font-size: 0.625rem;
+  }
+
+  .modal-footer {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  .modal-footer .btn {
+    width: 100%;
+  }
+}
+
+/* ==========================================================================
    Print CSS Engine: Thermal Receipt & Reports
    ========================================================================== */
 
 @media print {
-  /* Hide all dashboard UI when printing */
+  /* Global Hide for Non-Print elements */
   .no-print, .sidebar, .topbar, .modal-header, .modal-footer, button, #toast-container, .mobile-cart-bar {
     display: none !important;
   }
@@ -1413,26 +2221,39 @@ body {
     padding: 0 !important;
   }
 
-  .modal-backdrop {
+  /* Receipt slips print through their own iframe (see printReceipt in app.js), so the
+     old body.printing-receipt isolation rules are gone. What is left below only covers
+     printing a modal that happens to be open. */
+  .modal-backdrop.show {
     position: static !important;
     display: block !important;
     background: transparent !important;
     padding: 0 !important;
-    margin: 0 !important;
-    width: auto !important;
+    margin: 0 auto !important;
+    width: 100% !important;
     height: auto !important;
+    opacity: 1 !important;
   }
 
-  .modal-dialog {
+  .modal-backdrop.show .modal-dialog {
     box-shadow: none !important;
     border: none !important;
     max-width: 100% !important;
     width: 100% !important;
     padding: 0 !important;
-    margin: 0 !important;
+    margin: 0 auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    transform: none !important;
   }
 
-  /* Thermal Receipt Print Mode */
+  .modal-backdrop.show .modal-body {
+    padding: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Thermal Receipt Card Print Styling (72mm standard thermal POS width) */
   .thermal-receipt-card, #printable-receipt {
     display: block !important;
     visibility: visible !important;
@@ -1440,12 +2261,13 @@ body {
     max-width: 100% !important;
     border: none !important;
     box-shadow: none !important;
-    padding: 2mm 4mm !important;
+    padding: 2mm 3mm !important;
     margin: 0 auto !important;
     font-family: 'Space Mono', 'Courier New', monospace !important;
     font-size: 11px !important;
     line-height: 1.35 !important;
     color: #000 !important;
+    background: #FFF !important;
   }
 
   .thermal-receipt-card * {
@@ -1463,7 +2285,7 @@ body {
     margin: 8px 0 !important;
   }
 
-  /* Report Print Mode */
+  /* Report Print Mode - isolates full multi-page printable report */
   body.printing-report .report-printable-area {
     display: block !important;
     visibility: visible !important;
@@ -1539,7 +2361,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 72px;
+  font-size: 4.5rem;
   box-shadow: 0 10px 30px rgba(111, 78, 55, 0.2);
   cursor: pointer;
   animation: boxWiggle 1.4s infinite;

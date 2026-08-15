@@ -1,0 +1,280 @@
+{% extends 'base.html' %}
+
+{% block title %}Profil Saya | {{ store_name }}{% endblock %}
+{% block page_title %}Profil Saya{% endblock %}
+
+{% block content %}
+<div class="profile-layout">
+
+    <!-- Identity -->
+    <section class="card">
+        <div class="card-header">
+            <h3 class="card-title"><i class="fas fa-id-card text-primary"></i> Identitas Akun</h3>
+        </div>
+            <div class="profile-identity">
+                <div class="profile-avatar" id="profile-avatar">-</div>
+                <div style="min-width: 0;">
+                    <h2 class="profile-username" id="profile-username">Memuat...</h2>
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;">
+                        <span class="badge-chip primary" id="profile-role">-</span>
+                        <span class="badge-chip" id="profile-session">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <dl class="profile-facts">
+                <div>
+                    <dt>Halaman Awal</dt>
+                    <dd id="profile-landing">-</dd>
+                </div>
+                <div>
+                    <dt>Akun Dibuat</dt>
+                    <dd id="profile-created">-</dd>
+                </div>
+                <div>
+                    <dt>Jenis Hak Akses</dt>
+                    <dd id="profile-access-type">-</dd>
+                </div>
+            </dl>
+
+            <div style="margin-top: 18px;">
+                <dt style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); font-weight: 700; margin-bottom: 8px;">Halaman Yang Dapat Diakses</dt>
+                <div class="profile-pages" id="profile-pages">
+                    <span class="text-muted" style="font-size: 0.8125rem;">Memuat...</span>
+                </div>
+            </div>
+    </section>
+
+    <!-- Absensi Jam Kerja -->
+    <section class="card">
+        <div class="card-header">
+            <div>
+                <h3 class="card-title"><i class="fas fa-user-clock text-primary"></i> Absensi Hari Ini</h3>
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Catatan jam kerja untuk penggajian &mdash; terpisah dari sesi laci kas.</p>
+            </div>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px;">
+            <div id="attendance-status" style="font-size: 0.8125rem; color: var(--text-secondary);">Memuat...</div>
+            <div style="display: flex; gap: 6px;">
+                <button class="btn btn-primary btn-sm" id="btn-clock-in" style="display: none;" onclick="submitClock('clock-in')">
+                    <i class="fas fa-right-to-bracket"></i> Absen Masuk
+                </button>
+                <button class="btn btn-danger btn-sm" id="btn-clock-out" style="display: none;" onclick="submitClock('clock-out')">
+                    <i class="fas fa-right-from-bracket"></i> Absen Pulang
+                </button>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="custom-table">
+                <thead>
+                    <tr>
+                        <th>Tanggal</th>
+                        <th>Masuk</th>
+                        <th>Pulang</th>
+                        <th>Durasi</th>
+                    </tr>
+                </thead>
+                <tbody id="attendance-history-body">
+                    <tr><td colspan="4" class="text-center text-muted" style="padding: 18px;">Memuat...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Password -->
+    <section class="card">
+        <div class="card-header">
+            <h3 class="card-title"><i class="fas fa-key text-primary"></i> Ganti Password</h3>
+        </div>
+            <form id="password-form" onsubmit="submitPasswordChange(event)">
+                <div class="form-group">
+                    <label class="form-label" for="current-password">Password Lama</label>
+                    <input type="password" id="current-password" class="form-control" autocomplete="current-password" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="new-password">Password Baru</label>
+                    <input type="password" id="new-password" class="form-control" autocomplete="new-password" minlength="6" required>
+                    <small class="text-muted" style="font-size: 0.6875rem;">Minimal 6 karakter, dan harus berbeda dari password lama.</small>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="confirm-password">Ulangi Password Baru</label>
+                    <input type="password" id="confirm-password" class="form-control" autocomplete="new-password" minlength="6" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width: 100%;" id="btn-save-password">
+                    <i class="fas fa-floppy-disk"></i> Simpan Password Baru
+                </button>
+            </form>
+    </section>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    const ROLE_LABELS = {
+        SUPERADMIN: 'Superadmin (Master)',
+        ADMIN: 'Admin / Owner',
+        OWNER: 'Admin / Owner',
+        HEADBAR: 'Head Barista',
+        CASHIER: 'Kasir'
+    };
+
+    function formatDuration(minutes) {
+        if (minutes === null || minutes === undefined) return 'Berjalan';
+        const h = Math.floor(minutes / 60);
+        const m = minutes % 60;
+        return h > 0 ? `${h} jam ${m} mnt` : `${m} mnt`;
+    }
+
+    function formatClock(iso) {
+        if (!iso) return '-';
+        return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    async function loadSessionChip() {
+        const chip = document.getElementById('profile-session');
+        try {
+            const data = await apiFetch('/shift/current');
+            if (data && data.currentShift) {
+                const s = data.currentShift;
+                const keeper = s.currentUser ? s.currentUser.username : '-';
+                chip.textContent = `${s.label} aktif · penjaga: ${keeper}`;
+            } else {
+                chip.textContent = 'Sesi kas tutup';
+            }
+        } catch (e) {
+            chip.textContent = 'Sesi kas tidak diketahui';
+        }
+    }
+
+    // --- Absensi jam kerja (terpisah dari sesi laci kas) ---
+    async function loadAttendance() {
+        const statusEl = document.getElementById('attendance-status');
+        const tbody = document.getElementById('attendance-history-body');
+        try {
+            const data = await apiFetch('/attendance/me?days=7');
+            const current = data.current;
+
+            document.getElementById('btn-clock-in').style.display = current ? 'none' : 'inline-flex';
+            document.getElementById('btn-clock-out').style.display = current ? 'inline-flex' : 'none';
+            statusEl.innerHTML = current
+                ? `<span class="badge-chip success">Sedang bekerja</span> sejak ${formatClock(current.clockIn)}`
+                : `<span class="badge-chip">Belum absen masuk</span>`;
+
+            const entries = data.entries || [];
+            tbody.innerHTML = entries.length ? entries.map(e => `
+                <tr>
+                    <td>${new Date(e.clockIn).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}</td>
+                    <td>${formatClock(e.clockIn)}</td>
+                    <td>${e.clockOut ? formatClock(e.clockOut) : '-'}</td>
+                    <td><strong>${formatDuration(e.durationMinutes)}</strong></td>
+                </tr>
+            `).join('') : `<tr><td colspan="4" class="text-center text-muted" style="padding: 18px;">Belum ada catatan absensi.</td></tr>`;
+        } catch (e) {
+            statusEl.textContent = 'Gagal memuat absensi: ' + e.message;
+        }
+    }
+
+    async function submitClock(action) {
+        try {
+            await apiFetch(`/attendance/${action}`, { method: 'POST', body: JSON.stringify({}) });
+            showToast(action === 'clock-in' ? 'Absen masuk tercatat.' : 'Absen pulang tercatat.', 'success');
+            loadAttendance();
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+
+    async function loadProfile() {
+        try {
+            const me = await apiFetch('/auth/me');
+
+            const name = me.username || '-';
+            document.getElementById('profile-username').textContent = name;
+            document.getElementById('profile-avatar').textContent = name.charAt(0).toUpperCase();
+
+            const role = (me.role || 'CASHIER').toUpperCase();
+            document.getElementById('profile-role').textContent = ROLE_LABELS[role] || role;
+
+
+            document.getElementById('profile-landing').textContent = me.landingPage || '-';
+
+            document.getElementById('profile-created').textContent = me.createdAt
+                ? new Date(me.createdAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
+                : '-';
+
+            document.getElementById('profile-access-type').textContent = me.hasCustomAccess
+                ? 'Kustom per akun'
+                : 'Mengikuti role';
+
+            // allowedPages is null when the user follows their role's defaults, so fall
+            // back to the same endpoint the sidebar filter uses.
+            let pages = me.allowedPages;
+            if (!pages) {
+                const rbac = await apiFetch('/role-access/allowed-routes');
+                pages = (rbac && rbac.allowedPaths) || [];
+            }
+            renderAllowedPages(pages);
+        } catch (e) {
+            showToast('Gagal memuat profil: ' + e.message, 'error');
+        }
+    }
+
+    function renderAllowedPages(paths) {
+        const box = document.getElementById('profile-pages');
+        if (!paths || paths.length === 0) {
+            box.innerHTML = '<span class="text-muted" style="font-size: 0.8125rem;">Tidak ada halaman yang diizinkan.</span>';
+            return;
+        }
+        // Reuse the sidebar as the source of labels and icons so this never drifts
+        box.innerHTML = paths.map(path => {
+            const link = document.querySelector(`.sidebar .nav-item[href="${path}"]`);
+            const label = link ? link.querySelector('span').textContent : path;
+            const icon = link ? link.querySelector('i').className : 'fas fa-file';
+            return `<span class="badge-chip"><i class="${icon}"></i> ${label}</span>`;
+        }).join('');
+    }
+
+    async function submitPasswordChange(event) {
+        event.preventDefault();
+
+        const currentPassword = document.getElementById('current-password').value;
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+
+        if (newPassword !== confirmPassword) {
+            showToast('Konfirmasi password baru tidak cocok.', 'warning');
+            return;
+        }
+
+        const btn = document.getElementById('btn-save-password');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
+
+        try {
+            await apiFetch('/auth/me/password', {
+                method: 'PUT',
+                body: JSON.stringify({ currentPassword, newPassword })
+            });
+            document.getElementById('password-form').reset();
+            showToast('Password berhasil diperbarui. Gunakan password baru saat login berikutnya.', 'success');
+        } catch (e) {
+            showToast(e.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-floppy-disk"></i> Simpan Password Baru';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadProfile();
+        loadSessionChip();
+        loadAttendance();
+    });
+</script>
+{% endblock %}

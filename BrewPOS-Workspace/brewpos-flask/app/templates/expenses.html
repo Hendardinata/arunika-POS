@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Pengeluaran Operasional | Arunika-POS{% endblock %}
+{% block title %}Pengeluaran Operasional | {{ store_name }}{% endblock %}
 {% block page_title %}Pencatatan Biaya & Pengeluaran Toko{% endblock %}
 
 {% block content %}
@@ -9,15 +9,15 @@
     <div class="card-header">
         <div>
             <h3 class="card-title"><i class="fas fa-receipt text-primary"></i> Rekapitulasi Pengeluaran Toko</h3>
-            <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Catatan biaya belanja bahan baku, operasional, gaji, sewa, dan pengeluaran harian.</p>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Catatan biaya belanja bahan baku, operasional, gaji, sewa, dan pengeluaran harian.</p>
         </div>
         <button class="btn btn-primary btn-sm" onclick="openExpenseModal()"><i class="fas fa-plus"></i> Catat Pengeluaran</button>
     </div>
 
     <div style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap; padding: 6px 0;">
         <div style="background: var(--color-danger-bg); border: 1px solid rgba(211, 47, 47, 0.25); padding: 14px 20px; border-radius: var(--radius-md);">
-            <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Total Akumulasi Biaya</div>
-            <div id="total-expense-display" style="font-family: var(--font-heading); font-size: 22px; font-weight: 800; color: var(--color-danger); margin-top: 2px;">Rp 0</div>
+            <div style="font-size: 0.6875rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Total Akumulasi Biaya</div>
+            <div id="total-expense-display" style="font-family: var(--font-heading); font-size: 1.375rem; font-weight: 800; color: var(--color-danger); margin-top: 2px;">Rp 0</div>
         </div>
 
         <div id="expense-category-pills" style="display: flex; gap: 8px; flex-wrap: wrap; flex: 1;">
@@ -171,7 +171,7 @@
 
         const pillsContainer = document.getElementById('expense-category-pills');
         pillsContainer.innerHTML = Object.entries(catMap).map(([name, amount]) => `
-            <div style="background: #FFF; border: 1px solid var(--border-color); padding: 6px 12px; border-radius: var(--radius-sm); font-size: 12px;">
+            <div style="background: #FFF; border: 1px solid var(--border-color); padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.75rem;">
                 <span style="color: var(--text-muted);">${name}:</span>
                 <strong style="color: var(--text-main); margin-left: 4px;">${formatRp(amount)}</strong>
             </div>
@@ -186,13 +186,13 @@
             const dateStr = new Date(e.date).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' });
             const receiptBtn = e.receiptUrl 
                 ? `<button class="btn btn-secondary btn-sm" onclick="viewReceiptPhoto('${e.receiptUrl}')"><i class="fas fa-image text-primary"></i> Lihat Foto</button>`
-                : `<span class="text-muted" style="font-size: 11.5px;">-</span>`;
+                : `<span class="text-muted" style="font-size: 0.7188rem;">-</span>`;
 
             return `
                 <tr>
                     <td><strong>${dateStr}</strong></td>
                     <td><span class="badge-chip danger">${e.category ? e.category.name : '-'}</span></td>
-                    <td><strong style="color: var(--color-danger); font-size: 14px;">${formatRp(e.amount)}</strong></td>
+                    <td><strong style="color: var(--color-danger); font-size: 0.875rem;">${formatRp(e.amount)}</strong></td>
                     <td>${e.notes || '-'}</td>
                     <td>${e.user ? e.user.username : 'Staff'}</td>
                     <td>${receiptBtn}</td>

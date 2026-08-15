@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from app.extensions import db
 from app.models.system_settings import SystemSettings
 from app.services.system_logger import log_activity
+from app.middleware.auth import get_current_user_id
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/api/settings')
 
@@ -35,8 +36,9 @@ def update_setting():
 
         db.session.commit()
 
-        user_id = request.headers.get('X-User-Id')
-        log_activity('UPDATE_SETTINGS', int(user_id) if user_id and user_id.isdigit() else None,
+        user_id = get_current_user_id()
+        user_id_int = int(user_id) if user_id else None
+        log_activity('UPDATE_SETTINGS', user_id_int,
                      f"Updated setting {key} to {value}", 'SystemSettings', setting.id)
 
         return jsonify(setting.to_dict())

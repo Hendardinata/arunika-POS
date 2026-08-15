@@ -3,9 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Arunika-POS | Every Cup Has A Story{% endblock %}</title>
+    <title>{% block title %}{{ store_name }} | {{ store_tagline }}{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/favicon.svg') }}">
     <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script>
+        // Applied before the stylesheet paints: a collapsed sidebar restored after the
+        // transition is live would visibly slide shut on every page load.
+        (function () {
+            if (localStorage.getItem('sidebarCollapsed') === '1') {
+                document.documentElement.classList.add('sidebar-collapsed-init');
+            }
+        })();
+    </script>
     <!-- Main Style -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <!-- Chart.js -->
@@ -19,12 +30,18 @@
         <!-- Sidebar Navigation -->
         <aside class="sidebar no-print">
             <div class="sidebar-header">
-                <div class="brand-logo">☕</div>
+                <div class="brand-logo"><i class="fas fa-mug-hot"></i></div>
                 <div class="brand-info">
-                    <h1>Arunika-POS</h1>
-                    <p>Every Cup Has A Story</p>
+                    <h1>{{ store_name }}</h1>
+                    <p>{{ store_tagline }}</p>
                 </div>
+                <button class="sidebar-toggle" onclick="toggleSidebarCollapse()" title="Ciutkan menu samping">
+                    <i class="fas fa-angles-left"></i>
+                </button>
             </div>
+            <button class="sidebar-expand" onclick="toggleSidebarCollapse()" title="Lebarkan menu samping">
+                <i class="fas fa-angles-right"></i>
+            </button>
 
             <nav class="sidebar-nav">
                 <div class="nav-section-title">Operasional Kasir</div>
@@ -77,11 +94,11 @@
 
             <div class="sidebar-footer">
                 <div class="user-profile-badge">
-                    <div class="user-avatar">A</div>
-                    <div class="user-meta">
+                    <a href="/profile" class="user-avatar" title="Profil Saya" style="text-decoration: none;">A</a>
+                    <a href="/profile" class="user-meta" style="text-decoration: none; color: inherit;" title="Profil Saya">
                         <div class="user-name">Memuat...</div>
                         <div class="user-role">CASHIER</div>
-                    </div>
+                    </a>
                     <button class="btn btn-icon btn-secondary" onclick="logout()" title="Keluar">
                         <i class="fas fa-power-off text-danger"></i>
                     </button>
@@ -105,8 +122,12 @@
                     </div>
                 </div>
                 <div class="topbar-actions">
-                    <div class="shift-status-pill open" style="cursor: default;">
-                        <span class="status-dot"></span> <span class="shift-text">Terminal Online</span>
+                    <span class="badge-chip" id="topbar-paper-size" title="Ukuran kertas struk aktif">
+                        <i class="fas fa-receipt"></i> 58mm
+                    </span>
+                    <!-- id must stay in sync with updateShiftStatusWidget() in app.js -->
+                    <div class="shift-status-pill closed" id="shift-status-widget">
+                        <span class="status-dot"></span> Memuat shift...
                     </div>
                 </div>
             </header>

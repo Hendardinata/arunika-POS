@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Kelola Menu & Resep | Arunika-POS{% endblock %}
+{% block title %}Kelola Menu & Resep | {{ store_name }}{% endblock %}
 {% block page_title %}Katalog Menu & Racikan Resep Bahan{% endblock %}
 
 {% block content %}
@@ -8,7 +8,7 @@
     <div class="card-header">
         <div>
             <h3 class="card-title"><i class="fas fa-mug-hot text-primary"></i> Daftar Menu Minuman & Makanan</h3>
-            <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
                 Kelola harga jual, HPP (modal racikan otomatis), dan racikan resep bahan baku per cup.
             </p>
         </div>
@@ -20,7 +20,7 @@
 
     <!-- Search & Category Filter (Responsive) -->
     <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
-        <input type="text" id="filter-menu-search" class="form-control" style="flex: 1 1 220px; min-width: 180px;" placeholder="🔍 Cari nama menu..." oninput="filterMenus()">
+        <input type="text" id="filter-menu-search" class="form-control" style="flex: 1 1 220px; min-width: 180px;" placeholder="Cari nama menu..." oninput="filterMenus()">
         <select id="filter-category-select" class="form-control" style="flex: 0 1 200px; min-width: 150px;" onchange="filterMenus()">
             <option value="all">Semua Kategori</option>
         </select>
@@ -81,7 +81,7 @@
                     <div class="form-group">
                         <label class="form-label">HPP / Modal Estimasi (Rp)</label>
                         <input type="number" id="menu-hpp" class="form-control" placeholder="Contoh: 6500" value="0">
-                        <small class="text-muted" style="font-size: 11px;">Bisa dihitung otomatis dari racikan resep.</small>
+                        <small class="text-muted" style="font-size: 0.6875rem;">Bisa dihitung otomatis dari racikan resep.</small>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Upload Foto Menu</label>
@@ -113,7 +113,7 @@
         <div class="modal-header">
             <div>
                 <h3 class="modal-title"><i class="fas fa-flask text-primary"></i> Racikan Resep & Kalkulator HPP Otomatis</h3>
-                <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
                     Menu: <strong id="recipe-target-menu-name" style="color: var(--color-primary);">-</strong> (Harga Jual: <span id="recipe-target-price">Rp 0</span>)
                 </p>
             </div>
@@ -123,17 +123,17 @@
             <!-- Live Calculated HPP Summary Card -->
             <div style="background: linear-gradient(135deg, #FAF8F5, #F4EAE1); border: 1px solid var(--border-color); padding: 14px 18px; border-radius: var(--radius-md); margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center;">
                 <div>
-                    <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Total HPP Hasil Racikan</div>
-                    <div id="recipe-live-hpp" style="font-family: var(--font-heading); font-size: 22px; font-weight: 800; color: var(--color-primary); margin-top: 2px;">Rp 0</div>
+                    <div style="font-size: 0.6875rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Total HPP Hasil Racikan</div>
+                    <div id="recipe-live-hpp" style="font-family: var(--font-heading); font-size: 1.375rem; font-weight: 800; color: var(--color-primary); margin-top: 2px;">Rp 0</div>
                 </div>
                 <div style="text-align: right;">
-                    <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Estimasi Margin Laba / Cup</div>
-                    <div id="recipe-live-margin" style="font-family: var(--font-heading); font-size: 18px; font-weight: 800; color: var(--color-success); margin-top: 2px;">+Rp 0 (0%)</div>
+                    <div style="font-size: 0.6875rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Estimasi Margin Laba / Cup</div>
+                    <div id="recipe-live-margin" style="font-family: var(--font-heading); font-size: 1.125rem; font-weight: 800; color: var(--color-success); margin-top: 2px;">+Rp 0 (0%)</div>
                 </div>
             </div>
 
             <!-- Current Ingredients List in Recipe -->
-            <label class="form-label" style="font-size: 12.5px; font-weight: 700; color: var(--text-main); margin-bottom: 8px;">
+            <label class="form-label" style="font-size: 0.7812rem; font-weight: 700; color: var(--text-main); margin-bottom: 8px;">
                 Bahan Baku yang Digunakan per 1 Porsi:
             </label>
             <div id="recipe-ingredients-list-container" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px;">
@@ -142,12 +142,12 @@
 
             <!-- Add Ingredient to Recipe Bar -->
             <div style="background: #FFF; border: 1px dashed var(--border-color); padding: 12px 14px; border-radius: var(--radius-md); margin-bottom: 18px;">
-                <label class="form-label" style="font-size: 11.5px; margin-bottom: 6px;">➕ Tambah Bahan Baku ke Resep:</label>
+                <label class="form-label" style="font-size: 0.7188rem; margin-bottom: 6px;"><i class="fas fa-plus"></i> Tambah Bahan Baku ke Resep:</label>
                 <div style="display: grid; grid-template-columns: 2fr 1fr auto; gap: 8px;">
-                    <select id="builder-add-item-select" class="form-control" style="font-size: 12.5px;">
+                    <select id="builder-add-item-select" class="form-control" style="font-size: 0.7812rem;">
                         <!-- Rendered dynamically from inventory -->
                     </select>
-                    <input type="number" step="any" id="builder-add-item-qty" class="form-control" placeholder="Takaran" style="font-size: 12.5px;">
+                    <input type="number" step="any" id="builder-add-item-qty" class="form-control" placeholder="Takaran" style="font-size: 0.7812rem;">
                     <button class="btn btn-secondary btn-sm" onclick="addIngredientToRecipe()"><i class="fas fa-plus"></i> Tambah</button>
                 </div>
             </div>
@@ -160,7 +160,7 @@
 
             <div style="display: flex; align-items: center; gap: 8px;">
                 <input type="checkbox" id="recipe-apply-hpp-check" checked style="width: 16px; height: 16px;">
-                <label for="recipe-apply-hpp-check" style="font-size: 12.5px; font-weight: 600; color: var(--text-secondary); cursor: pointer;">
+                <label for="recipe-apply-hpp-check" style="font-size: 0.7812rem; font-weight: 600; color: var(--text-secondary); cursor: pointer;">
                     Terapkan otomatis HPP hasil hitungan resep ini ke harga modal menu
                 </label>
             </div>
@@ -248,21 +248,21 @@
 
             const imgTag = m.imageUrl 
                 ? `<img src="${m.imageUrl}" style="width: 36px; height: 36px; border-radius: var(--radius-xs); object-fit: cover;">`
-                : `<div style="width: 36px; height: 36px; border-radius: var(--radius-xs); background: var(--color-primary-light); color: var(--color-primary); display: flex; align-items: center; justify-content: center; font-size: 14px;"><i class="fas fa-mug-hot"></i></div>`;
+                : `<div style="width: 36px; height: 36px; border-radius: var(--radius-xs); background: var(--color-primary-light); color: var(--color-primary); display: flex; align-items: center; justify-content: center; font-size: 0.875rem;"><i class="fas fa-mug-hot"></i></div>`;
 
             return `
                 <tr>
                     <td>${imgTag}</td>
                     <td>
                         <strong style="color: var(--text-main);">${m.name}</strong>
-                        ${m.description ? `<div style="font-size: 11px; color: var(--text-muted);">${m.description}</div>` : ''}
+                        ${m.description ? `<div style="font-size: 0.6875rem; color: var(--text-muted);">${m.description}</div>` : ''}
                     </td>
                     <td><span class="badge-chip primary">${m.category ? m.category.name : '-'}</span></td>
-                    <td><strong style="color: var(--color-primary); font-size: 14px;">${formatRp(m.price)}</strong></td>
+                    <td><strong style="color: var(--color-primary); font-size: 0.875rem;">${formatRp(m.price)}</strong></td>
                     <td><strong style="color: var(--text-secondary);">${formatRp(hpp)}</strong></td>
                     <td>
-                        <strong style="color: var(--color-success); font-size: 13px;">+${formatRp(margin)}</strong>
-                        <span class="badge-chip success" style="font-size: 10px; margin-left: 4px;">${marginPct}%</span>
+                        <strong style="color: var(--color-success); font-size: 0.8125rem;">+${formatRp(margin)}</strong>
+                        <span class="badge-chip success" style="font-size: 0.625rem; margin-left: 4px;">${marginPct}%</span>
                     </td>
                     <td><strong>${m.soldCount || 0}</strong> cup</td>
                     <td>
@@ -395,8 +395,8 @@
         if (currentRecipeIngredients.length === 0) {
             container.innerHTML = `
                 <div style="text-align: center; color: var(--text-muted); padding: 18px; background: #FAF8F5; border-radius: var(--radius-sm);">
-                    <i class="fas fa-flask" style="font-size: 24px; opacity: 0.35; margin-bottom: 6px;"></i>
-                    <p style="font-size: 12px;">Belum ada bahan baku racikan pada menu ini.</p>
+                    <i class="fas fa-flask" style="font-size: 1.5rem; opacity: 0.35; margin-bottom: 6px;"></i>
+                    <p style="font-size: 0.75rem;">Belum ada bahan baku racikan pada menu ini.</p>
                 </div>
             `;
             updateLiveHppDisplay(0);
@@ -412,15 +412,15 @@
             return `
                 <div style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 8px; align-items: center; padding: 8px 12px; background: #FAF8F5; border-radius: var(--radius-sm); border: 1px solid var(--border-light);">
                     <div>
-                        <strong style="color: var(--text-main); font-size: 13px;">${item.name}</strong>
-                        <div style="font-size: 11px; color: var(--text-muted);">@ ${formatRp(unitCost)} / ${item.unit}</div>
+                        <strong style="color: var(--text-main); font-size: 0.8125rem;">${item.name}</strong>
+                        <div style="font-size: 0.6875rem; color: var(--text-muted);">@ ${formatRp(unitCost)} / ${item.unit}</div>
                     </div>
                     <div style="display: flex; align-items: center; gap: 4px;">
-                        <input type="number" step="any" class="form-control" style="padding: 4px 6px; font-size: 12px;" value="${item.quantityNeeded}" onchange="updateIngredientQty(${idx}, this.value)">
-                        <span style="font-size: 11px; color: var(--text-secondary);">${item.unit}</span>
+                        <input type="number" step="any" class="form-control" style="padding: 4px 6px; font-size: 0.75rem;" value="${item.quantityNeeded}" onchange="updateIngredientQty(${idx}, this.value)">
+                        <span style="font-size: 0.6875rem; color: var(--text-secondary);">${item.unit}</span>
                     </div>
                     <div style="text-align: right;">
-                        <strong style="color: var(--color-primary); font-size: 13px;">${formatRp(subCost)}</strong>
+                        <strong style="color: var(--color-primary); font-size: 0.8125rem;">${formatRp(subCost)}</strong>
                     </div>
                     <button class="btn btn-secondary btn-sm text-danger" onclick="removeIngredientFromRecipe(${idx})" title="Hapus"><i class="fas fa-trash"></i></button>
                 </div>
@@ -524,8 +524,8 @@
         const box = document.getElementById('category-list-box');
         box.innerHTML = categoriesList.map(c => `
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #FAF8F5; border-radius: var(--radius-sm);">
-                <span style="font-weight: 600; font-size: 13px;">${c.name}</span>
-                <span class="badge-chip primary" style="font-size: 10px;">ID: ${c.id}</span>
+                <span style="font-weight: 600; font-size: 0.8125rem;">${c.name}</span>
+                <span class="badge-chip primary" style="font-size: 0.625rem;">ID: ${c.id}</span>
             </div>
         `).join('');
     }

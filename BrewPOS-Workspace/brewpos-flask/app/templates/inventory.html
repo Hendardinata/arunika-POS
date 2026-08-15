@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Inventori & Pembelian Bahan | Arunika-POS{% endblock %}
+{% block title %}Inventori & Pembelian Bahan | {{ store_name }}{% endblock %}
 {% block page_title %}Inventori, Pembelian Bahan & Opname Harian{% endblock %}
 
 {% block content %}
@@ -9,7 +9,7 @@
     <div class="card-header">
         <div>
             <h3 class="card-title"><i class="fas fa-clipboard-check text-primary"></i> Alur Stock Opname Harian (SOP Kafe)</h3>
-            <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
                 Audit fisik pagi sebelum buka $\rightarrow$ Kunci baseline $\rightarrow$ Hitung sisa malam saat tutup untuk cek selisih bahan.
             </p>
         </div>
@@ -20,10 +20,10 @@
 
     <div style="display: flex; gap: 16px; align-items: center; background: #FAF8F5; padding: 14px 18px; border-radius: var(--radius-md); border: 1px solid var(--border-light);">
         <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 13px; font-weight: 700; color: var(--text-secondary);">Status Audit Hari Ini:</span>
+            <span style="font-size: 0.8125rem; font-weight: 700; color: var(--text-secondary);">Status Audit Hari Ini:</span>
             <span id="opname-status-label" class="badge-chip warning">Memuat Status...</span>
         </div>
-        <div style="font-size: 12px; color: var(--text-muted); margin-left: auto;">
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-left: auto;">
             Sesi Opname Terakhir: <strong id="opname-last-date" style="color: var(--text-main);">-</strong>
         </div>
     </div>
@@ -34,7 +34,7 @@
     <div class="card-header">
         <div>
             <h3 class="card-title"><i class="fas fa-boxes-stacked text-primary"></i> Data Stok Bahan Baku & Harga Pokok (Cost/Unit)</h3>
-            <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
                 Harga beli satuan digunakan sebagai dasar perhitungan HPP menu secara otomatis.
             </p>
         </div>
@@ -70,7 +70,7 @@
     <div class="card-header">
         <div>
             <h3 class="card-title"><i class="fas fa-history text-secondary"></i> Riwayat Pembelian & Mutasi Stok</h3>
-            <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Rekam jejak belanja bahan, supplier, dan penyesuaian stok manual.</p>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Rekam jejak belanja bahan, supplier, dan penyesuaian stok manual.</p>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="loadInventory()"><i class="fas fa-rotate-right"></i> Refresh</button>
     </div>
@@ -101,7 +101,7 @@
         <div class="modal-header">
             <div>
                 <h3 class="modal-title"><i class="fas fa-cart-shopping text-primary"></i> Catat Pembelian / Restok Bahan Baku</h3>
-                <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
                     Sistem otomatis menghitung harga satuan & memperbarui HPP menu.
                 </p>
             </div>
@@ -130,8 +130,8 @@
 
                 <!-- Live Unit Cost Indicator -->
                 <div style="background: linear-gradient(135deg, #FAF8F5, #F4EAE1); border: 1px solid var(--border-color); padding: 10px 14px; border-radius: var(--radius-sm); margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">Harga Pokok Satuan (Modal Baru):</span>
-                    <strong id="purchase-unit-cost-display" style="font-size: 15px; color: var(--color-primary);">Rp 0 / unit</strong>
+                    <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary);">Harga Pokok Satuan (Modal Baru):</span>
+                    <strong id="purchase-unit-cost-display" style="font-size: 0.9375rem; color: var(--color-primary);">Rp 0 / unit</strong>
                 </div>
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
@@ -159,13 +159,13 @@
                 <div style="display: flex; flex-direction: column; gap: 6px; padding: 10px 0; border-top: 1px solid var(--border-light);">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <input type="checkbox" id="purchase-sync-expense" checked style="width: 16px; height: 16px;">
-                        <label for="purchase-sync-expense" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); cursor: pointer;">
+                        <label for="purchase-sync-expense" style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); cursor: pointer;">
                             Catat otomatis ke Pengeluaran Toko (Kategori: Bahan Baku / Restok)
                         </label>
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <input type="checkbox" id="purchase-recalc-hpp" checked style="width: 16px; height: 16px;">
-                        <label for="purchase-recalc-hpp" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); cursor: pointer;">
+                        <label for="purchase-recalc-hpp" style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); cursor: pointer;">
                             Perbarui otomatis HPP menu yang menggunakan bahan ini
                         </label>
                     </div>
@@ -221,7 +221,7 @@
                     <div class="form-group">
                         <label class="form-label">Harga Pokok per Satuan (Rp)</label>
                         <input type="number" step="any" id="material-cost-per-unit" class="form-control" placeholder="Contoh: 120" value="0">
-                        <small class="text-muted" style="font-size: 11px;">Biaya modal per 1 gram/ml/pcs.</small>
+                        <small class="text-muted" style="font-size: 0.6875rem;">Biaya modal per 1 gram/ml/pcs.</small>
                     </div>
 
                     <div class="form-group" id="material-initial-stock-group">
@@ -254,15 +254,15 @@
             <div class="modal-body">
                 <input type="hidden" id="adjust-item-id">
                 
-                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 14px;">
+                <p style="font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 14px;">
                     Bahan: <strong id="adjust-item-name" style="color: var(--color-primary);">-</strong> (Stok saat ini: <span id="adjust-item-cur-stock">0</span>)
                 </p>
 
                 <div class="form-group">
                     <label class="form-label">Tipe Penyesuaian</label>
                     <select id="adjust-type" class="form-control">
-                        <option value="IN">➕ Masuk / Belanja Bahan (Stock IN)</option>
-                        <option value="OUT">➖ Keluar / Rusak / Tumpah (Stock OUT)</option>
+                        <option value="IN">Masuk / Belanja Bahan (Stock IN)</option>
+                        <option value="OUT">Keluar / Rusak / Tumpah (Stock OUT)</option>
                     </select>
                 </div>
 
@@ -297,7 +297,7 @@
             <button class="modal-close" onclick="closeModal('modal-opname-session')">&times;</button>
         </div>
         <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
-            <p id="opname-session-desc" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+            <p id="opname-session-desc" style="font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 16px;">
                 Hitung jumlah fisik stok bahan baku di bar/gudang dan masukkan ke kolom berikut:
             </p>
             <div id="opname-items-form-container">
@@ -386,7 +386,7 @@
             label.className = 'badge-chip success';
             label.textContent = 'Selesai Ditutup (Malam)';
             actions.innerHTML = `
-                <span class="badge-chip success" style="font-size: 12px; padding: 6px 12px;">
+                <span class="badge-chip success" style="font-size: 0.75rem; padding: 6px 12px;">
                     <i class="fas fa-check-double"></i> Audit Hari Ini Tuntas
                 </span>
             `;
@@ -416,16 +416,16 @@
 
             const imgTag = it.imageUrl 
                 ? `<img src="${it.imageUrl}" style="width: 36px; height: 36px; border-radius: var(--radius-xs); object-fit: cover;">`
-                : `<div style="width: 36px; height: 36px; border-radius: var(--radius-xs); background: var(--color-primary-light); color: var(--color-primary); display: flex; align-items: center; justify-content: center; font-size: 14px;"><i class="fas fa-box"></i></div>`;
+                : `<div style="width: 36px; height: 36px; border-radius: var(--radius-xs); background: var(--color-primary-light); color: var(--color-primary); display: flex; align-items: center; justify-content: center; font-size: 0.875rem;"><i class="fas fa-box"></i></div>`;
 
             return `
                 <tr>
                     <td>${imgTag}</td>
                     <td>
-                        <strong style="color: var(--text-main); font-size: 13.5px;">${it.name}</strong>
+                        <strong style="color: var(--text-main); font-size: 0.8438rem;">${it.name}</strong>
                     </td>
-                    <td><strong style="font-size: 15px; color: ${isLow ? 'var(--color-danger)' : 'var(--color-primary)'};">${stock} ${it.unit}</strong></td>
-                    <td><strong style="color: var(--color-primary); font-size: 13.5px;">${formatRp(costPerUnit)}</strong> <span style="font-size: 11px; color: var(--text-muted);">/ ${it.unit}</span></td>
+                    <td><strong style="font-size: 0.9375rem; color: ${isLow ? 'var(--color-danger)' : 'var(--color-primary)'};">${stock} ${it.unit}</strong></td>
+                    <td><strong style="color: var(--color-primary); font-size: 0.8438rem;">${formatRp(costPerUnit)}</strong> <span style="font-size: 0.6875rem; color: var(--text-muted);">/ ${it.unit}</span></td>
                     <td>${minStock} ${it.unit}</td>
                     <td>${statusChip}</td>
                     <td style="text-align: right;">
@@ -666,8 +666,8 @@
         container.innerHTML = rawInventory.map(it => `
             <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-light);">
                 <div>
-                    <strong style="color: var(--text-main); font-size: 13.5px;">${it.name}</strong>
-                    <div style="font-size: 11px; color: var(--text-muted);">Sistem: ${it.stock} ${it.unit}</div>
+                    <strong style="color: var(--text-main); font-size: 0.8438rem;">${it.name}</strong>
+                    <div style="font-size: 0.6875rem; color: var(--text-muted);">Sistem: ${it.stock} ${it.unit}</div>
                 </div>
                 <input type="number" step="any" class="form-control opname-input" data-id="${it.id}" value="${it.stock}" placeholder="Jumlah Fisik" required>
             </div>
@@ -694,8 +694,8 @@
         container.innerHTML = rawInventory.map(it => `
             <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-light);">
                 <div>
-                    <strong style="color: var(--text-main); font-size: 13.5px;">${it.name}</strong>
-                    <div style="font-size: 11px; color: var(--text-muted);">Sisa Sistem: ${it.stock} ${it.unit}</div>
+                    <strong style="color: var(--text-main); font-size: 0.8438rem;">${it.name}</strong>
+                    <div style="font-size: 0.6875rem; color: var(--text-muted);">Sisa Sistem: ${it.stock} ${it.unit}</div>
                 </div>
                 <input type="number" step="any" class="form-control opname-input" data-id="${it.id}" value="${it.stock}" placeholder="Sisa Fisik Malam" required>
             </div>

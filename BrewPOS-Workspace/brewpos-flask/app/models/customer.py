@@ -1,6 +1,33 @@
 from datetime import datetime
 from app.extensions import db
 
+GUEST_NICKNAME = 'Guest'
+
+
+def normalize_phone(phone_str):
+    """
+    Samakan bentuk nomor supaya '+62812-3456', '0812 3456', dan '628123456'
+    menunjuk ke satu baris yang sama. Kembalikan None kalau kosong.
+    """
+    if not phone_str:
+        return None
+    digits = ''.join(ch for ch in str(phone_str) if ch.isdigit())
+    if not digits:
+        return None
+    if digits.startswith('62'):
+        digits = '0' + digits[2:]
+    elif not digits.startswith('0'):
+        digits = '0' + digits
+    return digits
+
+
+def normalize_email(email_str):
+    if not email_str:
+        return None
+    cleaned = str(email_str).strip().lower()
+    return cleaned or None
+
+
 def mask_phone(phone_str):
     if not phone_str:
         return '-'
@@ -25,7 +52,8 @@ class Customer(db.Model):
     __tablename__ = 'Customer'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    nickname = db.Column(db.String(255), unique=True, nullable=False)
+    # Nama panggilan boleh sama; identitas member adalah kontaknya (HP atau email).
+    nickname = db.Column(db.String(255), nullable=False)
     phone = db.Column(db.String(50), nullable=True)
     email = db.Column(db.String(255), nullable=True)
     customerType = db.Column(db.String(30), nullable=False, default='REGULAR') # REGULAR (Pelanggan), EMPLOYEE (Karyawan)

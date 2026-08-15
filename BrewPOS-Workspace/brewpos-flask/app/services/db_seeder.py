@@ -58,10 +58,12 @@ def seed_default_users(app):
     with app.app_context():
         try:
             # 1. Sync & Seed Users
+            # Only create missing accounts. Never overwrite an existing password, or a
+            # password changed through the UI would silently revert on the next restart.
             for item in DEFAULT_USERS:
-                hashed = bcrypt.hashpw(item['password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
                 existing = User.query.filter_by(username=item['username']).first()
                 if not existing:
+                    hashed = bcrypt.hashpw(item['password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
                     user = User(
                         username=item['username'],
                         password=hashed,
@@ -70,10 +72,8 @@ def seed_default_users(app):
                     )
                     db.session.add(user)
                     print(f"[Seed] Created user: {item['username']} ({item['role']})")
-                else:
-                    existing.password = hashed
-                    if existing.role != item['role']:
-                        existing.role = item['role']
+                elif existing.role != item['role']:
+                    existing.role = item['role']
 
             # 2. Sync App Menus
             menu_map = {}

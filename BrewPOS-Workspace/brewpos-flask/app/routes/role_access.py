@@ -7,6 +7,16 @@ from app.services.system_logger import log_activity
 
 role_access_bp = Blueprint('role_access', __name__, url_prefix='/api/role-access')
 
+# Pages that belong to the user rather than to a role. initRbacNavigation() bounces the
+# user away from any path missing here, so these must be appended to every branch of
+# get_allowed_routes(). Seeding them into AppMenu would not be enough: users who already
+# have a custom allowedPages list stored would stay locked out of their own profile.
+PERSONAL_PATHS = ['/profile']
+
+
+def _with_personal_paths(paths):
+    return list(dict.fromkeys(list(paths) + PERSONAL_PATHS))
+
 ROLE_LEVELS = {
     'SUPERADMIN': 4,
     'ADMIN': 3,
@@ -15,9 +25,11 @@ ROLE_LEVELS = {
     'CASHIER': 1
 }
 
+from app.middleware.auth import get_current_user_id
+
 def get_current_actor():
-    user_id = request.headers.get('X-User-Id')
-    if user_id and user_id.isdigit():
+    user_id = get_current_user_id()
+    if user_id:
         user = User.query.get(int(user_id))
         if user:
             return user
@@ -54,7 +66,7 @@ def get_allowed_routes():
                 'role': role,
                 'isCustom': False,
                 'landingPage': '/dashboard',
-                'allowedPaths': [m.path for m in menus]
+                'allowedPaths': _with_personal_paths([m.path for m in menus])
             })
 
         # 2. Check if user has explicit custom allowedPages configured
@@ -70,7 +82,7 @@ def get_allowed_routes():
                     'role': role,
                     'isCustom': True,
                     'landingPage': landing,
-                    'allowedPaths': custom_pages
+                    'allowedPaths': _with_personal_paths(custom_pages)
                 })
 
         # 3. Fallback to RoleAccess configured for role
@@ -87,7 +99,7 @@ def get_allowed_routes():
             'role': role,
             'isCustom': False,
             'landingPage': landing_page,
-            'allowedPaths': allowed_paths
+            'allowedPaths': _with_personal_paths(allowed_paths)
         })
     except Exception as e:
         return jsonify({'error': 'Failed to fetch allowed routes', 'details': str(e)}), 500
@@ -225,7 +237,7 @@ def update_permission_matrix():
 
     data = request.get_json() or {}
     updates = data.get('matrix', [])
-    user_id = request.headers.get('X-User-Id')
+    user_id = get_current_user_id()
 
     try:
         for item in updates:
@@ -251,7 +263,7 @@ def update_permission_matrix():
                 db.session.add(ra)
 
         db.session.commit()
-        log_activity('UPDATE_PERMISSION_MATRIX', int(user_id) if user_id and user_id.isdigit() else None,
+        log_activity('UPDATE_PERMISSION_MATRIX', int(user_id) if user_id else None,
                      "Updated Application Page Permissions Matrix")
 
         return jsonify({'message': 'Matriks hak akses halaman berhasil disimpan'})

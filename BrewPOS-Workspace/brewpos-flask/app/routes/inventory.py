@@ -2,6 +2,7 @@ import os
 import time
 from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app
+from app.middleware.auth import get_current_user_id
 from werkzeug.utils import secure_filename
 from sqlalchemy import func
 from app.extensions import db
@@ -79,8 +80,8 @@ def create_inventory_item():
 
         db.session.commit()
 
-        user_id = request.headers.get('X-User-Id')
-        log_activity('CREATE_INVENTORY', int(user_id) if user_id and user_id.isdigit() else None,
+        user_id = get_current_user_id()
+        log_activity('CREATE_INVENTORY', int(user_id) if user_id else None,
                      f"Added new item: {name}", 'InventoryItem', item.id)
 
         d = item.to_dict()
@@ -163,8 +164,8 @@ def adjust_inventory_stock(id):
         db.session.add(log)
         db.session.commit()
 
-        user_id = request.headers.get('X-User-Id')
-        log_activity('UPDATE_INVENTORY', int(user_id) if user_id and user_id.isdigit() else None,
+        user_id = get_current_user_id()
+        log_activity('UPDATE_INVENTORY', int(user_id) if user_id else None,
                      f"Adjusted stock {adj_type} {qty} for {item.name}", 'InventoryItem', item.id)
 
         d = item.to_dict()
@@ -239,9 +240,9 @@ def purchase_material():
             cat = ExpenseCategory.query.filter(ExpenseCategory.name.like('%Bahan%')).first()
             if not cat:
                 cat = ExpenseCategory.query.first()
-            user_id = request.headers.get('X-User-Id')
+            user_id = get_current_user_id()
             admin_user = User.query.first()
-            exp_user_id = int(user_id) if user_id and user_id.isdigit() else (admin_user.id if admin_user else 1)
+            exp_user_id = int(user_id) if user_id else (admin_user.id if admin_user else 1)
 
             purchase_date = datetime.utcnow()
             if purchase_date_str:
@@ -273,8 +274,8 @@ def purchase_material():
 
         db.session.commit()
 
-        user_id = request.headers.get('X-User-Id')
-        log_activity('PURCHASE_MATERIAL', int(user_id) if user_id and user_id.isdigit() else None,
+        user_id = get_current_user_id()
+        log_activity('PURCHASE_MATERIAL', int(user_id) if user_id else None,
                      f"Purchased {quantity} {item.unit} {item.name} for Rp {int(total_cost):,}".replace(',', '.'),
                      'InventoryItem', item.id)
 

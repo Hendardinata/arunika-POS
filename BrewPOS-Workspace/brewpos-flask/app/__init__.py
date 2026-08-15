@@ -23,6 +23,33 @@ def create_app(config_class=Config):
     auto_sync_schema(app)
     seed_default_users(app)
 
+    # Setup global API Auth middleware
+    from app.middleware.auth import setup_auth_middleware
+    setup_auth_middleware(app)
+
+    @app.context_processor
+    def inject_store_profile():
+        """
+        Store identity for the shell (sidebar brand, <title>). Rendered server-side on
+        purpose: filling it from getStoreSettings() in JS would flash the placeholder
+        name on every page load, and <title> cannot wait for JS at all.
+        """
+        defaults = {'store_name': 'Arunika-POS', 'store_tagline': 'Every Cup Has A Story'}
+        try:
+            from app.models.system_settings import SystemSettings
+            rows = SystemSettings.query.filter(
+                SystemSettings.key.in_(['STORE_NAME', 'TAGLINE'])
+            ).all()
+            found = {r.key: (r.value or '').strip() for r in rows}
+            if found.get('STORE_NAME'):
+                defaults['store_name'] = found['STORE_NAME']
+            if found.get('TAGLINE'):
+                defaults['store_tagline'] = found['TAGLINE']
+        except Exception as e:
+            # A missing table or a cold DB must never take the whole page down
+            print(f"[StoreProfile] Falling back to defaults: {e}")
+        return defaults
+
     # Static uploads handler for /uploads/<path:filename>
     @app.route('/uploads/<path:filename>')
     def uploaded_file(filename):
@@ -39,7 +66,7 @@ def create_app(config_class=Config):
     from app.routes import (
         auth_bp, category_bp, menu_bp, checkout_bp, customer_bp,
         analytics_bp, gamification_bp, inventory_bp, expenses_bp,
-        settings_bp, shift_bp, role_access_bp, recipe_bp, logs_bp,
+        settings_bp, shift_bp, attendance_bp, role_access_bp, recipe_bp, logs_bp,
         monitoring_bp, web_bp
     )
 
@@ -54,6 +81,7 @@ def create_app(config_class=Config):
     app.register_blueprint(expenses_bp)
     app.register_blueprint(settings_bp)
     app.register_blueprint(shift_bp)
+    app.register_blueprint(attendance_bp)
     app.register_blueprint(role_access_bp)
     app.register_blueprint(recipe_bp)
     app.register_blueprint(logs_bp)

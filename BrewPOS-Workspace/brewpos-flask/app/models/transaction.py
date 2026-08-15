@@ -19,9 +19,13 @@ class Transaction(db.Model):
     voidedBy = db.Column(db.Integer, nullable=True)
     customerId = db.Column(db.Integer, db.ForeignKey('Customer.id'), nullable=False)
     shiftId = db.Column(db.Integer, db.ForeignKey('Shift.id'), nullable=True)
+    # Kasir yang memproses. Sesi kas dipakai bersama, jadi atribusi per orang
+    # harus melekat di transaksi, bukan disimpulkan dari shift.
+    userId = db.Column(db.Integer, db.ForeignKey('User.id'), nullable=True)
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     items = db.relationship('TransactionItem', backref='transaction', lazy=True, cascade='all, delete-orphan')
+    cashier = db.relationship('User', foreign_keys=[userId], lazy='joined')
 
     def get_code(self):
         if self.transactionCode:
@@ -48,6 +52,8 @@ class Transaction(db.Model):
             'voidedBy': self.voidedBy,
             'customerId': self.customerId,
             'shiftId': self.shiftId,
+            'userId': self.userId,
+            'cashierName': self.cashier.username if self.cashier else None,
             'createdAt': self.createdAt.isoformat() if self.createdAt else None
         }
         if include_customer and self.customer:

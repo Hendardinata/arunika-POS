@@ -45,3 +45,7 @@ def monitoring():
 @web_bp.route('/settings')
 def settings():
     return render_template('settings.html', active_page='settings')
+
+@web_bp.route('/profile')
+def profile():
+    return render_template('profile.html', active_page='profile')

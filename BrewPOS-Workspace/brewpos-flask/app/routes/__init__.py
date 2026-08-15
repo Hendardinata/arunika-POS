@@ -9,6 +9,7 @@ from app.routes.inventory import inventory_bp
 from app.routes.expenses import expenses_bp
 from app.routes.settings import settings_bp
 from app.routes.shift import shift_bp
+from app.routes.attendance import attendance_bp
 from app.routes.role_access import role_access_bp
 from app.routes.recipe import recipe_bp
 from app.routes.logs import logs_bp
@@ -27,6 +28,7 @@ __all__ = [
     'expenses_bp',
     'settings_bp',
     'shift_bp',
+    'attendance_bp',
     'role_access_bp',
     'recipe_bp',
     'logs_bp',

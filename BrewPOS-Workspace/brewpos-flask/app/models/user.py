@@ -14,7 +14,8 @@ class User(db.Model):
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     expenses = db.relationship('Expense', backref='recordedBy', lazy=True)
-    shifts = db.relationship('Shift', backref='user', lazy=True)
+    # Shift punya beberapa FK ke User (pembuka/penutup/penjaga), jadi kolomnya eksplisit.
+    shifts = db.relationship('Shift', backref='user', lazy=True, foreign_keys='Shift.userId')
     systemLogs = db.relationship('SystemLog', backref='user', lazy=True)
 
     def get_custom_allowed_pages(self):

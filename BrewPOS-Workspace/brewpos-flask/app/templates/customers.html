@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Manajemen Member & Loyalty CRM | Arunika-POS{% endblock %}
+{% block title %}Manajemen Member & Loyalty CRM | {{ store_name }}{% endblock %}
 {% block page_title %}Direktori Member, CRM & Loyalty{% endblock %}
 
 {% block content %}
@@ -34,7 +34,7 @@
     <div class="card-header">
         <div>
             <h3 class="card-title"><i class="fas fa-gift text-primary"></i> Katalog Loyalty Rewards (Tukar Poin)</h3>
-            <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Hadiah diskon atau produk gratis yang dapat ditukar member di kasir saat checkout.</p>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Hadiah diskon atau produk gratis yang dapat ditukar member di kasir saat checkout.</p>
         </div>
         <button class="btn btn-primary btn-sm" onclick="openRewardModal()"><i class="fas fa-plus"></i> Tambah Reward</button>
     </div>
@@ -48,7 +48,7 @@
     <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
         <div>
             <h3 class="card-title"><i class="fas fa-users-gear text-primary"></i> Direktori & Manajemen Member Kafe</h3>
-            <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
                 Kelola tipe member (Pelanggan / Karyawan), status keaktifan, serta sensor kontak proteksi privasi.
             </p>
         </div>
@@ -60,7 +60,7 @@
     <!-- Filter, Search & Sorting Bar -->
     <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
         <!-- Instant Search -->
-        <input type="text" id="crm-search" class="form-control" style="flex: 1 1 200px; min-width: 180px;" placeholder="🔍 Cari nama, telepon, atau email..." oninput="filterAndSortCustomers()">
+        <input type="text" id="crm-search" class="form-control" style="flex: 1 1 200px; min-width: 180px;" placeholder="Cari nama, telepon, atau email..." oninput="filterAndSortCustomers()">
 
         <!-- Filter Type -->
         <select id="crm-filter-type" class="form-control" style="flex: 0 1 170px; min-width: 140px;" onchange="filterAndSortCustomers()">
@@ -72,8 +72,8 @@
         <!-- Filter Status (Aktif vs Hilang) -->
         <select id="crm-filter-status" class="form-control" style="flex: 0 1 180px; min-width: 150px;" onchange="filterAndSortCustomers()">
             <option value="ALL">Semua Status Keaktifan</option>
-            <option value="AKTIF">🟢 Member Aktif</option>
-            <option value="HILANG">🔴 Member Hilang (>30 hr)</option>
+            <option value="AKTIF">Member Aktif</option>
+            <option value="HILANG">Member Hilang (&gt;30 hr)</option>
         </select>
 
         <!-- Sorting -->
@@ -134,17 +134,17 @@
 
                 <!-- Daily Free Quota for Employee -->
                 <div class="form-group" id="member-quota-group" style="display: none; background: #FFF8E1; padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid #FFE082;">
-                    <label class="form-label" style="font-size: 12px; color: #8D6E63; font-weight: 700;">
+                    <label class="form-label" style="font-size: 0.75rem; color: #8D6E63; font-weight: 700;">
                         <i class="fas fa-mug-hot text-warning"></i> Jatah Minuman Gratis per Hari (Cup)
                     </label>
                     <input type="number" id="member-quota" class="form-control" placeholder="2" value="2" min="0">
-                    <small class="text-muted" style="font-size: 11px; display: block; margin-top: 4px;">
+                    <small class="text-muted" style="font-size: 0.6875rem; display: block; margin-top: 4px;">
                         Member tipe karyawan akan mendapat kuota menu gratis 100% saat transaksi kasir.
                     </small>
                 </div>
 
                 <!-- Mandatory Identity Notice -->
-                <div style="background: var(--color-primary-light); padding: 10px 12px; border-radius: var(--radius-sm); margin-bottom: 12px; font-size: 11.5px; color: var(--color-primary);">
+                <div style="background: var(--color-primary-light); padding: 10px 12px; border-radius: var(--radius-sm); margin-bottom: 12px; font-size: 0.7188rem; color: var(--color-primary);">
                     <i class="fas fa-shield-alt"></i> <strong>Ketentuan Identitas Wajib:</strong><br>
                     Member wajib memiliki minimal salah satu identitas kontak (Nomor Telepon atau Email).
                 </div>
@@ -152,13 +152,13 @@
                 <div class="form-group">
                     <label class="form-label">Nomor Telepon / WhatsApp</label>
                     <input type="text" id="member-phone" class="form-control" placeholder="Contoh: 081234567890">
-                    <small class="text-muted" style="font-size: 11px;">Hanya admin/owner yang melihat nomor lengkap; kasir hanya melihat 4 digit akhir.</small>
+                    <small class="text-muted" style="font-size: 0.6875rem;">Hanya admin/owner yang melihat nomor lengkap; kasir hanya melihat 4 digit akhir.</small>
                 </div>
 
                 <div class="form-group">
                     <label class="form-label">Alamat Email</label>
                     <input type="email" id="member-email" class="form-control" placeholder="Contoh: budi@gmail.com">
-                    <small class="text-muted" style="font-size: 11px;">Sensor otomatis berlaku untuk kasir/karyawan non-admin.</small>
+                    <small class="text-muted" style="font-size: 0.6875rem;">Sensor otomatis berlaku untuk kasir/karyawan non-admin.</small>
                 </div>
             </div>
             <div class="modal-footer">
@@ -421,7 +421,13 @@
             closeModal('modal-member');
             loadCrmData();
         } catch (err) {
-            showToast(err.message, 'error');
+            // 409: kontak sudah dipakai member lain. Nickname sendiri boleh kembar.
+            const existing = err.data && err.data.existingCustomer;
+            if (existing) {
+                showToast(`${err.message}. Buka data member tersebut untuk menggabungkan.`, 'error');
+            } else {
+                showToast(err.message, 'error');
+            }
         } finally {
             btn.disabled = false;
         }
@@ -491,8 +497,8 @@
         tbody.innerHTML = customers.map(c => {
             const isEmp = (c.customerType === 'EMPLOYEE');
             const typeBadge = isEmp 
-                ? `<span class="badge-chip warning" style="font-weight: 700;">☕ Tipe Karyawan</span><div style="font-size: 10.5px; color: #8D6E63; margin-top: 2px;">Jatah: ${c.dailyQuota || 0} cup/hr</div>`
-                : `<span class="badge-chip success" style="font-weight: 700;">👤 Tipe Pelanggan</span>`;
+                ? `<span class="badge-chip warning" style="font-weight: 700;"><i class="fas fa-mug-hot"></i> Tipe Karyawan</span><div style="font-size: 0.6562rem; color: #8D6E63; margin-top: 2px;">Jatah: ${c.dailyQuota || 0} cup/hr</div>`
+                : `<span class="badge-chip success" style="font-weight: 700;"><i class="fas fa-user"></i> Tipe Pelanggan</span>`;
 
             const isActive = (c.status === 'AKTIF');
             const statusBadge = isActive
@@ -505,21 +511,21 @@
             // Contacts with Privacy Masking indicator
             const phoneDisplay = c.phone || '-';
             const emailDisplay = c.email || '-';
-            const maskHint = c.isMasked ? '<i class="fas fa-lock" style="font-size: 10px; opacity: 0.6;" title="Disensor untuk hak akses kasir"></i>' : '';
+            const maskHint = c.isMasked ? '<i class="fas fa-lock" style="font-size: 0.625rem; opacity: 0.6;" title="Disensor untuk hak akses kasir"></i>' : '';
 
             const safeNickname = (c.nickname || '').replace(/'/g, "\\'");
 
             return `
                 <tr>
                     <td>
-                        <strong style="color: var(--text-main); font-size: 13.5px;">${c.nickname || '-'}</strong>
-                        <div style="font-size: 11px; color: var(--text-muted);">Member ID: #${c.id}</div>
+                        <strong style="color: var(--text-main); font-size: 0.8438rem;">${c.nickname || '-'}</strong>
+                        <div style="font-size: 0.6875rem; color: var(--text-muted);">Member ID: #${c.id}</div>
                     </td>
                     <td>${typeBadge}</td>
                     <td>${statusBadge}</td>
-                    <td style="font-size: 12px; line-height: 1.4;">
-                        <div><i class="fas fa-phone" style="font-size: 11px; color: var(--text-muted);"></i> ${phoneDisplay} ${maskHint}</div>
-                        ${c.email && c.email !== '-' ? `<div><i class="fas fa-envelope" style="font-size: 11px; color: var(--text-muted);"></i> ${emailDisplay}</div>` : ''}
+                    <td style="font-size: 0.75rem; line-height: 1.4;">
+                        <div><i class="fas fa-phone" style="font-size: 0.6875rem; color: var(--text-muted);"></i> ${phoneDisplay} ${maskHint}</div>
+                        ${c.email && c.email !== '-' ? `<div><i class="fas fa-envelope" style="font-size: 0.6875rem; color: var(--text-muted);"></i> ${emailDisplay}</div>` : ''}
                     </td>
                     <td>
                         <span class="badge-chip primary" style="font-weight: 800;">Lvl ${c.level || 1}</span>
@@ -527,10 +533,10 @@
                             <div style="width: ${xpPct}%; height: 100%; background: var(--color-secondary);"></div>
                         </div>
                     </td>
-                    <td><strong style="font-size: 14px; color: var(--color-primary);">${c.points || 0} Pts</strong></td>
-                    <td style="font-size: 12px;">
+                    <td><strong style="font-size: 0.875rem; color: var(--color-primary);">${c.points || 0} Pts</strong></td>
+                    <td style="font-size: 0.75rem;">
                         <div>${lastVisit}</div>
-                        <small style="color: var(--color-accent); font-weight: 700;">${c.streakCount || 0} 🔥 streak</small>
+                        <small style="color: var(--color-accent); font-weight: 700;">${c.streakCount || 0} <i class="fas fa-fire"></i> streak</small>
                     </td>
                     <td style="text-align: right;">
                         <button class="btn btn-secondary btn-sm" onclick="editMember(${c.id})" title="Edit Member"><i class="fas fa-edit"></i></button>
@@ -554,8 +560,8 @@
         container.innerHTML = questsList.map(q => `
             <div style="padding: 12px 14px; background: #FAF8F5; border-radius: var(--radius-md); border: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
                 <div>
-                    <strong style="font-size: 13.5px; color: var(--text-main);">${q.name}</strong>
-                    <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">${q.description || ''}</div>
+                    <strong style="font-size: 0.8438rem; color: var(--text-main);">${q.name}</strong>
+                    <div style="font-size: 0.7188rem; color: var(--text-muted); margin-top: 2px;">${q.description || ''}</div>
                     <div style="margin-top: 4px;">
                         <span class="badge-chip primary">+${q.rewardPoints} Pts</span>
                         <span class="badge-chip success">+${q.rewardXp} XP</span>
@@ -578,9 +584,9 @@
 
         container.innerHTML = badgesList.map(b => `
             <div style="padding: 12px; background: #FAF8F5; border-radius: var(--radius-md); border: 1px solid var(--border-light); text-align: center;">
-                <div style="font-size: 28px; color: var(--color-secondary); margin-bottom: 6px;">🏅</div>
-                <strong style="font-size: 12.5px; display: block; color: var(--text-main); line-height: 1.2;">${b.name}</strong>
-                <div style="font-size: 11px; color: var(--color-primary); font-weight: 700; margin-top: 4px;">≥ ${b.requiredTransactions} Order</div>
+                <div style="font-size: 1.75rem; color: var(--color-secondary); margin-bottom: 6px;"><i class="fas fa-medal"></i></div>
+                <strong style="font-size: 0.7812rem; display: block; color: var(--text-main); line-height: 1.2;">${b.name}</strong>
+                <div style="font-size: 0.6875rem; color: var(--color-primary); font-weight: 700; margin-top: 4px;">≥ ${b.requiredTransactions} Order</div>
             </div>
         `).join('');
     }
@@ -597,8 +603,8 @@
         container.innerHTML = rewardsList.map(r => `
             <div style="padding: 14px; background: #FAF8F5; border-radius: var(--radius-md); border: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
                 <div>
-                    <strong style="font-size: 13.5px; color: var(--color-primary);">${r.name}</strong>
-                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">${r.description || ''}</div>
+                    <strong style="font-size: 0.8438rem; color: var(--color-primary);">${r.name}</strong>
+                    <div style="font-size: 0.6875rem; color: var(--text-muted); margin-top: 2px;">${r.description || ''}</div>
                     <div style="margin-top: 6px;">
                         <span class="badge-chip warning" style="font-weight: 800;">${r.pointsRequired} Poin</span>
                     </div>
@@ -615,17 +621,17 @@
         document.getElementById('member-detail-title').textContent = `Profil Member: ${c.nickname}`;
         const unlockedBadges = c.badges || [];
         const badgesHtml = unlockedBadges.length > 0 
-            ? unlockedBadges.map(b => `<span class="badge-chip success" style="margin: 3px;">🏅 ${b.badge ? b.badge.name : 'Badge'}</span>`).join('')
-            : '<span class="text-muted" style="font-size: 12px;">Belum ada badge yang terbuka.</span>';
+            ? unlockedBadges.map(b => `<span class="badge-chip success" style="margin: 3px;"><i class="fas fa-medal"></i> ${b.badge ? b.badge.name : 'Badge'}</span>`).join('')
+            : '<span class="text-muted" style="font-size: 0.75rem;">Belum ada badge yang terbuka.</span>';
 
         const isEmp = (c.customerType === 'EMPLOYEE');
 
         document.getElementById('member-modal-body').innerHTML = `
             <div style="text-align: center; padding-bottom: 16px; border-bottom: 1px solid var(--border-light); margin-bottom: 16px;">
-                <div style="width: 56px; height: 56px; border-radius: 50%; background: var(--color-primary-light); color: var(--color-primary); display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; margin: 0 auto 8px;">
+                <div style="width: 56px; height: 56px; border-radius: 50%; background: var(--color-primary-light); color: var(--color-primary); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 800; margin: 0 auto 8px;">
                     ${(c.nickname || 'U').charAt(0).toUpperCase()}
                 </div>
-                <h4 style="font-family: var(--font-heading); font-size: 18px; color: var(--text-main); margin-bottom: 2px;">${c.nickname}</h4>
+                <h4 style="font-family: var(--font-heading); font-size: 1.125rem; color: var(--text-main); margin-bottom: 2px;">${c.nickname}</h4>
                 <div style="display: flex; justify-content: center; gap: 6px; margin-top: 4px;">
                     <span class="badge-chip ${isEmp ? 'warning' : 'success'}">${isEmp ? 'Tipe Karyawan' : 'Tipe Pelanggan'}</span>
                     <span class="badge-chip ${c.status === 'AKTIF' ? 'success' : 'danger'}">${c.status === 'AKTIF' ? 'Status: AKTIF' : 'Status: HILANG (>30 hr)'}</span>
@@ -633,19 +639,19 @@
             </div>
 
             <div style="background: #FAF8F5; padding: 12px 14px; border-radius: var(--radius-sm); margin-bottom: 14px;">
-                <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Kontak Member</div>
-                <div style="margin-top: 4px; font-size: 13px;"><strong>No. HP:</strong> ${c.phone || '-'}</div>
-                <div style="margin-top: 2px; font-size: 13px;"><strong>Email:</strong> ${c.email || '-'}</div>
+                <div style="font-size: 0.6875rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Kontak Member</div>
+                <div style="margin-top: 4px; font-size: 0.8125rem;"><strong>No. HP:</strong> ${c.phone || '-'}</div>
+                <div style="margin-top: 2px; font-size: 0.8125rem;"><strong>Email:</strong> ${c.email || '-'}</div>
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
                 <div style="background: #FAF8F5; padding: 10px 14px; border-radius: var(--radius-sm);">
-                    <div style="font-size: 11px; color: var(--text-muted);">Poin Aktif</div>
-                    <strong style="font-size: 16px; color: var(--color-primary);">${c.points || 0} Pts</strong>
+                    <div style="font-size: 0.6875rem; color: var(--text-muted);">Poin Aktif</div>
+                    <strong style="font-size: 1rem; color: var(--color-primary);">${c.points || 0} Pts</strong>
                 </div>
                 <div style="background: #FAF8F5; padding: 10px 14px; border-radius: var(--radius-sm);">
-                    <div style="font-size: 11px; color: var(--text-muted);">Streak Kunjungan</div>
-                    <strong style="font-size: 16px; color: var(--color-accent);">${c.streakCount || 0} Hari Berturut-turut</strong>
+                    <div style="font-size: 0.6875rem; color: var(--text-muted);">Streak Kunjungan</div>
+                    <strong style="font-size: 1rem; color: var(--color-accent);">${c.streakCount || 0} Hari Berturut-turut</strong>
                 </div>
             </div>
 

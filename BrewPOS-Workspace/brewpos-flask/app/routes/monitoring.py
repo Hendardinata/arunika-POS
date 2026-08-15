@@ -7,6 +7,7 @@ from app.models.inventory import InventoryItem
 from app.models.shift import Shift
 from app.models.system_log import SystemLog
 from app.services.system_logger import log_activity
+from app.middleware.auth import get_current_user_id
 
 monitoring_bp = Blueprint('monitoring', __name__, url_prefix='/api/monitoring')
 
@@ -82,8 +83,9 @@ def update_kds_status(id):
         tx.voidReason = f"PREP:{new_status}"
         db.session.commit()
 
-        user_id = request.headers.get('X-User-Id')
-        log_activity('KDS_STATUS_CHANGE', int(user_id) if user_id and user_id.isdigit() else None,
+        user_id = get_current_user_id()
+        user_id_int = int(user_id) if user_id else None
+        log_activity('KDS_STATUS_CHANGE', user_id_int,
                      f"Order #{id} status changed to {new_status}", 'Transaction', id)
 
         return jsonify({'message': f'Order #{id} status updated to {new_status}', 'status': new_status})

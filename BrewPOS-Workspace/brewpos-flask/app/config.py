@@ -7,8 +7,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env')
 
 class Config:
-    SECRET_KEY = os.getenv('SECRET_KEY', 'arunika_pos_secret_key_super_secure_2026')
-    JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'fallback_secret_for_development_only')
+    SECRET_KEY = os.getenv('SECRET_KEY', 'default_secret_please_change_in_production')
+    JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'default_jwt_secret_please_change')
     
     # Database
     SQLALCHEMY_DATABASE_URI = os.getenv(

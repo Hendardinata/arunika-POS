@@ -1,6 +1,7 @@
 import os
 import time
 from flask import Blueprint, request, jsonify, current_app
+from app.middleware.auth import get_current_user_id
 from werkzeug.utils import secure_filename
 from sqlalchemy import func
 from app.extensions import db
@@ -79,8 +80,8 @@ def create_menu():
         db.session.add(menu)
         db.session.commit()
 
-        user_id = request.headers.get('X-User-Id')
-        log_activity('CREATE_MENU', int(user_id) if user_id and user_id.isdigit() else None,
+        user_id = get_current_user_id()
+        log_activity('CREATE_MENU', int(user_id) if user_id else None,
                      f"Created menu: {name}", 'Menu', menu.id)
 
         return jsonify(menu.to_dict()), 201
@@ -120,8 +121,8 @@ def update_menu(id):
 
         db.session.commit()
 
-        user_id = request.headers.get('X-User-Id')
-        log_activity('UPDATE_MENU', int(user_id) if user_id and user_id.isdigit() else None,
+        user_id = get_current_user_id()
+        log_activity('UPDATE_MENU', int(user_id) if user_id else None,
                      f"Updated menu: {menu.name}", 'Menu', menu.id)
 
         return jsonify(menu.to_dict())
@@ -147,8 +148,8 @@ def delete_menu(id):
         db.session.delete(menu)
         db.session.commit()
 
-        user_id = request.headers.get('X-User-Id')
-        log_activity('DELETE_MENU', int(user_id) if user_id and user_id.isdigit() else None,
+        user_id = get_current_user_id()
+        log_activity('DELETE_MENU', int(user_id) if user_id else None,
                      f"Deleted menu: {name}", 'Menu', id)
 
         return '', 204

@@ -157,6 +157,7 @@ def get_comprehensive_reports():
         total_tax = sum(t.taxAmount for t in completed_tx)
         total_parking = sum(t.parkingFee for t in completed_tx)
         total_net_sales = sum(t.totalAmount for t in completed_tx)
+        total_void_amount = sum(t.totalAmount for t in void_tx)
 
         # Payment Methods breakdown
         by_payment = {}
@@ -258,9 +259,11 @@ def get_comprehensive_reports():
                 'totalNet': total_net_sales,
                 'totalOrders': len(completed_tx),
                 'totalVoid': len(void_tx),
+                'totalVoidAmount': total_void_amount,
                 'byPaymentMethod': by_payment
             },
-            'transactions': [t.to_dict(include_items=True, include_customer=True) for t in all_tx],
+            'transactions': [t.to_dict(include_items=True, include_customer=True) for t in completed_tx],
+            'voidTransactions': [t.to_dict(include_items=True, include_customer=True) for t in void_tx],
             'cogsReport': cogs_list,
             'purchasesReport': {
                 'totalOpex': total_opex,
@@ -288,19 +291,17 @@ def export_excel_report():
     from openpyxl.utils import get_column_letter
 
     try:
-        days_param = request.args.get('days', 'all')
+        # Same filter as /comprehensive-reports so the workbook and the screen never disagree
+        start_date, end_date, days_param = _parse_date_filter()
+        days_param = days_param or 'all'
         now = datetime.utcnow()
-        start_date = None
-        if days_param == '1':
-            start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        elif days_param.isdigit():
-            start_date = now - timedelta(days=int(days_param))
 
         wb = openpyxl.Workbook()
         default_sheet = wb.active
 
         # Styling definitions
         primary_header_fill = PatternFill(start_color="6F4E37", end_color="6F4E37", fill_type="solid")
+        danger_header_fill = PatternFill(start_color="B71C1C", end_color="B71C1C", fill_type="solid")
         summary_fill = PatternFill(start_color="F4EAE1", end_color="F4EAE1", fill_type="solid")
         header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
         title_font = Font(name="Segoe UI", size=14, bold=True, color="6F4E37")
@@ -314,10 +315,10 @@ def export_excel_report():
             bottom=Side(style='thin', color='E0E0E0')
         )
 
-        def style_header_row(ws, row_idx, max_col):
+        def style_header_row(ws, row_idx, max_col, fill=primary_header_fill):
             for col in range(1, max_col + 1):
                 cell = ws.cell(row=row_idx, column=col)
-                cell.fill = primary_header_fill
+                cell.fill = fill
                 cell.font = header_font
                 cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
@@ -341,8 +342,9 @@ def export_excel_report():
 
         tx_query = Transaction.query
         if start_date: tx_query = tx_query.filter(Transaction.createdAt >= start_date)
-        completed_tx = tx_query.filter_by(status='COMPLETED').all()
-        all_tx = tx_query.order_by(Transaction.createdAt.desc()).all()
+        if end_date: tx_query = tx_query.filter(Transaction.createdAt <= end_date)
+        completed_tx = tx_query.filter_by(status='COMPLETED').order_by(Transaction.createdAt.desc()).all()
+        void_tx = tx_query.filter_by(status='VOID').order_by(Transaction.createdAt.desc()).all()
 
         total_net_sales = sum(t.totalAmount for t in completed_tx)
         total_tax = sum(t.taxAmount or 0 for t in completed_tx)
@@ -369,6 +371,7 @@ def export_excel_report():
 
         exp_query = Expense.query
         if start_date: exp_query = exp_query.filter(Expense.date >= start_date)
+        if end_date: exp_query = exp_query.filter(Expense.date <= end_date)
         all_expenses = exp_query.order_by(Expense.date.desc()).all()
         total_opex = sum(e.amount for e in all_expenses)
 
@@ -376,7 +379,7 @@ def export_excel_report():
         net_margin_pct = round((net_operating_profit / total_net_sales * 100), 1) if total_net_sales > 0 else 0
 
         pnl_rows = [
-            ("1. Pendapatan Penjualan Bersih (Net Sales)", total_net_sales, "100.0%"),
+            ("1. Pendapatan Penjualan Bersih (Net Revenue)", total_net_sales, "100.0%"),
             ("2. Harga Pokok Penjualan / Modal Bahan (COGS)", -total_cogs, f"{round(total_cogs/total_net_sales*100, 1) if total_net_sales > 0 else 0}%"),
             ("= LABA KOTOR (GROSS PROFIT)", gross_profit, f"{gross_margin_pct}%"),
             ("3. Total Beban Biaya Operasional (OPEX)", -total_opex, f"{round(total_opex/total_net_sales*100, 1) if total_net_sales > 0 else 0}%"),
@@ -404,25 +407,25 @@ def export_excel_report():
         auto_fit_columns(ws_pnl)
 
         # -------------------------------------------------------------
-        # SHEET 2: PENJUALAN (SALES TRANSACTIONS)
+        # SHEET 2: PENJUALAN SAH (COMPLETED SALES ONLY)
         # -------------------------------------------------------------
-        ws_sales = wb.create_sheet(title="2. Penjualan")
+        ws_sales = wb.create_sheet(title="2. Penjualan Sah")
         ws_sales.cell(row=1, column=1, value="ARUNIKA COFFEE & LOUNGE").font = title_font
-        ws_sales.cell(row=2, column=1, value=f"RINCIAN TRANSAKSI PENJUALAN | Total Transaksi: {len(all_tx)}").font = subtitle_font
+        ws_sales.cell(row=2, column=1, value=f"RINCIAN TRANSAKSI PENJUALAN SAH (COMPLETED) | Total: {len(completed_tx)} Transaksi").font = subtitle_font
 
-        headers_sales = ["Kode Transaksi", "Waktu", "Pelanggan", "Rincian Menu", "Subtotal (Rp)", "Diskon (Rp)", "PPN (Rp)", "Total Bayar (Rp)", "Metode", "Status", "Alasan Void"]
+        headers_sales = ["Kode Transaksi", "Waktu", "Pelanggan", "Rincian Menu", "Subtotal (Rp)", "Diskon (Rp)", "PPN (Rp)", "Total Bayar (Rp)", "Metode", "Status"]
         for col_idx, h in enumerate(headers_sales, 1):
             ws_sales.cell(row=4, column=col_idx, value=h)
         style_header_row(ws_sales, 4, len(headers_sales))
 
-        for row_idx, t in enumerate(all_tx, start=5):
+        for row_idx, t in enumerate(completed_tx, start=5):
             items_str = ", ".join([f"{it.quantity}x {it.menu.name if it.menu else 'Menu'}" for it in t.items])
             cust_name = t.customer.nickname if t.customer else "Guest"
             date_str = t.createdAt.strftime('%Y-%m-%d %H:%M') if t.createdAt else ""
             tx_code = t.get_code()
             row_data = [
                 tx_code, date_str, cust_name, items_str, t.subTotal, t.discountAmount or 0,
-                t.taxAmount or 0, t.totalAmount, t.paymentMethod or "CASH", t.status, t.voidReason or ""
+                t.taxAmount or 0, t.totalAmount, t.paymentMethod or "CASH", t.status
             ]
             for col_idx, val in enumerate(row_data, 1):
                 cell = ws_sales.cell(row=row_idx, column=col_idx, value=val)
@@ -434,9 +437,42 @@ def export_excel_report():
         auto_fit_columns(ws_sales)
 
         # -------------------------------------------------------------
-        # SHEET 3: HPP & MARGIN MENU (COGS)
+        # SHEET 3: TRANSAKSI DIBATALKAN (VOID TRANSACTIONS)
         # -------------------------------------------------------------
-        ws_cogs = wb.create_sheet(title="3. HPP & Margin Menu")
+        ws_void = wb.create_sheet(title="3. Transaksi Batal (VOID)")
+        ws_void.cell(row=1, column=1, value="ARUNIKA COFFEE & LOUNGE").font = title_font
+        ws_void.cell(row=2, column=1, value=f"DAFTAR TRANSAKSI DIBATALKAN (VOID) | Total: {len(void_tx)} Transaksi Dibatalkan").font = subtitle_font
+
+        headers_void = ["Kode Transaksi", "Waktu Order", "Waktu Void", "Pelanggan", "Rincian Menu", "Total Batal (Rp)", "Metode", "Alasan Void", "Petugas Void"]
+        for col_idx, h in enumerate(headers_void, 1):
+            ws_void.cell(row=4, column=col_idx, value=h)
+        style_header_row(ws_void, 4, len(headers_void), fill=danger_header_fill)
+
+        for row_idx, t in enumerate(void_tx, start=5):
+            items_str = ", ".join([f"{it.quantity}x {it.menu.name if it.menu else 'Menu'}" for it in t.items])
+            cust_name = t.customer.nickname if t.customer else "Guest"
+            date_str = t.createdAt.strftime('%Y-%m-%d %H:%M') if t.createdAt else ""
+            void_date_str = t.voidedAt.strftime('%Y-%m-%d %H:%M') if getattr(t, 'voidedAt', None) else "-"
+            tx_code = t.get_code()
+            voided_by_user = t.voidedByUser.username if getattr(t, 'voidedByUser', None) else (str(t.voidedBy) if t.voidedBy else "Staff")
+            
+            row_data = [
+                tx_code, date_str, void_date_str, cust_name, items_str, t.totalAmount,
+                t.paymentMethod or "CASH", t.voidReason or "Tanpa Keterangan", voided_by_user
+            ]
+            for col_idx, val in enumerate(row_data, 1):
+                cell = ws_void.cell(row=row_idx, column=col_idx, value=val)
+                cell.font = regular_font
+                cell.border = border_thin
+                if col_idx == 6:
+                    cell.number_format = '#,##0'
+
+        auto_fit_columns(ws_void)
+
+        # -------------------------------------------------------------
+        # SHEET 4: HPP & MARGIN MENU (COGS)
+        # -------------------------------------------------------------
+        ws_cogs = wb.create_sheet(title="4. HPP & Margin Menu")
         ws_cogs.cell(row=1, column=1, value="ARUNIKA COFFEE & LOUNGE").font = title_font
         ws_cogs.cell(row=2, column=1, value="ANALISIS HPP, OMSET & PROFITABILITAS PER MENU").font = subtitle_font
 
@@ -467,9 +503,9 @@ def export_excel_report():
         auto_fit_columns(ws_cogs)
 
         # -------------------------------------------------------------
-        # SHEET 4: PEMBELIAN & BIAYA (OPEX)
+        # SHEET 5: PEMBELIAN & BIAYA (OPEX)
         # -------------------------------------------------------------
-        ws_exp = wb.create_sheet(title="4. Biaya & Pembelian")
+        ws_exp = wb.create_sheet(title="5. Biaya & Pembelian")
         ws_exp.cell(row=1, column=1, value="ARUNIKA COFFEE & LOUNGE").font = title_font
         ws_exp.cell(row=2, column=1, value="BIAYA OPERASIONAL & PEMBELIAN BAHAN BAKU").font = subtitle_font
 
@@ -493,9 +529,9 @@ def export_excel_report():
         auto_fit_columns(ws_exp)
 
         # -------------------------------------------------------------
-        # SHEET 5: STOK BAHAN BAKU
+        # SHEET 6: STOK BAHAN BAKU
         # -------------------------------------------------------------
-        ws_inv = wb.create_sheet(title="5. Stok Bahan Baku")
+        ws_inv = wb.create_sheet(title="6. Stok Bahan Baku")
         ws_inv.cell(row=1, column=1, value="ARUNIKA COFFEE & LOUNGE").font = title_font
         ws_inv.cell(row=2, column=1, value="STATUS & TINGKAT PERSEDIAAN BAHAN BAKU").font = subtitle_font
 

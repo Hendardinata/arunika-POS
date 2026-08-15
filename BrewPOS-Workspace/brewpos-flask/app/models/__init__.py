@@ -10,6 +10,7 @@ from app.models.transaction import Transaction, TransactionItem
 from app.models.inventory import InventoryItem, InventoryLog, DailyOpname, DailyOpnameItem
 from app.models.expense import ExpenseCategory, Expense
 from app.models.shift import Shift
+from app.models.attendance import Attendance, ShiftHandover
 from app.models.app_menu import AppMenu, RoleAccess
 from app.models.system_log import SystemLog
 
@@ -34,6 +35,8 @@ __all__ = [
     'ExpenseCategory',
     'Expense',
     'Shift',
+    'Attendance',
+    'ShiftHandover',
     'AppMenu',
     'RoleAccess',
     'SystemLog',
