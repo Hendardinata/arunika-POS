@@ -11,6 +11,9 @@ class Menu(db.Model):
     imageUrl = db.Column(db.String(500), nullable=True)
     categoryId = db.Column(db.Integer, db.ForeignKey('Category.id'), nullable=False)
     recipeNotes = db.Column(db.Text, nullable=True)
+    # Menu yang sudah pernah terjual tidak boleh dihapus; nonaktifkan supaya
+    # hilang dari POS tapi riwayat penjualan & laporan HPP tetap utuh.
+    isActive = db.Column(db.Boolean, nullable=False, default=True)
 
     transactionItems = db.relationship('TransactionItem', backref='menu', lazy=True)
     recipeIngredients = db.relationship('RecipeIngredient', backref='menu', lazy=True, cascade='all, delete-orphan')
@@ -40,6 +43,7 @@ class Menu(db.Model):
             'imageUrl': self.imageUrl,
             'categoryId': self.categoryId,
             'recipeNotes': self.recipeNotes,
+            'isActive': bool(self.isActive) if self.isActive is not None else True,
             'soldCount': sold_count
         }
         if include_category and self.category:

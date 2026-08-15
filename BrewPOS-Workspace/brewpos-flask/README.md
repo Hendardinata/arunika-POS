@@ -73,10 +73,12 @@ password lewat UI tidak akan tertimpa saat server restart.
 
 | Username | Password | Role |
 |---|---|---|
-| `superadmin` | `superadmin123` | SUPERADMIN |
-| `owner` | `owner123` | ADMIN |
-| `headbar` | `headbar123` | HEADBAR |
-| `kasir` | `kasir123` | CASHIER |
+| `superadmin` | `12qwaszx` | SUPERADMIN |
+| `owner` | `12qwaszx` | ADMIN |
+| `headbar` | `12qwaszx` | HEADBAR |
+| `kasir` | `12qwaszx` | CASHIER |
+
+> Ganti password ini sebelum dipakai di lingkungan produksi.
 
 ---
 

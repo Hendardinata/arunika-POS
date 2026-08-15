@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify, g
+from sqlalchemy import func
 from app.extensions import db
+from app.models.expense import Expense
 from app.models.shift import Shift
 from app.models.attendance import ShiftHandover
 from app.models.user import User
@@ -148,7 +150,14 @@ def close_shift():
             if t.paymentMethod == 'CASH':
                 cash_income += t.totalAmount
 
-        expected_ending_cash = shift.startingCash + cash_income
+        # Uang yang diambil dari laci untuk belanja ikut dihitung, kalau tidak
+        # setiap pembelian tunai muncul sebagai "kas kurang" yang palsu.
+        cash_expense = db.session.query(func.coalesce(func.sum(Expense.amount), 0)).filter(
+            Expense.shiftId == shift.id,
+            Expense.paymentSource == 'CASH_DRAWER'
+        ).scalar() or 0
+
+        expected_ending_cash = shift.startingCash + cash_income - int(cash_expense)
 
         shift.status = 'CLOSED'
         shift.endTime = datetime.utcnow()

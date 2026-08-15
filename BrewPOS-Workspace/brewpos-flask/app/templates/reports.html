@@ -283,13 +283,14 @@
                             <th>Tanggal</th>
                             <th>Kategori Biaya</th>
                             <th>Nominal (Rp)</th>
+                            <th>Sumber Dana</th>
                             <th>Keterangan / Keperluan</th>
                             <th>Dicatat Oleh</th>
                             <th>Foto Nota</th>
                         </tr>
                     </thead>
                     <tbody id="purchases-table-body">
-                        <tr><td colspan="6" class="text-center text-muted" style="padding: 30px;">Memuat data pengeluaran...</td></tr>
+                        <tr><td colspan="7" class="text-center text-muted" style="padding: 30px;">Memuat data pengeluaran...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -500,7 +501,7 @@
                 <i class="fas fa-arrow-left"></i> Tutup
             </button>
             <div style="display: flex; gap: 6px;">
-                <button class="btn btn-primary" onclick="printReceipt('report-receipt-body')" title="Cetak ulang struk">
+                <button class="btn btn-primary" onclick="printReceiptSmart('report-receipt-body')" title="Cetak ulang struk">
                     <i class="fas fa-print"></i> Cetak Struk Ulang
                 </button>
             </div>
@@ -784,7 +785,7 @@
     function renderPurchasesTable(expenses) {
         const tbody = document.getElementById('purchases-table-body');
         if (expenses.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada data biaya.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada data biaya.</td></tr>`;
             return;
         }
 
@@ -794,11 +795,14 @@
                 ? `<a href="${e.receiptUrl}" target="_blank" class="badge-chip info"><i class="fas fa-image"></i> Lihat Foto</a>`
                 : '-';
 
+            const fromDrawer = (e.paymentSource || 'CASH_DRAWER') === 'CASH_DRAWER';
+
             return `
                 <tr>
                     <td><strong>${dateStr}</strong></td>
                     <td><span class="badge-chip danger">${e.category ? e.category.name : '-'}</span></td>
                     <td><strong style="color: var(--color-danger); font-size: 0.875rem;">${formatRp(e.amount)}</strong></td>
+                    <td><span class="badge-chip ${fromDrawer ? 'warning' : 'secondary'}" style="font-size: 0.625rem;">${e.paymentSourceLabel || (fromDrawer ? 'Kas Laci' : 'Non-Tunai')}</span></td>
                     <td>${e.notes || '-'}</td>
                     <td>${e.recordedBy ? e.recordedBy.username : 'Staff'}</td>
                     <td>${receiptLink}</td>

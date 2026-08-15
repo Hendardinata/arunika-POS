@@ -45,13 +45,15 @@
                     <th>Waktu / Tanggal</th>
                     <th>Kategori Biaya</th>
                     <th>Jumlah (Rp)</th>
+                    <th>Sumber Dana</th>
                     <th>Keterangan / Keperluan</th>
                     <th>Dicatat Oleh</th>
                     <th>Bukti Nota</th>
+                    <th style="text-align: right;">Aksi</th>
                 </tr>
             </thead>
             <tbody id="expenses-table-body">
-                <tr><td colspan="6" class="text-center text-muted" style="padding: 30px;">Memuat data pengeluaran...</td></tr>
+                <tr><td colspan="8" class="text-center text-muted" style="padding: 30px;">Memuat data pengeluaran...</td></tr>
             </tbody>
         </table>
     </div>
@@ -76,6 +78,17 @@
                 <div class="form-group">
                     <label class="form-label">Nominal Pengeluaran (Rp)</label>
                     <input type="number" id="expense-amount" class="form-control" placeholder="Contoh: 150000" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Sumber Dana</label>
+                    <select id="expense-source" class="form-control">
+                        <option value="CASH_DRAWER">Kas Laci Kasir (uang diambil dari laci)</option>
+                        <option value="OTHER">Non-Tunai / Luar Kas (transfer, rekening pribadi)</option>
+                    </select>
+                    <small class="text-muted" style="font-size: 0.6875rem; margin-top: 4px; display: block;">
+                        Yang diambil dari laci otomatis mengurangi ekspektasi kas saat sesi ditutup.
+                    </small>
                 </div>
 
                 <div class="form-group">
@@ -119,6 +132,7 @@
 <script>
     let expenseCategories = [];
     let currentFilter = 'all';
+    let currentExpenses = [];
 
     document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('expense-date').valueAsDate = new Date();
@@ -158,6 +172,7 @@
     }
 
     function renderExpensesView(expenses) {
+        currentExpenses = expenses;
         const tbody = document.getElementById('expenses-table-body');
         const total = expenses.reduce((sum, it) => sum + it.amount, 0);
         document.getElementById('total-expense-display').textContent = formatRp(total);
@@ -178,33 +193,78 @@
         `).join('');
 
         if (expenses.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada catatan pengeluaran.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">Belum ada catatan pengeluaran.</td></tr>`;
             return;
         }
 
         tbody.innerHTML = expenses.map(e => {
             const dateStr = new Date(e.date).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' });
-            const receiptBtn = e.receiptUrl 
+            const receiptBtn = e.receiptUrl
                 ? `<button class="btn btn-secondary btn-sm" onclick="viewReceiptPhoto('${e.receiptUrl}')"><i class="fas fa-image text-primary"></i> Lihat Foto</button>`
                 : `<span class="text-muted" style="font-size: 0.7188rem;">-</span>`;
+            const fromDrawer = (e.paymentSource || 'CASH_DRAWER') === 'CASH_DRAWER';
+            const sourceChip = `<span class="badge-chip ${fromDrawer ? 'warning' : 'secondary'}" style="font-size: 0.625rem;">
+                    <i class="fas ${fromDrawer ? 'fa-cash-register' : 'fa-building-columns'}"></i> ${e.paymentSourceLabel || (fromDrawer ? 'Kas Laci' : 'Non-Tunai')}
+                </span>`;
 
             return `
                 <tr>
                     <td><strong>${dateStr}</strong></td>
                     <td><span class="badge-chip danger">${e.category ? e.category.name : '-'}</span></td>
                     <td><strong style="color: var(--color-danger); font-size: 0.875rem;">${formatRp(e.amount)}</strong></td>
+                    <td>${sourceChip}</td>
                     <td>${e.notes || '-'}</td>
-                    <td>${e.user ? e.user.username : 'Staff'}</td>
+                    <td>${e.recordedBy ? e.recordedBy.username : 'Staff'}</td>
                     <td>${receiptBtn}</td>
+                    <td style="text-align: right; white-space: nowrap;">
+                        <button class="btn btn-secondary btn-sm" onclick="editExpense(${e.id})" title="Koreksi pengeluaran">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-secondary btn-sm text-danger" onclick="deleteExpense(${e.id}, ${e.amount})" title="Hapus pengeluaran">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
                 </tr>
             `;
         }).join('');
     }
 
+    let editingExpenseId = null;
+
     function openExpenseModal() {
+        editingExpenseId = null;
         document.getElementById('expense-form').reset();
         document.getElementById('expense-date').valueAsDate = new Date();
+        document.querySelector('#modal-expense .modal-title').textContent = 'Catat Pengeluaran Baru';
+        document.getElementById('btn-save-expense').textContent = 'Simpan Pengeluaran';
         openModal('modal-expense');
+    }
+
+    function editExpense(id) {
+        const exp = currentExpenses.find(x => x.id === id);
+        if (!exp) return;
+
+        editingExpenseId = id;
+        document.getElementById('expense-form').reset();
+        document.getElementById('expense-category').value = exp.categoryId;
+        document.getElementById('expense-amount').value = exp.amount;
+        document.getElementById('expense-source').value = exp.paymentSource || 'CASH_DRAWER';
+        document.getElementById('expense-date').value = (exp.date || '').slice(0, 10);
+        document.getElementById('expense-notes').value = exp.notes || '';
+        document.querySelector('#modal-expense .modal-title').textContent = 'Koreksi Pengeluaran';
+        document.getElementById('btn-save-expense').textContent = 'Simpan Perubahan';
+        openModal('modal-expense');
+    }
+
+    async function deleteExpense(id, amount) {
+        if (!confirm(`Hapus catatan pengeluaran ${formatRp(amount)}? Laporan laba rugi ikut berubah.`)) return;
+        try {
+            await apiFetch(`/expenses/${id}`, { method: 'DELETE' });
+            showToast('Pengeluaran dihapus', 'success');
+            loadExpenses(currentFilter);
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
     }
 
     async function saveExpense(e) {
@@ -217,13 +277,19 @@
         formData.append('amount', document.getElementById('expense-amount').value);
         formData.append('date', document.getElementById('expense-date').value);
         formData.append('notes', document.getElementById('expense-notes').value);
+        formData.append('paymentSource', document.getElementById('expense-source').value);
 
         const receipt = document.getElementById('expense-receipt').files[0];
         if (receipt) formData.append('receipt', receipt);
 
         try {
-            await apiFetch('/expenses', { method: 'POST', body: formData });
-            showToast('Pengeluaran berhasil dicatat!', 'success');
+            if (editingExpenseId) {
+                await apiFetch(`/expenses/${editingExpenseId}`, { method: 'PUT', body: formData });
+                showToast('Pengeluaran berhasil diperbarui!', 'success');
+            } else {
+                await apiFetch('/expenses', { method: 'POST', body: formData });
+                showToast('Pengeluaran berhasil dicatat!', 'success');
+            }
             closeModal('modal-expense');
             loadExpenses(currentFilter);
         } catch (err) {

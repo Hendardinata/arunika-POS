@@ -110,6 +110,14 @@ def auto_sync_schema(app):
         ("Shift", "closedBy", "INT NULL"),
         ("Shift", "currentUserId", "INT NULL"),
         ("Shift", "closingNote", "NVARCHAR(MAX) NULL"),
+        # Arsip: menu/bahan yang sudah terpakai di transaksi tidak boleh dihapus
+        # (riwayat penjualan & HPP ikut hilang), jadi dinonaktifkan saja.
+        ("Menu", "isActive", "BIT NOT NULL DEFAULT 1"),
+        ("InventoryItem", "isActive", "BIT NOT NULL DEFAULT 1"),
+        # Sumber dana pengeluaran: yang diambil dari laci harus ikut mengurangi
+        # ekspektasi kas saat sesi ditutup.
+        ("Expense", "paymentSource", "NVARCHAR(20) NOT NULL DEFAULT 'CASH_DRAWER'"),
+        ("Expense", "shiftId", "INT NULL"),
     ]
 
     # Backfill for the shift rework. Safe to re-run: every statement is scoped to

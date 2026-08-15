@@ -810,6 +810,17 @@ body {
   transform: scale(1);
 }
 
+/* Banyak modal membungkus body+footer dalam <form>. Tanpa aturan ini form
+   tersebut jadi flex item biasa dengan min-height:auto, menolak menyusut, dan
+   footernya (tombol Simpan) terdorong keluar layar di HP. */
+.modal-dialog > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .modal-header {
   padding: 18px 24px;
   display: flex;
@@ -846,8 +857,12 @@ body {
   padding: 20px 24px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  /* Tinggi body mengikuti sisa ruang dialog, bukan hasil calc() yang menebak
+     tinggi header+footer. Tebakan itu meleset begitu footer menumpuk dua
+     tombol di HP, dan tombol Simpan terdorong keluar layar. min-height:0
+     wajib supaya flex item ini boleh menyusut dan menggulung isinya. */
   flex: 1 1 auto;
-  max-height: calc(90vh - 130px);
+  min-height: 0;
 }
 
 .modal-footer {
@@ -1758,7 +1773,6 @@ body {
 
   .modal-body {
     padding: 12px !important;
-    max-height: calc(94vh - 110px) !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
   }
@@ -1891,10 +1905,6 @@ body.scroll-locked {
     max-height: 90dvh;
   }
 
-  .modal-body {
-    max-height: calc(90dvh - 120px);
-  }
-
   /* Tabel lebar (laporan sesi kas punya 11 kolom) tidak boleh digencet sampai
      tiap kata pecah per huruf. Biarkan menggeser horizontal dengan header lengket. */
   .table-responsive {
@@ -1904,6 +1914,17 @@ body.scroll-locked {
 
   .table-responsive .custom-table {
     min-width: 680px;
+  }
+
+  /* Wajib bersamaan dengan min-width tabel di atas. Item grid/flex punya
+     min-width:auto, jadi tabel selebar 680px membuat kartu induknya menolak
+     menyusut dan seluruh halaman meluber keluar layar (halaman Pengaturan
+     paling terasa). min-width:0 mengembalikan hak menyusut, dan tabelnya
+     tetap bisa digeser di dalam .table-responsive. */
+  .content-area .card,
+  .content-area .table-responsive,
+  .content-area [style*="display: grid"] > * {
+    min-width: 0;
   }
 
   .custom-table th,
@@ -2146,15 +2167,46 @@ body.scroll-locked {
     gap: 10px;
   }
 
-  .card-header > .btn,
-  .card-header > div > .btn {
+  /* Judul dan grup tombol masing-masing satu baris penuh, tapi tombolnya
+     dibiarkan membungkus dan berbagi lebar. Memaksa tiap tombol 100% membuat
+     baris filter (Pengeluaran, Monitoring) meluber keluar layar. */
+  .card-header > * {
     width: 100%;
+  }
+
+  .card-header > div {
+    flex-wrap: wrap;
+  }
+
+  .card-header .btn {
+    flex: 1 1 auto;
+  }
+
+  /* Baris flex horizontal yang sengaja ditumpuk di layar sempit */
+  .stack-on-mobile {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 10px !important;
+  }
+
+  .stack-on-mobile > * {
+    margin-left: 0 !important;
+    width: 100%;
+  }
+
+  /* Grup tombol di dalamnya membungkus, tidak memanjang keluar layar */
+  .stack-on-mobile > div {
+    flex-wrap: wrap;
+  }
+
+  .stack-on-mobile .btn {
+    flex: 1 1 auto;
   }
 
   /* Baris filter periode / aksi laporan: geser horizontal daripada menumpuk */
   .filter-period-btn,
   .filter-exp-btn {
-    flex: 0 0 auto;
+    flex: 1 1 auto;
   }
 
   /* Toolbar aksi laporan (Excel/PDF) menumpuk penuh supaya tidak terpotong */

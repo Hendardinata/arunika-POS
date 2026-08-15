@@ -4,30 +4,34 @@ from app.extensions import db
 from app.models.user import User
 from app.models.app_menu import AppMenu, RoleAccess
 
+# Satu akun per hak akses. assignedShift sudah tidak dipakai (tidak ada shift
+# tetap; kasir mana pun ikut sesi kas toko yang sedang terbuka).
+DEFAULT_PASSWORD = '12qwaszx'
+
 DEFAULT_USERS = [
     {
         'username': 'superadmin',
-        'password': 'superadmin123',
+        'password': DEFAULT_PASSWORD,
         'role': 'SUPERADMIN',
         'assignedShift': None
     },
     {
         'username': 'owner',
-        'password': 'owner123',
+        'password': DEFAULT_PASSWORD,
         'role': 'ADMIN',
         'assignedShift': None
     },
     {
         'username': 'headbar',
-        'password': 'headbar123',
+        'password': DEFAULT_PASSWORD,
         'role': 'HEADBAR',
-        'assignedShift': 'MORNING'
+        'assignedShift': None
     },
     {
         'username': 'kasir',
-        'password': 'kasir123',
+        'password': DEFAULT_PASSWORD,
         'role': 'CASHIER',
-        'assignedShift': 'MORNING'
+        'assignedShift': None
     }
 ]
 

@@ -25,7 +25,11 @@ def _save_upload_file(file, prefix='inv'):
 @inventory_bp.route('', methods=['GET'])
 def get_inventory():
     try:
-        items = InventoryItem.query.all()
+        query = InventoryItem.query
+        if request.args.get('activeOnly') in ('1', 'true'):
+            # MSSQL menolak "IS 1" yang dihasilkan is_(True); pakai perbandingan biasa.
+            query = query.filter(InventoryItem.isActive == True)  # noqa: E712
+        items = query.all()
         res = []
         for i in items:
             d = i.to_dict()
@@ -106,6 +110,7 @@ def update_inventory_item(id):
             if 'imageUrl' in data: item.imageUrl = data['imageUrl']
             if 'minStock' in data and hasattr(item, 'minStock'):
                 item.minStock = float(data['minStock'])
+            if 'isActive' in data: item.isActive = bool(data['isActive'])
         else:
             if 'name' in request.form: item.name = request.form['name']
             if 'unit' in request.form: item.unit = request.form['unit']
@@ -123,6 +128,49 @@ def update_inventory_item(id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Failed to update inventory item'}), 500
+
+
+@inventory_bp.route('/<int:id>', methods=['DELETE'])
+def delete_inventory_item(id):
+    """
+    Hapus bahan hanya kalau benar-benar belum meninggalkan jejak. Begitu ada
+    mutasi stok, resep, atau opname, menghapusnya akan merusak riwayat HPP —
+    arahkan ke arsip (isActive=false).
+    """
+    try:
+        item = InventoryItem.query.get(id)
+        if not item:
+            return jsonify({'error': 'Bahan tidak ditemukan'}), 404
+
+        from app.models.menu import RecipeIngredient
+        recipe_count = RecipeIngredient.query.filter_by(inventoryItemId=id).count()
+        log_count = InventoryLog.query.filter_by(itemId=id).count()
+        opname_count = DailyOpnameItem.query.filter_by(inventoryItemId=id).count()
+
+        if recipe_count or log_count or opname_count:
+            reasons = []
+            if recipe_count: reasons.append(f'dipakai di {recipe_count} resep menu')
+            if log_count: reasons.append(f'punya {log_count} riwayat mutasi stok')
+            if opname_count: reasons.append(f'tercatat di {opname_count} opname')
+            return jsonify({
+                'error': f'Bahan "{item.name}" ' + ', '.join(reasons) +
+                         '. Menghapusnya akan merusak riwayat HPP. Arsipkan saja.',
+                'canArchive': True,
+                'itemId': item.id
+            }), 400
+
+        name = item.name
+        db.session.delete(item)
+        db.session.commit()
+
+        user_id = get_current_user_id()
+        log_activity('DELETE_INVENTORY', int(user_id) if user_id else None,
+                     f"Menghapus bahan: {name}", 'InventoryItem', id)
+        return '', 204
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting inventory item: {e}")
+        return jsonify({'error': 'Gagal menghapus bahan'}), 500
 
 
 @inventory_bp.route('/<int:id>/adjust', methods=['PUT'])

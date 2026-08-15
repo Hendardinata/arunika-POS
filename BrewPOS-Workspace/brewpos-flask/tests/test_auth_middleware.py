@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 
 import jwt
 
+from conftest import SEED_PASSWORD
+
 
 def test_api_requires_token(client):
     res = client.get('/api/settings')
@@ -16,7 +18,7 @@ def test_api_accepts_valid_token(client, admin_headers):
 
 
 def test_login_stays_public(client):
-    res = client.post('/api/auth/login', json={'username': 'kasir', 'password': 'kasir123'})
+    res = client.post('/api/auth/login', json={'username': 'kasir', 'password': SEED_PASSWORD})
     assert res.status_code == 200
     assert res.get_json()['token']
 

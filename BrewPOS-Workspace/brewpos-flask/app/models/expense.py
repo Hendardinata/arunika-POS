@@ -28,6 +28,10 @@ class Expense(db.Model):
     categoryId = db.Column(db.Integer, db.ForeignKey('ExpenseCategory.id'), nullable=False)
     userId = db.Column(db.Integer, db.ForeignKey('User.id'), nullable=False)
     receiptUrl = db.Column(db.String(500), nullable=True)
+    # CASH_DRAWER = uang diambil dari laci kasir (mengurangi ekspektasi kas saat
+    # tutup sesi), OTHER = transfer/rekening pribadi/kartu (tidak menyentuh laci).
+    paymentSource = db.Column(db.String(20), nullable=False, default='CASH_DRAWER')
+    shiftId = db.Column(db.Integer, db.ForeignKey('Shift.id'), nullable=True)
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updatedAt = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -40,6 +44,9 @@ class Expense(db.Model):
             'categoryId': self.categoryId,
             'userId': self.userId,
             'receiptUrl': self.receiptUrl,
+            'paymentSource': self.paymentSource or 'CASH_DRAWER',
+            'paymentSourceLabel': 'Kas Laci' if (self.paymentSource or 'CASH_DRAWER') == 'CASH_DRAWER' else 'Non-Tunai / Luar Kas',
+            'shiftId': self.shiftId,
             'createdAt': self.createdAt.isoformat() if self.createdAt else None,
             'updatedAt': self.updatedAt.isoformat() if self.updatedAt else None,
             'category': self.category.to_dict() if self.category else None,

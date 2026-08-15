@@ -6,6 +6,7 @@ from werkzeug.utils import secure_filename
 from sqlalchemy import func
 from app.extensions import db
 from app.models.expense import Expense, ExpenseCategory
+from app.middleware.auth import get_current_user_id, is_supervisor
 from app.services.system_logger import log_activity
 
 expenses_bp = Blueprint('expenses', __name__, url_prefix='/api/expenses')
@@ -64,6 +65,58 @@ def create_expense_category():
 
 # --- EXPENSES ---
 
+@expenses_bp.route('/categories/<int:id>', methods=['PUT'])
+def update_expense_category(id):
+    try:
+        category = ExpenseCategory.query.get(id)
+        if not category:
+            return jsonify({'error': 'Kategori tidak ditemukan'}), 404
+
+        data = request.get_json() or {}
+        name = (data.get('name') or '').strip()
+        if not name:
+            return jsonify({'error': 'Nama kategori wajib diisi'}), 400
+
+        clash = ExpenseCategory.query.filter(ExpenseCategory.name == name,
+                                             ExpenseCategory.id != id).first()
+        if clash:
+            return jsonify({'error': f'Kategori "{name}" sudah ada'}), 409
+
+        category.name = name
+        if 'description' in data:
+            category.description = data.get('description')
+        db.session.commit()
+        return jsonify(category.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error updating expense category: {e}")
+        return jsonify({'error': 'Gagal memperbarui kategori'}), 500
+
+
+@expenses_bp.route('/categories/<int:id>', methods=['DELETE'])
+def delete_expense_category(id):
+    """Kategori yang sudah dipakai tidak dihapus supaya rincian biaya lama tetap terbaca."""
+    try:
+        category = ExpenseCategory.query.get(id)
+        if not category:
+            return jsonify({'error': 'Kategori tidak ditemukan'}), 404
+
+        used = Expense.query.filter_by(categoryId=id).count()
+        if used:
+            return jsonify({
+                'error': f'Kategori "{category.name}" sudah dipakai {used} pengeluaran, '
+                         'jadi tidak bisa dihapus. Ubah namanya saja bila perlu.'
+            }), 400
+
+        db.session.delete(category)
+        db.session.commit()
+        return '', 204
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting expense category: {e}")
+        return jsonify({'error': 'Gagal menghapus kategori'}), 500
+
+
 @expenses_bp.route('', methods=['GET'])
 def get_expenses():
     try:
@@ -116,45 +169,160 @@ def get_expenses_summary():
         return jsonify({'error': 'Failed to fetch expense summary'}), 500
 
 
+def _read_expense_payload():
+    """Baca field dari JSON maupun FormData (halaman mengirim FormData karena ada foto nota)."""
+    src = request.get_json() or {} if request.is_json else request.form
+    receipt_url = src.get('receiptUrl')
+    if not request.is_json and 'receipt' in request.files:
+        uploaded = _save_receipt_file(request.files['receipt'])
+        if uploaded:
+            receipt_url = uploaded
+    return {
+        'amount': src.get('amount'),
+        'date': src.get('date'),
+        'notes': src.get('notes'),
+        'categoryId': src.get('categoryId'),
+        'paymentSource': src.get('paymentSource'),
+        'receiptUrl': receipt_url,
+    }
+
+
+def _validate_expense(payload, partial=False):
+    """Returns (cleaned, error). error = (message, status)."""
+    cleaned = {}
+
+    if payload.get('amount') is not None or not partial:
+        try:
+            amount = int(payload.get('amount') or 0)
+        except (TypeError, ValueError):
+            return None, ('Nominal pengeluaran harus berupa angka', 400)
+        if amount <= 0:
+            return None, ('Nominal pengeluaran harus lebih dari 0', 400)
+        cleaned['amount'] = amount
+
+    if payload.get('categoryId') is not None or not partial:
+        try:
+            category_id = int(payload.get('categoryId') or 0)
+        except (TypeError, ValueError):
+            return None, ('Kategori biaya tidak valid', 400)
+        if not ExpenseCategory.query.get(category_id):
+            return None, ('Kategori biaya tidak ditemukan', 400)
+        cleaned['categoryId'] = category_id
+
+    if payload.get('date'):
+        try:
+            cleaned['date'] = datetime.fromisoformat(str(payload['date']).replace('Z', '+00:00'))
+        except ValueError:
+            return None, ('Format tanggal tidak valid', 400)
+    elif not partial:
+        cleaned['date'] = datetime.utcnow()
+
+    source = (payload.get('paymentSource') or '').upper()
+    if source:
+        if source not in ('CASH_DRAWER', 'OTHER'):
+            return None, ('Sumber dana tidak dikenal', 400)
+        cleaned['paymentSource'] = source
+    elif not partial:
+        cleaned['paymentSource'] = 'CASH_DRAWER'
+
+    if 'notes' in payload:
+        cleaned['notes'] = payload.get('notes')
+    if payload.get('receiptUrl') is not None:
+        cleaned['receiptUrl'] = payload.get('receiptUrl')
+
+    return cleaned, None
+
+
 @expenses_bp.route('', methods=['POST'])
 def create_expense():
     try:
-        if request.is_json:
-            data = request.get_json() or {}
-            amount = int(data.get('amount', 0))
-            date_str = data.get('date')
-            notes = data.get('notes')
-            category_id = int(data.get('categoryId', 0))
-            user_id = int(data.get('userId', 0))
-            receipt_url = data.get('receiptUrl')
-        else:
-            amount = int(request.form.get('amount', 0))
-            date_str = request.form.get('date')
-            notes = request.form.get('notes')
-            category_id = int(request.form.get('categoryId', 0))
-            user_id = int(request.form.get('userId', 0))
-            receipt_url = request.form.get('receiptUrl')
-            if 'receipt' in request.files:
-                receipt_url = _save_receipt_file(request.files['receipt'])
+        # Pencatat diambil dari token, bukan dari payload. Sebelumnya userId dibaca
+        # dari body; halaman tidak pernah mengirimnya sehingga selalu 0 dan setiap
+        # pencatatan pengeluaran gagal karena melanggar foreign key.
+        user_id = get_current_user_id()
+        if not user_id:
+            return jsonify({'error': 'Sesi tidak valid, silakan login ulang'}), 401
 
-        date_val = datetime.fromisoformat(date_str.replace('Z', '+00:00')) if date_str else datetime.utcnow()
+        cleaned, err = _validate_expense(_read_expense_payload())
+        if err:
+            return jsonify({'error': err[0]}), err[1]
 
-        expense = Expense(
-            amount=amount,
-            date=date_val,
-            notes=notes,
-            categoryId=category_id,
-            userId=user_id,
-            receiptUrl=receipt_url
-        )
+        expense = Expense(userId=int(user_id), **cleaned)
+
+        # Pengeluaran tunai diikat ke sesi kas yang sedang terbuka supaya
+        # rekonsiliasi laci ikut memperhitungkan uang yang keluar.
+        if expense.paymentSource == 'CASH_DRAWER':
+            from app.routes.checkout import _get_open_shift
+            open_shift = _get_open_shift()
+            if open_shift:
+                expense.shiftId = open_shift.id
+
         db.session.add(expense)
         db.session.commit()
+
+        log_activity('CREATE_EXPENSE', int(user_id),
+                     f"Mencatat pengeluaran Rp {expense.amount:,}".replace(',', '.'),
+                     'Expense', expense.id)
 
         return jsonify(expense.to_dict()), 201
     except Exception as e:
         db.session.rollback()
         print(f"Error creating expense: {e}")
-        return jsonify({'error': 'Failed to create expense', 'details': str(e)}), 500
+        return jsonify({'error': 'Gagal menyimpan pengeluaran', 'details': str(e)}), 500
+
+
+@expenses_bp.route('/<int:id>', methods=['PUT'])
+def update_expense(id):
+    """Koreksi pengeluaran yang salah input (nominal, kategori, tanggal, catatan)."""
+    try:
+        expense = Expense.query.get(id)
+        if not expense:
+            return jsonify({'error': 'Pengeluaran tidak ditemukan'}), 404
+
+        user_id = get_current_user_id()
+        if not user_id:
+            return jsonify({'error': 'Sesi tidak valid, silakan login ulang'}), 401
+
+        cleaned, err = _validate_expense(_read_expense_payload(), partial=True)
+        if err:
+            return jsonify({'error': err[0]}), err[1]
+
+        for field, value in cleaned.items():
+            setattr(expense, field, value)
+
+        db.session.commit()
+        log_activity('UPDATE_EXPENSE', int(user_id),
+                     f"Mengubah pengeluaran #{expense.id}", 'Expense', expense.id)
+        return jsonify(expense.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error updating expense: {e}")
+        return jsonify({'error': 'Gagal memperbarui pengeluaran'}), 500
+
+
+@expenses_bp.route('/<int:id>', methods=['DELETE'])
+def delete_expense(id):
+    """Hapus catatan pengeluaran. Dibatasi HEADBAR ke atas karena mengubah laba rugi."""
+    try:
+        expense = Expense.query.get(id)
+        if not expense:
+            return jsonify({'error': 'Pengeluaran tidak ditemukan'}), 404
+
+        if not is_supervisor():
+            return jsonify({'error': 'Hanya Head Barista ke atas yang boleh menghapus pengeluaran'}), 403
+
+        user_id = get_current_user_id()
+        amount = expense.amount
+        db.session.delete(expense)
+        db.session.commit()
+
+        log_activity('DELETE_EXPENSE', int(user_id) if user_id else None,
+                     f"Menghapus pengeluaran Rp {amount:,}".replace(',', '.'), 'Expense', id)
+        return '', 204
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting expense: {e}")
+        return jsonify({'error': 'Gagal menghapus pengeluaran'}), 500
 
 
 @expenses_bp.route('/seed-categories', methods=['POST'])

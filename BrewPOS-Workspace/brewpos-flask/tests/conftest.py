@@ -78,6 +78,10 @@ def client(app):
     return app.test_client()
 
 
+# Seluruh akun bawaan memakai password yang sama (lihat DEFAULT_PASSWORD di db_seeder)
+SEED_PASSWORD = '12qwaszx'
+
+
 def _login(client, username, password):
     res = client.post('/api/auth/login', json={'username': username, 'password': password})
     assert res.status_code == 200, res.get_json()
@@ -87,18 +91,18 @@ def _login(client, username, password):
 @pytest.fixture
 def admin_headers(client):
     """SUPERADMIN — above the HEADBAR threshold, may discount and void."""
-    return _login(client, 'superadmin', 'superadmin123')
+    return _login(client, 'superadmin', SEED_PASSWORD)
 
 
 @pytest.fixture
 def headbar_headers(client):
-    return _login(client, 'headbar', 'headbar123')
+    return _login(client, 'headbar', SEED_PASSWORD)
 
 
 @pytest.fixture
 def cashier_headers(client):
     """CASHIER — below the supervisor threshold."""
-    return _login(client, 'kasir', 'kasir123')
+    return _login(client, 'kasir', SEED_PASSWORD)
 
 
 @pytest.fixture

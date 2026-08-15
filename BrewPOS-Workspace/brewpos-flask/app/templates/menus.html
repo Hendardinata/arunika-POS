@@ -250,11 +250,14 @@
                 ? `<img src="${m.imageUrl}" style="width: 36px; height: 36px; border-radius: var(--radius-xs); object-fit: cover;">`
                 : `<div style="width: 36px; height: 36px; border-radius: var(--radius-xs); background: var(--color-primary-light); color: var(--color-primary); display: flex; align-items: center; justify-content: center; font-size: 0.875rem;"><i class="fas fa-mug-hot"></i></div>`;
 
+            const isArchived = m.isActive === false;
+
             return `
-                <tr>
+                <tr${isArchived ? ' style="opacity: 0.55;"' : ''}>
                     <td>${imgTag}</td>
                     <td>
                         <strong style="color: var(--text-main);">${m.name}</strong>
+                        ${isArchived ? '<span class="badge-chip danger" style="font-size: 0.5938rem; margin-left: 6px;">NONAKTIF</span>' : ''}
                         ${m.description ? `<div style="font-size: 0.6875rem; color: var(--text-muted);">${m.description}</div>` : ''}
                     </td>
                     <td><span class="badge-chip primary">${m.category ? m.category.name : '-'}</span></td>
@@ -272,6 +275,10 @@
                     </td>
                     <td style="text-align: right;">
                         <button class="btn btn-secondary btn-sm" onclick="editMenu(${m.id})" title="Edit Menu"><i class="fas fa-edit"></i></button>
+                        <button class="btn btn-secondary btn-sm" onclick="toggleMenuActive(${m.id}, ${m.isActive === false ? 'false' : 'true'}, '${m.name.replace(/'/g, "\\'")}')"
+                                title="${m.isActive === false ? 'Aktifkan kembali' : 'Nonaktifkan (sembunyikan dari POS)'}">
+                            <i class="fas ${m.isActive === false ? 'fa-eye text-success' : 'fa-eye-slash text-secondary'}"></i>
+                        </button>
                         <button class="btn btn-secondary btn-sm text-danger" onclick="deleteMenu(${m.id}, '${m.name.replace(/'/g, "\\'")}')" title="Hapus"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>
@@ -354,6 +361,30 @@
         try {
             await apiFetch(`/menus/${id}`, { method: 'DELETE' });
             showToast('Menu berhasil dihapus', 'success');
+            loadData();
+        } catch (err) {
+            // Menu yang sudah terjual tidak bisa dihapus; tawarkan arsip langsung
+            // supaya kasir tidak mentok pada pesan error tanpa jalan keluar.
+            if (err.data && err.data.canArchive) {
+                if (confirm(`${err.message}\n\nNonaktifkan sekarang?`)) {
+                    await toggleMenuActive(id, true, name, true);
+                }
+                return;
+            }
+            showToast(err.message, 'error');
+        }
+    }
+
+    async function toggleMenuActive(id, isCurrentlyActive, name, skipConfirm = false) {
+        const willDisable = isCurrentlyActive;
+        if (!skipConfirm && willDisable &&
+            !confirm(`Nonaktifkan "${name}"? Menu akan hilang dari POS, tapi riwayat penjualannya tetap tersimpan.`)) return;
+        try {
+            await apiFetch(`/menus/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ isActive: !willDisable })
+            });
+            showToast(willDisable ? `"${name}" dinonaktifkan` : `"${name}" diaktifkan kembali`, 'success');
             loadData();
         } catch (err) {
             showToast(err.message, 'error');

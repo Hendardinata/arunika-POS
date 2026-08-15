@@ -273,7 +273,7 @@
                 <i class="fas fa-arrow-left"></i> Selesai
             </button>
             <div style="display: flex; gap: 6px;">
-                <button class="btn btn-primary" onclick="printReceipt('receipt-modal-body')" title="Cetak otomatis sesuai printer kasir">
+                <button class="btn btn-primary" onclick="printReceiptSmart('receipt-modal-body')" title="Cetak ke printer thermal; kalau tidak ada, buka dialog cetak">
                     <i class="fas fa-print"></i> Cetak Struk
                 </button>
             </div>
@@ -416,7 +416,8 @@
 
     async function loadMenus() {
         try {
-            const data = await apiFetch('/menus');
+            // Menu yang diarsipkan tidak boleh muncul di katalog kasir
+            const data = await apiFetch('/menus?activeOnly=1');
             allMenus = data;
             renderMenus();
         } catch (e) {

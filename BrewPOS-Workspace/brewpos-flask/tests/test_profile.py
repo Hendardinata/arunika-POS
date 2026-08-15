@@ -1,4 +1,5 @@
 """Self-service profile: reading your own account and rotating your own password."""
+from conftest import SEED_PASSWORD
 
 
 def _login(client, username, password):
@@ -27,11 +28,11 @@ def test_me_landing_page_follows_role(client, admin_headers, headbar_headers):
 def test_cashier_can_change_own_password(client, cashier_headers):
     """PUT /users/<id> is admin-gated, so this is the only route a cashier has."""
     res = client.put('/api/auth/me/password',
-                     json={'currentPassword': 'kasir123', 'newPassword': 'rahasia456'},
+                     json={'currentPassword': SEED_PASSWORD, 'newPassword': 'rahasia456'},
                      headers=cashier_headers)
     assert res.status_code == 200, res.get_json()
 
-    assert _login(client, 'kasir', 'kasir123').status_code == 401
+    assert _login(client, 'kasir', SEED_PASSWORD).status_code == 401
     assert _login(client, 'kasir', 'rahasia456').status_code == 200
 
 
@@ -42,27 +43,27 @@ def test_wrong_current_password_is_refused(client, cashier_headers):
     assert res.status_code == 401
 
     # The old password must still work: nothing was changed
-    assert _login(client, 'kasir', 'kasir123').status_code == 200
+    assert _login(client, 'kasir', SEED_PASSWORD).status_code == 200
 
 
 def test_short_new_password_is_refused(client, cashier_headers):
     res = client.put('/api/auth/me/password',
-                     json={'currentPassword': 'kasir123', 'newPassword': 'abc'},
+                     json={'currentPassword': SEED_PASSWORD, 'newPassword': 'abc'},
                      headers=cashier_headers)
     assert res.status_code == 400
-    assert _login(client, 'kasir', 'kasir123').status_code == 200
+    assert _login(client, 'kasir', SEED_PASSWORD).status_code == 200
 
 
 def test_reusing_the_same_password_is_refused(client, cashier_headers):
     res = client.put('/api/auth/me/password',
-                     json={'currentPassword': 'kasir123', 'newPassword': 'kasir123'},
+                     json={'currentPassword': SEED_PASSWORD, 'newPassword': SEED_PASSWORD},
                      headers=cashier_headers)
     assert res.status_code == 400
 
 
 def test_password_change_needs_a_token(client):
     res = client.put('/api/auth/me/password',
-                     json={'currentPassword': 'kasir123', 'newPassword': 'rahasia456'})
+                     json={'currentPassword': SEED_PASSWORD, 'newPassword': 'rahasia456'})
     assert res.status_code == 401
 
 

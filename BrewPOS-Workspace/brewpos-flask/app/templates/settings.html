@@ -79,9 +79,31 @@
                 </div>
 
                 <div class="form-group">
+                    <label class="form-label">Potong Kertas Otomatis</label>
+                    <select id="cfg-auto-cut" class="form-control">
+                        <option value="1">Ya, printer punya auto-cutter</option>
+                        <option value="0">Tidak, sobek manual</option>
+                    </select>
+                    <small class="text-muted" style="font-size: 0.6875rem;">Banyak printer 58mm portabel tidak punya pemotong. Pilih "Tidak" bila kertas tidak terpotong sendiri.</small>
+                </div>
+
+                <div class="form-group">
                     <label class="form-label">Masa Kedaluwarsa Poin (Hari)</label>
                     <input type="number" id="cfg-expiry" class="form-control" placeholder="90" required>
                 </div>
+            </div>
+
+            <div style="background: #FAF8F5; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 12px;">
+                <div style="font-size: 0.8125rem; font-weight: 700; margin-bottom: 4px;">
+                    <i class="fas fa-print text-primary"></i> Tes Cetak Printer Thermal
+                </div>
+                <p style="font-size: 0.6875rem; color: var(--text-muted); margin-bottom: 10px;">
+                    Mencetak contoh struk berisi penggaris kolom. Kalau penggaris terpotong, ubah format kertas di atas.
+                </p>
+                <div id="printer-bridge-status" style="font-size: 0.7188rem; margin-bottom: 8px;"></div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="runTestPrint()" style="width: 100%;">
+                    <i class="fas fa-receipt"></i> Cetak Struk Uji
+                </button>
             </div>
 
             <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px;" id="btn-save-settings">
@@ -274,9 +296,36 @@
             document.getElementById('cfg-expiry').value = map['POINT_EXPIRATION_DAYS'] || '90';
             document.getElementById('cfg-paper-size').value = map['RECEIPT_PAPER_SIZE'] || '58mm';
             document.getElementById('cfg-print-scale').value = map['RECEIPT_PRINT_SCALE'] || '100';
+            document.getElementById('cfg-auto-cut').value = map['RECEIPT_AUTO_CUT'] || '1';
+            renderPrinterBridgeStatus();
         } catch (e) {
             showToast('Gagal memuat pengaturan: ' + e.message, 'error');
         }
+    }
+
+    /* Jembatan printer hanya ada di dalam aplikasi Android; di browser biasa
+       tombol tes tetap berguna sebagai pratinjau lewat dialog cetak. */
+    function renderPrinterBridgeStatus() {
+        const el = document.getElementById('printer-bridge-status');
+        if (!el) return;
+        const ready = (typeof EscPos !== 'undefined') && EscPos.hasBridge();
+        el.innerHTML = ready
+            ? '<span class="badge-chip success"><i class="fas fa-link"></i> Printer thermal terhubung</span>'
+            : '<span class="badge-chip warning"><i class="fas fa-link-slash"></i> Aplikasi printer tidak terdeteksi</span>'
+              + ' <span class="text-muted">&mdash; struk akan dibuka lewat dialog cetak biasa</span>';
+    }
+
+    async function runTestPrint() {
+        const settings = await getStoreSettings();
+        const cols = document.getElementById('cfg-paper-size').value.startsWith('80') ? 48 : 32;
+        const cut = document.getElementById('cfg-auto-cut').value !== '0';
+
+        if (typeof EscPos !== 'undefined' && EscPos.hasBridge()) {
+            EscPos.sendToBridge(EscPos.buildTestReceipt(settings, { cols, cut }));
+            showToast('Struk uji dikirim ke printer', 'success');
+            return;
+        }
+        showToast('Aplikasi printer tidak terdeteksi. Buka lewat aplikasi kasir untuk mencetak ke printer Bluetooth.', 'warning');
     }
 
     async function saveSystemSettings(e) {
@@ -297,7 +346,8 @@
             { key: 'EMPLOYEE_DAILY_QUOTA', value: document.getElementById('cfg-employee-quota').value },
             { key: 'POINT_EXPIRATION_DAYS', value: document.getElementById('cfg-expiry').value },
             { key: 'RECEIPT_PAPER_SIZE', value: document.getElementById('cfg-paper-size').value },
-            { key: 'RECEIPT_PRINT_SCALE', value: document.getElementById('cfg-print-scale').value || '100' }
+            { key: 'RECEIPT_PRINT_SCALE', value: document.getElementById('cfg-print-scale').value || '100' },
+            { key: 'RECEIPT_AUTO_CUT', value: document.getElementById('cfg-auto-cut').value }
         ];
 
         try {

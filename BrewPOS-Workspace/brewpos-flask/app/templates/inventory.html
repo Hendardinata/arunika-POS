@@ -10,7 +10,7 @@
         <div>
             <h3 class="card-title"><i class="fas fa-clipboard-check text-primary"></i> Alur Stock Opname Harian (SOP Kafe)</h3>
             <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
-                Audit fisik pagi sebelum buka $\rightarrow$ Kunci baseline $\rightarrow$ Hitung sisa malam saat tutup untuk cek selisih bahan.
+                Audit fisik pagi sebelum buka &rarr; Kunci baseline &rarr; Hitung sisa malam saat tutup untuk cek selisih bahan.
             </p>
         </div>
         <div style="display: flex; gap: 8px;" id="opname-action-buttons">
@@ -18,8 +18,8 @@
         </div>
     </div>
 
-    <div style="display: flex; gap: 16px; align-items: center; background: #FAF8F5; padding: 14px 18px; border-radius: var(--radius-md); border: 1px solid var(--border-light);">
-        <div style="display: flex; align-items: center; gap: 8px;">
+    <div class="stack-on-mobile" style="display: flex; gap: 16px; align-items: center; background: #FAF8F5; padding: 14px 18px; border-radius: var(--radius-md); border: 1px solid var(--border-light);">
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <span style="font-size: 0.8125rem; font-weight: 700; color: var(--text-secondary);">Status Audit Hari Ini:</span>
             <span id="opname-status-label" class="badge-chip warning">Memuat Status...</span>
         </div>
@@ -339,7 +339,12 @@
             renderInventoryTable(rawInventory);
             renderLogsTable(inventoryLogs);
         } catch (e) {
+            // Jangan tinggalkan tabel di status "Memuat..." selamanya kalau render gagal.
             showToast('Gagal memuat inventori: ' + e.message, 'error');
+            document.getElementById('inventory-table-body').innerHTML =
+                `<tr><td colspan="7" class="text-danger" style="text-align: center; padding: 24px;">Gagal memuat data: ${e.message}</td></tr>`;
+            document.getElementById('inventory-logs-table-body').innerHTML =
+                `<tr><td colspan="7" class="text-danger" style="text-align: center; padding: 24px;">Gagal memuat riwayat.</td></tr>`;
         }
     }
 
@@ -350,7 +355,9 @@
         const status = todayOpname ? todayOpname.status : 'NOT_OPEN';
 
         if (todayOpname && todayOpname.opname && todayOpname.opname.date) {
-            lastDateEl.textContent = new Date(todayOpname.opname.date).toLocaleDateString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+            // toLocaleDateString menolak timeStyle (RangeError) dan errornya menghentikan
+            // seluruh render halaman. Untuk tanggal+jam harus toLocaleString.
+            lastDateEl.textContent = new Date(todayOpname.opname.date).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
         } else {
             lastDateEl.textContent = 'Belum Ada';
         }
@@ -418,11 +425,14 @@
                 ? `<img src="${it.imageUrl}" style="width: 36px; height: 36px; border-radius: var(--radius-xs); object-fit: cover;">`
                 : `<div style="width: 36px; height: 36px; border-radius: var(--radius-xs); background: var(--color-primary-light); color: var(--color-primary); display: flex; align-items: center; justify-content: center; font-size: 0.875rem;"><i class="fas fa-box"></i></div>`;
 
+            const isArchived = it.isActive === false;
+
             return `
-                <tr>
+                <tr${isArchived ? ' style="opacity: 0.55;"' : ''}>
                     <td>${imgTag}</td>
                     <td>
                         <strong style="color: var(--text-main); font-size: 0.8438rem;">${it.name}</strong>
+                        ${isArchived ? '<span class="badge-chip danger" style="font-size: 0.5938rem; margin-left: 6px;">DIARSIPKAN</span>' : ''}
                     </td>
                     <td><strong style="font-size: 0.9375rem; color: ${isLow ? 'var(--color-danger)' : 'var(--color-primary)'};">${stock} ${it.unit}</strong></td>
                     <td><strong style="color: var(--color-primary); font-size: 0.8438rem;">${formatRp(costPerUnit)}</strong> <span style="font-size: 0.6875rem; color: var(--text-muted);">/ ${it.unit}</span></td>
@@ -437,6 +447,13 @@
                         </button>
                         <button class="btn btn-secondary btn-sm" onclick="editMaterial(${it.id})" title="Edit Bahan">
                             <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="toggleMaterialActive(${it.id}, ${isArchived ? 'false' : 'true'}, '${it.name.replace(/'/g, "\\'")}')"
+                                title="${isArchived ? 'Aktifkan kembali' : 'Arsipkan bahan'}">
+                            <i class="fas ${isArchived ? 'fa-eye text-success' : 'fa-box-archive text-secondary'}"></i>
+                        </button>
+                        <button class="btn btn-secondary btn-sm text-danger" onclick="deleteMaterial(${it.id}, '${it.name.replace(/'/g, "\\'")}')" title="Hapus Bahan">
+                            <i class="fas fa-trash"></i>
                         </button>
                     </td>
                 </tr>
@@ -565,6 +582,42 @@
         document.getElementById('material-initial-stock-group').style.display = 'block';
         document.getElementById('material-form').reset();
         openModal('modal-material');
+    }
+
+    // Bahan yang sudah punya riwayat tidak bisa dihapus (HPP historis ikut rusak),
+    // jadi jalur normalnya adalah arsip. Stok yang meleset diperbaiki lewat
+    // Sesuaikan Stok / opname, bukan dengan menghapus bahannya.
+    async function deleteMaterial(id, name) {
+        if (!confirm(`Yakin ingin menghapus bahan "${name}"?`)) return;
+        try {
+            await apiFetch(`/inventory/${id}`, { method: 'DELETE' });
+            showToast('Bahan berhasil dihapus', 'success');
+            loadInventory();
+        } catch (err) {
+            if (err.data && err.data.canArchive) {
+                if (confirm(`${err.message}\n\nArsipkan sekarang?`)) {
+                    await toggleMaterialActive(id, true, name, true);
+                }
+                return;
+            }
+            showToast(err.message, 'error');
+        }
+    }
+
+    async function toggleMaterialActive(id, isCurrentlyActive, name, skipConfirm = false) {
+        const willArchive = isCurrentlyActive;
+        if (!skipConfirm && willArchive &&
+            !confirm(`Arsipkan bahan "${name}"? Bahan tidak lagi muncul saat belanja, tapi riwayat mutasi dan HPP-nya tetap tersimpan.`)) return;
+        try {
+            await apiFetch(`/inventory/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ isActive: !willArchive })
+            });
+            showToast(willArchive ? `"${name}" diarsipkan` : `"${name}" diaktifkan kembali`, 'success');
+            loadInventory();
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
     }
 
     function editMaterial(id) {

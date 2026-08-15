@@ -33,7 +33,14 @@ def get_menus():
 
         sold_map = {sc[0]: int(sc[1] or 0) for sc in sold_counts}
 
-        menus = Menu.query.all()
+        # POS memanggil dengan activeOnly=1; halaman kelola menu tetap melihat
+        # yang diarsipkan supaya bisa diaktifkan kembali.
+        query = Menu.query
+        if request.args.get('activeOnly') in ('1', 'true'):
+            # MSSQL menolak "IS 1" yang dihasilkan is_(True); pakai perbandingan biasa.
+            query = query.filter(Menu.isActive == True)  # noqa: E712
+
+        menus = query.all()
         result = [m.to_dict(include_category=True, sold_count=sold_map.get(m.id, 0)) for m in menus]
         return jsonify(result)
     except Exception as e:
@@ -106,6 +113,7 @@ def update_menu(id):
             if 'hpp' in data: menu.hpp = int(data['hpp'])
             if 'categoryId' in data: menu.categoryId = int(data['categoryId'])
             if 'imageUrl' in data: menu.imageUrl = data['imageUrl']
+            if 'isActive' in data: menu.isActive = bool(data['isActive'])
         else:
             if 'name' in request.form: menu.name = request.form['name']
             if 'description' in request.form: menu.description = request.form['description']
@@ -142,7 +150,14 @@ def delete_menu(id):
         # Check if used in transactions
         used_count = TransactionItem.query.filter_by(menuId=id).count()
         if used_count > 0:
-            return jsonify({'error': 'Cannot delete menu because it is already used in transactions. Please hide or disable it instead.'}), 400
+            return jsonify({
+                'error': f'Menu "{menu.name}" sudah terpakai di {used_count} transaksi, '
+                         'jadi tidak bisa dihapus tanpa merusak riwayat penjualan. '
+                         'Nonaktifkan saja agar hilang dari POS.',
+                'canArchive': True,
+                'menuId': menu.id,
+                'usedCount': used_count
+            }), 400
 
         name = menu.name
         db.session.delete(menu)

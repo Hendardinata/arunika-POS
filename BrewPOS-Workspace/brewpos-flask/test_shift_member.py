@@ -162,6 +162,37 @@ check('cari member via HP berformat', s1.status_code == 200 and s1.get_json()['n
 
 c.post('/api/shift/close', json={'endingCash': 150000}, headers=A)
 
+# --- Pengeluaran tunai dari laci ikut mengurangi ekspektasi kas ---
+from app.models.expense import ExpenseCategory
+
+with app.app_context():
+    db.session.add(ExpenseCategory(name='Operasional Uji'))
+    db.session.commit()
+    cat_id = ExpenseCategory.query.filter_by(name='Operasional Uji').first().id
+
+c.post('/api/shift/open', json={'startingCash': 500000}, headers=A)
+r = c.post('/api/checkout', json={'nickname': 'Guest', 'paymentMethod': 'CASH',
+                                  'items': [{'menuId': menu_id, 'quantity': 1}]}, headers=A)
+check('checkout tunai untuk uji kas', r.status_code == 201, r.get_json())
+tunai = r.get_json()['transaction']['totalAmount'] if r.status_code == 201 else 0
+
+r = c.post('/api/expenses', json={'categoryId': cat_id, 'amount': 30000,
+                                  'notes': 'beli gas', 'paymentSource': 'CASH_DRAWER'}, headers=A)
+check('catat pengeluaran dari laci', r.status_code == 201, r.get_json())
+check('pengeluaran terikat ke sesi berjalan', r.get_json().get('shiftId') is not None, r.get_json())
+
+r = c.post('/api/expenses', json={'categoryId': cat_id, 'amount': 999000,
+                                  'notes': 'transfer sewa', 'paymentSource': 'OTHER'}, headers=A)
+check('pengeluaran non-tunai tidak terikat sesi', r.get_json().get('shiftId') is None, r.get_json())
+
+r = c.post('/api/shift/close', json={'endingCash': 500000 + tunai - 30000}, headers=A)
+expected = r.get_json().get('expectedEndingCash')
+check('ekspektasi kas dikurangi belanja tunai',
+      expected == 500000 + tunai - 30000, f'expected={expected}, seharusnya={500000 + tunai - 30000}')
+check('kas cocok (tidak ada selisih palsu)',
+      r.get_json().get('endingCash') == expected, r.get_json())
+
+
 with app.app_context():
     db.session.remove()
     db.engine.dispose()

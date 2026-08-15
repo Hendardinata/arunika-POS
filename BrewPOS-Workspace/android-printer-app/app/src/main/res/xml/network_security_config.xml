@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android memblokir HTTP polos sejak API 28. Selama server POS masih HTTP,
+  domain/IP-nya harus didaftarkan di sini.
+
+  Begitu server sudah HTTPS, HAPUS blok domain-config di bawah supaya seluruh
+  lalu lintas kembali wajib terenkripsi.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">192.168.0.5</domain>
+    </domain-config>
+</network-security-config>

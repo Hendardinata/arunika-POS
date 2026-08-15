@@ -1,0 +1,54 @@
+name: Build APK Kasir
+
+# Membangun APK cangkang POS + jembatan printer Bluetooth.
+# Hasilnya bisa diunduh dari tab Actions -> pilih run -> bagian Artifacts.
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - 'BrewPOS-Workspace/android-printer-app/**'
+      - '.github/workflows/android-apk.yml'
+  workflow_dispatch:
+    inputs:
+      posUrl:
+        description: 'Alamat server POS yang dibuka aplikasi'
+        required: false
+        default: 'http://192.168.0.5:3001'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: BrewPOS-Workspace/android-printer-app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Siapkan JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Siapkan Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Siapkan Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      # Debug build sudah ditandatangani kunci debug bawaan, jadi APK-nya
+      # langsung bisa dipasang tanpa mengurus keystore.
+      - name: Build APK debug
+        run: gradle assembleDebug -PposUrl="${{ github.event.inputs.posUrl || 'http://192.168.0.5:3001' }}" --no-daemon
+
+      - name: Unggah APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: arunika-pos-apk
+          path: BrewPOS-Workspace/android-printer-app/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30

@@ -11,6 +11,9 @@ class InventoryItem(db.Model):
     minStock = db.Column(db.Float, nullable=False, default=10.0)
     costPerUnit = db.Column(db.Float, nullable=False, default=0.0)  # Purchase cost per 1 unit (gram, ml, pcs)
     imageUrl = db.Column(db.String(500), nullable=True)
+    # Bahan yang sudah punya riwayat mutasi atau dipakai resep tidak dihapus,
+    # cukup diarsipkan supaya tidak muncul saat belanja/opname.
+    isActive = db.Column(db.Boolean, nullable=False, default=True)
 
     logs = db.relationship('InventoryLog', backref='item', lazy=True, cascade='all, delete-orphan')
     opnameItems = db.relationship('DailyOpnameItem', backref='inventoryItem', lazy=True)
@@ -26,7 +29,8 @@ class InventoryItem(db.Model):
             'unit': self.unit,
             'minStock': min_stock_val,
             'costPerUnit': self.costPerUnit or 0.0,
-            'imageUrl': self.imageUrl
+            'imageUrl': self.imageUrl,
+            'isActive': bool(self.isActive) if self.isActive is not None else True
         }
 
 

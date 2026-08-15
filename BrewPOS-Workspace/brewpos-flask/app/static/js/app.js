@@ -351,6 +351,8 @@ async function submitCloseShift() {
 
 // Thermal Receipt Helper with Store Info, Dynamic PPN, and Discounts
 function renderThermalReceiptHtml(txData, storeInfo = null) {
+    // Simpan data mentahnya; tombol cetak thermal menyusun ESC/POS dari sini.
+    lastReceiptData = txData;
     const info = storeInfo || cachedStoreSettings || {
         STORE_NAME: 'ARUNIKA COFFEE',
         TAGLINE: 'Every Cup Has A Story',
@@ -579,6 +581,52 @@ function initSidebarCollapse() {
 }
 
 // Thermal Receipt Isolated Print Mode (Prints only the receipt slip with auto paper-size detection)
+/*
+ * Cetak struk lewat printer thermal Bluetooth bila aplikasi Android terpasang.
+ * Kalau tidak ada jembatannya (dibuka dari browser biasa/desktop), pemanggil
+ * jatuh kembali ke printReceipt() berbasis HTML.
+ *
+ * lastReceiptData diisi saat struk ditampilkan, supaya tombol cetak punya data
+ * mentahnya -- bukan hasil render HTML.
+ */
+let lastReceiptData = null;
+
+function receiptColumns(settings) {
+    const paper = ((settings && settings.RECEIPT_PAPER_SIZE) || '58mm').toString();
+    return paper.startsWith('80') ? 48 : 32;
+}
+
+async function printReceiptThermal(txData = null) {
+    if (typeof EscPos === 'undefined' || !EscPos.hasBridge()) return false;
+
+    const data = txData || lastReceiptData;
+    if (!data) return false;
+
+    try {
+        const settings = await getStoreSettings();
+        const user = getUser();
+        const bytes = EscPos.buildReceipt(data, settings, {
+            cols: receiptColumns(settings),
+            cut: (settings && settings.RECEIPT_AUTO_CUT) !== '0',
+            cashierName: (user && user.username) ? user.username : 'Kasir'
+        });
+        EscPos.sendToBridge(bytes);
+        return true;
+    } catch (e) {
+        console.error('Gagal menyusun struk ESC/POS:', e);
+        return false;
+    }
+}
+
+/* Dipanggil tombol "Cetak Struk": coba printer Bluetooth dulu, baru dialog cetak. */
+async function printReceiptSmart(containerId = null, txData = null) {
+    if (await printReceiptThermal(txData)) {
+        showToast('Struk dikirim ke printer', 'success');
+        return;
+    }
+    printReceipt(containerId);
+}
+
 async function printReceipt(containerId = null, forcedPaperSize = null) {
     const targetEl = containerId 
         ? (document.getElementById(containerId) ? document.getElementById(containerId).querySelector('.thermal-receipt-card') || document.getElementById(containerId) : null)

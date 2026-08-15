@@ -21,12 +21,12 @@ def seed_database():
         print("Tables created successfully!")
 
         # 1. Default System Users (All 4 RBAC Roles)
+        # Satu akun per hak akses, password seragam. assignedShift sudah pensiun.
         users_to_seed = [
-            {'username': 'superadmin', 'password': 'superadmin123', 'role': 'SUPERADMIN', 'shift': None},
-            {'username': 'owner', 'password': 'owner123', 'role': 'ADMIN', 'shift': None},
-            {'username': 'admin', 'password': 'owner123', 'role': 'ADMIN', 'shift': None},
-            {'username': 'headbar', 'password': 'headbar123', 'role': 'HEADBAR', 'shift': 'MORNING'},
-            {'username': 'kasir', 'password': 'kasir123', 'role': 'CASHIER', 'shift': 'MORNING'},
+            {'username': 'superadmin', 'password': '12qwaszx', 'role': 'SUPERADMIN', 'shift': None},
+            {'username': 'owner', 'password': '12qwaszx', 'role': 'ADMIN', 'shift': None},
+            {'username': 'headbar', 'password': '12qwaszx', 'role': 'HEADBAR', 'shift': None},
+            {'username': 'kasir', 'password': '12qwaszx', 'role': 'CASHIER', 'shift': None},
         ]
         for u_data in users_to_seed:
             hashed_pw = bcrypt.hashpw(u_data['password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
