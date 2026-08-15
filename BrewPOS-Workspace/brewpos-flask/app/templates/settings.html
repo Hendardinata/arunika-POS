@@ -101,9 +101,20 @@
                     Mencetak contoh struk berisi penggaris kolom. Kalau penggaris terpotong, ubah format kertas di atas.
                 </p>
                 <div id="printer-bridge-status" style="font-size: 0.7188rem; margin-bottom: 8px;"></div>
-                <button type="button" class="btn btn-secondary btn-sm" onclick="runTestPrint()" style="width: 100%;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="runTestPrint()" style="width: 100%; margin-bottom: 6px;">
                     <i class="fas fa-receipt"></i> Cetak Struk Uji
                 </button>
+                <div id="printer-tools" style="display: none; gap: 6px;">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="AndroidPrinter.choosePrinter()">
+                        <i class="fas fa-print"></i> Pilih Printer
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="AndroidPrinter.forgetPrinter()">
+                        <i class="fas fa-rotate-left"></i> Lupakan
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="AndroidPrinter.showDiagnostics()">
+                        <i class="fas fa-stethoscope"></i> Diagnostik
+                    </button>
+                </div>
             </div>
 
             <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px;" id="btn-save-settings">
@@ -313,6 +324,21 @@
             ? '<span class="badge-chip success"><i class="fas fa-link"></i> Printer thermal terhubung</span>'
             : '<span class="badge-chip warning"><i class="fas fa-link-slash"></i> Aplikasi printer tidak terdeteksi</span>'
               + ' <span class="text-muted">&mdash; struk akan dibuka lewat dialog cetak biasa</span>';
+
+        // Alat bantu hanya berguna di dalam aplikasi Android
+        const tools = document.getElementById('printer-tools');
+        if (tools) tools.style.display = ready ? 'flex' : 'none';
+
+        // Galat terakhir dari sisi Android ditarik ke sini supaya tidak perlu
+        // kabel USB untuk membacanya.
+        if (ready && typeof AndroidPrinter.lastError === 'function') {
+            const err = AndroidPrinter.lastError();
+            if (err) {
+                el.innerHTML += '<div class="text-danger" style="margin-top: 6px; font-size: 0.6875rem; white-space: pre-wrap;">'
+                    + '<i class="fas fa-triangle-exclamation"></i> Galat terakhir: '
+                    + err.split('\n').slice(0, 2).join(' ') + '</div>';
+            }
+        }
     }
 
     async function runTestPrint() {

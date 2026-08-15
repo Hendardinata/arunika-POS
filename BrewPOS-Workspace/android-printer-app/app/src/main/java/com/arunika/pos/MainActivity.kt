@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Base64
+import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -20,6 +21,11 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import java.io.OutputStream
+import java.io.PrintWriter
+import java.io.StringWriter
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 import kotlin.concurrent.thread
 
@@ -31,23 +37,44 @@ import kotlin.concurrent.thread
  *
  * Printer thermal 58mm memakai Bluetooth Classic (SPP). Tidak ada koneksi tingkat
  * sistem untuk perangkat semacam ini -- statusnya di Pengaturan Android memang
- * "paired" saja, dan koneksinya dibuka oleh aplikasi saat mau mencetak.
+ * "paired" saja, dan koneksinya dibuka aplikasi saat mau mencetak.
+ *
+ * PENTING soal penanganan galat: versi pertama aplikasi ini tertutup sendiri saat
+ * mencetak tanpa pesan apa pun. Sekarang setiap jalur dibungkus penangkap galat,
+ * ada penangkap crash global, dan galat terakhir disimpan supaya bisa dibaca lewat
+ * menu Diagnostik -- tanpa perlu kabel USB atau logcat.
  */
 class MainActivity : AppCompatActivity() {
 
     companion object {
-        // Diisi saat build dari app/build.gradle.kts (-PposUrl=...)
+        private const val TAG = "ArunikaPOS"
         private val POS_URL = BuildConfig.POS_URL
         private val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
         private const val PREFS = "arunika_printer"
         private const val KEY_MAC = "printer_mac"
+        private const val KEY_LAST_ERROR = "last_error"
+        private const val KEY_CRASH = "last_crash"
         private const val REQ_BT = 1001
     }
 
     private lateinit var webView: WebView
 
+    private fun prefs() = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Simpan crash apa pun supaya bisa dibaca setelah aplikasi dibuka lagi.
+        // Tanpa ini, aplikasi hanya "hilang" dan tidak ada jejak sama sekali.
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            try {
+                prefs().edit().putString(KEY_CRASH, stamp() + "\n" + stackOf(e)).apply()
+            } catch (_: Throwable) {
+            }
+            previous?.uncaughtException(t, e)
+        }
+
         webView = WebView(this)
         setContentView(webView)
 
@@ -64,21 +91,153 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl(POS_URL)
 
         requestBluetoothPermission()
+        showPendingCrashIfAny()
     }
 
     override fun onBackPressed() {
         if (webView.canGoBack()) webView.goBack() else super.onBackPressed()
     }
 
+    // ------------------------------------------------------------------
+    // Utilitas galat
+    // ------------------------------------------------------------------
+
+    private fun stamp(): String =
+        SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(Date())
+
+    private fun stackOf(e: Throwable): String {
+        val sw = StringWriter()
+        e.printStackTrace(PrintWriter(sw))
+        return sw.toString().take(4000)
+    }
+
+    private fun recordError(context: String, e: Throwable) {
+        Log.e(TAG, context, e)
+        val msg = "$context\n${e.javaClass.simpleName}: ${e.message}"
+        try {
+            prefs().edit().putString(KEY_LAST_ERROR, stamp() + "\n" + msg + "\n\n" + stackOf(e)).apply()
+        } catch (_: Throwable) {
+        }
+        toast(msg)
+    }
+
+    private fun showPendingCrashIfAny() {
+        val crash = prefs().getString(KEY_CRASH, null) ?: return
+        prefs().edit().remove(KEY_CRASH).apply()
+        safeDialog("Aplikasi sempat tertutup", crash)
+    }
+
+    private fun toast(msg: String) = runOnUiThread {
+        if (!isFinishing) Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+    }
+
+    /** Dialog yang tidak pernah bisa menjatuhkan aplikasi. */
+    private fun safeDialog(title: String, message: String) = runOnUiThread {
+        if (isFinishing || isDestroyed) return@runOnUiThread
+        try {
+            AlertDialog.Builder(this)
+                .setTitle(title)
+                .setMessage(message)
+                .setPositiveButton("Tutup", null)
+                .show()
+        } catch (e: Throwable) {
+            Log.e(TAG, "Gagal menampilkan dialog", e)
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Jembatan JavaScript
+    // ------------------------------------------------------------------
+
+    inner class PrinterBridge {
+
+        /** Dipanggil dari JavaScript: AndroidPrinter.print(base64EscPos) */
+        @JavascriptInterface
+        fun print(base64: String) {
+            try {
+                val data = Base64.decode(base64, Base64.DEFAULT)
+                if (data.isEmpty()) { toast("Data struk kosong"); return }
+                thread {
+                    // Pembungkus terakhir: apa pun yang lolos di dalam sini tidak
+                    // boleh sampai mematikan aplikasi.
+                    try { sendToPrinter(data) } catch (e: Throwable) { recordError("Gagal mencetak", e) }
+                }
+            } catch (e: Throwable) {
+                recordError("Data struk tidak bisa dibaca", e)
+            }
+        }
+
+        /** Buka pemilih printer dari halaman web. */
+        @JavascriptInterface
+        fun choosePrinter() {
+            try { runOnUiThread { showPrinterPicker(null) } }
+            catch (e: Throwable) { recordError("Gagal membuka daftar printer", e) }
+        }
+
+        @JavascriptInterface
+        fun isReady(): Boolean = try {
+            hasBtPermission() && BluetoothAdapter.getDefaultAdapter() != null
+        } catch (e: Throwable) {
+            recordError("Gagal memeriksa Bluetooth", e); false
+        }
+
+        /** Galat terakhir, supaya halaman web bisa menampilkannya. */
+        @JavascriptInterface
+        fun lastError(): String = try {
+            prefs().getString(KEY_LAST_ERROR, "") ?: ""
+        } catch (e: Throwable) { "" }
+
+        /** Ringkasan kondisi perangkat untuk menelusuri masalah cetak. */
+        @JavascriptInterface
+        fun showDiagnostics() {
+            try {
+                val adapter = try { BluetoothAdapter.getDefaultAdapter() } catch (e: Throwable) { null }
+                val mac = prefs().getString(KEY_MAC, null)
+                val bonded = try { bondedDevices().size } catch (e: Throwable) { -1 }
+                val info = buildString {
+                    appendLine("Alamat server : $POS_URL")
+                    appendLine("Android SDK   : ${Build.VERSION.SDK_INT}")
+                    appendLine("Perangkat     : ${Build.MANUFACTURER} ${Build.MODEL}")
+                    appendLine("Izin Bluetooth: ${if (hasBtPermission()) "diberikan" else "BELUM"}")
+                    appendLine("Bluetooth     : ${if (adapter == null) "tidak ada" else if (adapter.isEnabled) "aktif" else "mati"}")
+                    appendLine("Perangkat pair: $bonded")
+                    appendLine("Printer dipilih: ${mac ?: "belum ada"}")
+                    appendLine()
+                    appendLine("Galat terakhir:")
+                    append(prefs().getString(KEY_LAST_ERROR, "(belum ada)"))
+                }
+                safeDialog("Diagnostik Printer", info)
+            } catch (e: Throwable) {
+                recordError("Gagal membuka diagnostik", e)
+            }
+        }
+
+        /** Lupakan printer tersimpan supaya bisa memilih ulang. */
+        @JavascriptInterface
+        fun forgetPrinter() {
+            try {
+                prefs().edit().remove(KEY_MAC).apply()
+                toast("Pilihan printer dihapus")
+            } catch (e: Throwable) { recordError("Gagal menghapus pilihan printer", e) }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Bluetooth
+    // ------------------------------------------------------------------
+
     private fun requestBluetoothPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
                 != PackageManager.PERMISSION_GRANTED
             ) {
                 ActivityCompat.requestPermissions(
                     this, arrayOf(Manifest.permission.BLUETOOTH_CONNECT), REQ_BT
                 )
             }
+        } catch (e: Throwable) {
+            recordError("Gagal meminta izin Bluetooth", e)
         }
     }
 
@@ -88,56 +247,62 @@ class MainActivity : AppCompatActivity() {
                 PackageManager.PERMISSION_GRANTED
     }
 
-    private fun toast(msg: String) = runOnUiThread {
-        Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
-    }
-
-    inner class PrinterBridge {
-        /** Dipanggil dari JavaScript: AndroidPrinter.print(base64EscPos) */
-        @JavascriptInterface
-        fun print(base64: String) {
-            val data = try {
-                Base64.decode(base64, Base64.DEFAULT)
-            } catch (e: Exception) {
-                toast("Data struk tidak valid"); return
-            }
-            thread { sendToPrinter(data) }
-        }
-
-        /** Buka pemilih printer dari halaman web (mis. tombol di Pengaturan). */
-        @JavascriptInterface
-        fun choosePrinter() = runOnUiThread { showPrinterPicker(null) }
-
-        @JavascriptInterface
-        fun isReady(): Boolean = hasBtPermission() && BluetoothAdapter.getDefaultAdapter() != null
-    }
-
     @SuppressLint("MissingPermission")
     private fun bondedDevices(): List<BluetoothDevice> {
-        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return emptyList()
         if (!hasBtPermission()) return emptyList()
-        // Ambil dari daftar paired -- tidak perlu discovery, jadi tidak perlu izin lokasi.
-        return adapter.bondedDevices?.toList() ?: emptyList()
+        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return emptyList()
+        return try {
+            adapter.bondedDevices?.toList() ?: emptyList()
+        } catch (e: Throwable) {
+            recordError("Gagal membaca daftar perangkat", e); emptyList()
+        }
     }
 
+    /** Nama perangkat butuh izin di Android 12+; jangan sampai jadi sumber crash. */
     @SuppressLint("MissingPermission")
+    private fun safeName(d: BluetoothDevice): String = try {
+        d.name ?: "(tanpa nama)"
+    } catch (e: Throwable) {
+        "(tanpa nama)"
+    }
+
     private fun showPrinterPicker(pending: ByteArray?) {
-        val devices = bondedDevices()
-        if (devices.isEmpty()) {
-            toast("Belum ada perangkat Bluetooth yang di-pair. Pair printer dulu di Pengaturan Android.")
-            return
-        }
-        val names = devices.map { "${it.name ?: "(tanpa nama)"}\n${it.address}" }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("Pilih Printer")
-            .setItems(names) { _, which ->
-                val dev = devices[which]
-                getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-                    .putString(KEY_MAC, dev.address).apply()
-                toast("Printer disimpan: ${dev.name}")
-                if (pending != null) thread { sendToPrinter(pending) }
+        if (isFinishing || isDestroyed) return
+        try {
+            val devices = bondedDevices()
+            if (devices.isEmpty()) {
+                safeDialog(
+                    "Belum ada printer",
+                    "Tidak ada perangkat Bluetooth yang sudah di-pair, atau izin Bluetooth belum " +
+                    "diberikan.\n\nPair printer lewat Pengaturan Bluetooth Android, lalu coba lagi."
+                )
+                return
             }
-            .show()
+            val names = devices.map { "${safeName(it)}\n${it.address}" }.toTypedArray()
+            AlertDialog.Builder(this)
+                .setTitle("Pilih Printer")
+                .setItems(names) { _, which ->
+                    // Blok ini dulu tidak punya penangkap galat sama sekali -- galat
+                    // di sini langsung menutup aplikasi tepat setelah printer diklik.
+                    try {
+                        val dev = devices[which]
+                        prefs().edit().putString(KEY_MAC, dev.address).apply()
+                        toast("Printer disimpan: ${safeName(dev)}")
+                        if (pending != null) {
+                            thread {
+                                try { sendToPrinter(pending) }
+                                catch (e: Throwable) { recordError("Gagal mencetak", e) }
+                            }
+                        }
+                    } catch (e: Throwable) {
+                        recordError("Gagal menyimpan pilihan printer", e)
+                    }
+                }
+                .setNegativeButton("Batal", null)
+                .show()
+        } catch (e: Throwable) {
+            recordError("Gagal menampilkan daftar printer", e)
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -147,46 +312,67 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread { requestBluetoothPermission() }
             return
         }
+
         val adapter = BluetoothAdapter.getDefaultAdapter()
-        if (adapter == null) { toast("Perangkat tidak punya Bluetooth"); return }
+        if (adapter == null) { toast("Perangkat ini tidak punya Bluetooth"); return }
         if (!adapter.isEnabled) { toast("Nyalakan Bluetooth dulu"); return }
 
-        val mac = getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_MAC, null)
+        val mac = prefs().getString(KEY_MAC, null)
         if (mac == null) {
-            // Belum pernah pilih printer: minta pilih, lalu cetak setelahnya.
             runOnUiThread { showPrinterPicker(data) }
             return
         }
 
-        val device = try { adapter.getRemoteDevice(mac) } catch (e: Exception) {
-            toast("Printer tersimpan tidak dikenali, pilih ulang")
-            runOnUiThread { showPrinterPicker(data) }; return
+        val device = try {
+            adapter.getRemoteDevice(mac)
+        } catch (e: Throwable) {
+            recordError("Printer tersimpan tidak dikenali", e)
+            prefs().edit().remove(KEY_MAC).apply()
+            runOnUiThread { showPrinterPicker(data) }
+            return
         }
 
-        // Discovery yang masih jalan sering bikin connect() gagal.
-        if (adapter.isDiscovering) adapter.cancelDiscovery()
+        try { if (adapter.isDiscovering) adapter.cancelDiscovery() } catch (_: Throwable) {}
 
         var socket: BluetoothSocket? = null
+        var connected = false
+
+        // Cara standar
         try {
             socket = device.createRfcommSocketToServiceRecord(SPP_UUID)
             socket.connect()
-        } catch (first: Exception) {
-            // Sebagian printer murah menolak cara standar; jalur cadangan lewat
-            // RFCOMM channel 1 secara refleksi.
+            connected = true
+        } catch (first: Throwable) {
+            Log.w(TAG, "Sambungan SPP standar gagal, coba jalur cadangan", first)
+            try { socket?.close() } catch (_: Throwable) {}
+            socket = null
+        }
+
+        // Jalur cadangan: RFCOMM channel 1 lewat refleksi
+        if (!connected) {
             try {
-                socket?.close()
                 val m = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
                 socket = m.invoke(device, 1) as BluetoothSocket
                 socket.connect()
-            } catch (second: Exception) {
-                toast("Gagal terhubung ke printer. Pastikan printer menyala dan dekat.")
-                try { socket?.close() } catch (_: Exception) {}
+                connected = true
+            } catch (second: Throwable) {
+                try { socket?.close() } catch (_: Throwable) {}
+                recordError(
+                    "Tidak bisa terhubung ke printer.\nPastikan printer menyala, dekat, " +
+                    "dan tidak sedang dipakai aplikasi lain.", second
+                )
                 return
             }
         }
 
+        val live = socket
+        if (live == null) {
+            toast("Sambungan printer tidak terbentuk")
+            return
+        }
+
         try {
-            val out: OutputStream = socket!!.outputStream
+            val out: OutputStream = live.outputStream
             // Kirim bertahap: buffer sebagian printer kecil dan mudah kebanjiran.
             var offset = 0
             val chunk = 256
@@ -200,10 +386,10 @@ class MainActivity : AppCompatActivity() {
             // Jeda sebelum tutup: tanpa ini baris terakhir sering terpotong.
             Thread.sleep(400)
             toast("Struk tercetak")
-        } catch (e: Exception) {
-            toast("Gagal mengirim data ke printer: ${e.message}")
+        } catch (e: Throwable) {
+            recordError("Gagal mengirim data ke printer", e)
         } finally {
-            try { socket?.close() } catch (_: Exception) {}
+            try { live.close() } catch (_: Throwable) {}
         }
     }
 }
