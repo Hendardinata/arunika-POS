@@ -55,19 +55,24 @@ function extractLines(bytes) {
     const PARAM_LEN = { 0x40: 0, 0x74: 1, 0x61: 1, 0x45: 1, 0x64: 1, 0x21: 1 }; // setelah ESC/GS
     const lines = [];
     let cur = '';
+    let align = 'left';
+    const push = () => { const s = new String(cur); s.align = align; lines.push(s); cur = ''; };
     for (let i = 0; i < bytes.length; i++) {
         const b = bytes[i];
         if (b === 0x1B || b === 0x1D) {
             const cmd = bytes[i + 1];
             if (b === 0x1D && cmd === 0x56) { i += 3; continue; }      // GS V m n (potong)
+            // Rekam alignment supaya bisa diuji: baris yang ditengahkan printer
+            // tidak boleh diberi padding spasi lagi oleh kode.
+            if (b === 0x1B && cmd === 0x61) align = ['left', 'center', 'right'][bytes[i + 2]] || 'left';
             const n = PARAM_LEN[cmd];
             i += 1 + (n === undefined ? 0 : n);
             continue;
         }
-        if (b === 0x0A) { lines.push(cur); cur = ''; continue; }
+        if (b === 0x0A) { push(); continue; }
         cur += String.fromCharCode(b);
     }
-    if (cur) lines.push(cur);
+    if (cur) push();
     return lines;
 }
 
@@ -98,6 +103,27 @@ check('tanpa perintah potong bila cutter dimatikan', () => {
 check('tidak ada baris melebihi lebar kertas', () => {
     const tooLong = printable.filter(l => l.length > COLS);
     assert.strictEqual(tooLong.length, 0, 'baris kepanjangan: ' + JSON.stringify(tooLong));
+});
+
+check('baris tengah tidak dipadding manual (anti centering ganda)', () => {
+    // Bug nyata: header diberi padding spasi lalu printer menengahkannya lagi,
+    // sehingga Telp/IG bergeser ke kanan sementara nama toko tetap pas.
+    const padded = printable.filter(l => l.align === 'center' && /^\s/.test(l.toString()));
+    assert.strictEqual(padded.length, 0,
+        'baris ini akan tergeser: ' + JSON.stringify(padded.map(String)));
+});
+
+check('header memakai perataan tengah printer', () => {
+    const header = printable.filter(l => l.align === 'center');
+    assert.ok(header.some(l => l.toString().startsWith('Telp:')), 'baris Telp bukan rata tengah');
+    assert.ok(header.some(l => l.toString().startsWith('IG:')), 'baris IG bukan rata tengah');
+    assert.ok(header.some(l => l.toString() === 'RuA'), 'nama toko hilang dari header');
+});
+
+check('struk uji juga bebas padding ganda', () => {
+    const lines = extractLines(EscPos.buildTestReceipt(store, { cols: COLS }));
+    const padded = lines.filter(l => l.align === 'center' && /^\s/.test(l.toString()));
+    assert.strictEqual(padded.length, 0, JSON.stringify(padded.map(String)));
 });
 
 check('semua byte ASCII (aman untuk codepage printer)', () => {

@@ -94,13 +94,6 @@
         return l + new Array(cols - l.length - r.length + 1).join(' ') + r;
     }
 
-    function center(text, cols) {
-        var t = toAscii(text);
-        if (t.length >= cols) return t.slice(0, cols);
-        var pad = Math.floor((cols - t.length) / 2);
-        return new Array(pad + 1).join(' ') + t;
-    }
-
     function line(ch, cols) {
         return new Array(cols + 1).join(ch);
     }
@@ -159,12 +152,12 @@
         b.raw(CMD.ALIGN_CENTER).raw(CMD.SIZE_DOUBLE).raw(CMD.BOLD_ON);
         b.ln(info.STORE_NAME || 'ARUNIKA COFFEE');
         b.raw(CMD.BOLD_OFF).raw(CMD.SIZE_NORMAL);
-        if (info.TAGLINE) b.ln(center(info.TAGLINE, cols));
+        if (info.TAGLINE) b.ln(info.TAGLINE);
         if (info.STORE_ADDRESS) {
-            wrap(info.STORE_ADDRESS, cols).forEach(function (l) { b.ln(center(l, cols)); });
+            wrap(info.STORE_ADDRESS, cols).forEach(function (l) { b.ln(l); });
         }
-        if (info.STORE_PHONE) b.ln(center('Telp: ' + info.STORE_PHONE, cols));
-        if (info.STORE_INSTAGRAM) b.ln(center('IG: ' + info.STORE_INSTAGRAM, cols));
+        if (info.STORE_PHONE) b.ln('Telp: ' + info.STORE_PHONE);
+        if (info.STORE_INSTAGRAM) b.ln('IG: ' + info.STORE_INSTAGRAM);
 
         b.raw(CMD.ALIGN_LEFT);
         b.ln(line('=', cols));
@@ -257,7 +250,7 @@
         b.raw(CMD.ALIGN_CENTER).raw(CMD.SIZE_DOUBLE).raw(CMD.BOLD_ON);
         b.ln('TES CETAK');
         b.raw(CMD.BOLD_OFF).raw(CMD.SIZE_NORMAL);
-        b.ln(center((info && info.STORE_NAME) || 'ARUNIKA POS', cols));
+        b.ln((info && info.STORE_NAME) || 'ARUNIKA POS');
         b.raw(CMD.ALIGN_LEFT);
         b.ln(line('=', cols));
         b.ln(pair('Lebar kertas', cols + ' kolom', cols));
@@ -302,7 +295,7 @@
         hasBridge: hasBridge,
         sendToBridge: sendToBridge,
         // diekspor untuk pengujian
-        _toAscii: toAscii, _pair: pair, _wrap: wrap, _center: center, _rupiah: rupiah
+        _toAscii: toAscii, _pair: pair, _wrap: wrap, _rupiah: rupiah
     };
 
     global.EscPos = api;
