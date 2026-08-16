@@ -2272,41 +2272,35 @@ body.scroll-locked {
   padding: 18px 12px !important;
 }
 
+/* Lebar isi dikunci tepat selebar kolom printer (32 untuk 58mm, 48 untuk 80mm).
+   Tanpa ini kartu lebih lebar daripada barisnya: nilai yang rata kanan berhenti
+   jauh sebelum tepi sementara garis pemisah memanjang penuh, dan struk terlihat
+   miring. --receipt-cols diisi oleh escpos.js sesuai ukuran kertas. */
 .receipt-paper {
   position: relative;
+  box-sizing: content-box !important;
+  width: calc(var(--receipt-cols, 32) * 1ch) !important;
+  max-width: none !important;
   background: #FFFDFA;
   border: none;
   border-radius: 0;
-  padding: 22px 20px 26px;
+  padding: 22px 18px 26px !important;
   margin: 6px auto;
-  max-width: 320px;
   box-shadow: 0 6px 22px rgba(70, 45, 30, 0.16);
   color: #2A2320;
-  letter-spacing: 0.02em;
+  font-size: 13px;
+  letter-spacing: 0;
 }
 
-/* Tepi sobek kertas di atas & bawah */
-.receipt-paper::before,
-.receipt-paper::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 7px;
-  background:
-    linear-gradient(45deg, transparent 33.33%, #FFFDFA 33.33%, #FFFDFA 66.66%, transparent 66.66%),
-    linear-gradient(-45deg, transparent 33.33%, #FFFDFA 33.33%, #FFFDFA 66.66%, transparent 66.66%);
-  background-size: 12px 14px;
+@media (max-width: 480px) {
+  .receipt-paper {
+    font-size: 12px;
+    padding: 18px 14px 22px !important;
+  }
 }
 
-.receipt-paper::before {
-  top: -7px;
-  transform: scaleY(-1);
-}
-
-.receipt-paper::after {
-  bottom: -7px;
-}
+/* Tanpa hiasan tepi sobek: zigzag CSS-nya terbaca sebagai coretan miring, bukan
+   kertas robek. Lembaran polos dengan bayangan lembut sudah cukup jelas. */
 
 .receipt-line {
   white-space: pre;
@@ -2331,11 +2325,13 @@ body.scroll-locked {
   margin-bottom: 2px;
 }
 
-/* Baris TOTAL: satu-satunya angka yang harus langsung ketemu mata */
+/* Baris TOTAL: satu-satunya angka yang harus langsung ketemu mata.
+   Lebar huruf sengaja tidak diperbesar -- printer pun hanya menggandakan tinggi,
+   dan font yang lebih lebar membuat 32 karakternya menjulur keluar dari kertas. */
 .receipt-line.total {
-  font-size: 1.2em;
   font-weight: 800;
-  padding: 3px 0;
+  padding: 4px 0;
+  line-height: 1.7;
 }
 
 .receipt-rule {
@@ -2353,11 +2349,6 @@ body.scroll-locked {
 
 @media print {
   /* Hiasan pratinjau tidak boleh ikut tercetak */
-  .receipt-paper::before,
-  .receipt-paper::after {
-    display: none !important;
-  }
-
   .receipt-paper {
     box-shadow: none !important;
     background: #FFF !important;

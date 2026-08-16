@@ -286,7 +286,8 @@
      * Daftar baris -> HTML monospace. Bentuknya sengaja dibuat sama persis dengan
      * yang keluar di kertas, jadi pratinjau di layar = hasil cetak.
      */
-    function linesToHtml(lines) {
+    function linesToHtml(lines, cols) {
+        cols = cols || 32;
         // Maju kertas & potong di ujung hanya urusan mekanis printer, tidak perlu
         // jadi ruang kosong di layar. Tapi jeda di tengah dokumen itu bagian dari
         // tata letak -- tanpa itu footer menempel ke baris kembalian.
@@ -310,7 +311,10 @@
             if (l.b && l.s !== 'd') cls += ' bold';
             return '<div class="' + cls + '">' + (escapeHtml(l.t) || '&nbsp;') + '</div>';
         }).join('');
-        return '<div class="thermal-receipt-card receipt-paper" id="printable-receipt">' + html + '</div>';
+        // Lebar kertas dikunci tepat selebar jumlah kolom printer, kalau tidak
+        // nilai yang rata kanan berhenti jauh sebelum tepi dan struk terlihat miring.
+        return '<div class="thermal-receipt-card receipt-paper" id="printable-receipt"' +
+               ' style="--receipt-cols: ' + cols + ';">' + html + '</div>';
     }
 
     /** Struk siap kirim ke printer. */
@@ -320,7 +324,8 @@
 
     /** Struk yang sama, tapi sebagai HTML untuk pratinjau & dialog cetak browser. */
     function buildReceiptHtml(txData, info, opts) {
-        return linesToHtml(buildReceiptLines(txData, info, opts));
+        var cols = (opts || {}).cols || 32;
+        return linesToHtml(buildReceiptLines(txData, info, opts), cols);
     }
 
     /** Struk uji singkat untuk memastikan printer & sambungan bekerja. */

@@ -243,6 +243,15 @@ check('HTML tidak memuat baris maju kertas', () => {
     assert.ok(!/&nbsp;<\/div>\s*<div[^>]*>&nbsp;/.test(html), 'baris kosong beruntun ikut dirender');
 });
 
+check('lebar kertas layar dikunci ke jumlah kolom', () => {
+    // Kalau kartu lebih lebar dari 32 karakter, nilai rata kanan berhenti jauh
+    // dari tepi dan struk terlihat miring.
+    const h58 = EscPos.buildReceiptHtml(tx, store, { cols: 32 });
+    const h80 = EscPos.buildReceiptHtml(tx, store, { cols: 48 });
+    assert.ok(h58.includes('--receipt-cols: 32'), 'lebar 58mm tidak diteruskan ke CSS');
+    assert.ok(h80.includes('--receipt-cols: 48'), 'lebar 80mm tidak diteruskan ke CSS');
+});
+
 check('jeda sebelum footer tetap ada di layar', () => {
     // Tanpa ini footer menempel langsung ke baris kembalian.
     const html = EscPos.buildReceiptHtml(tx, store, { cols: COLS });
