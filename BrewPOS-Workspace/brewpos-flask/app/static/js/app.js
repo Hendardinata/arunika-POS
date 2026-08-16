@@ -353,180 +353,22 @@ async function submitCloseShift() {
 function renderThermalReceiptHtml(txData, storeInfo = null) {
     // Simpan data mentahnya; tombol cetak thermal menyusun ESC/POS dari sini.
     lastReceiptData = txData;
+
     const info = storeInfo || cachedStoreSettings || {
         STORE_NAME: 'ARUNIKA COFFEE',
         TAGLINE: 'Every Cup Has A Story',
-        STORE_ADDRESS: 'Jl. Melati Kopi No. 12, City Center',
-        STORE_PHONE: '0812-3456-7890',
-        STORE_WEBSITE: 'www.arunikacoffee.com',
-        STORE_INSTAGRAM: '@arunika.coffee',
-        RECEIPT_FOOTER: 'Terima kasih atas kunjungannya! Wifi: arunika_free (Pass: ngopidulu)',
+        RECEIPT_FOOTER: 'Terima kasih atas kunjungannya!',
         TAX_PERCENT: '11'
     };
 
     const user = getUser();
-    const cashierName = (user && user.username) ? user.username : 'Kasir';
-    
-    // Support both raw transaction object or { message, transaction, customer } checkout payload
-    const tx = txData.transaction || txData;
-    const items = tx.items || txData.items || [];
-    const dateStr = new Date(tx.createdAt || txData.createdAt || Date.now()).toLocaleString('id-ID', {
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit'
+    // Struk layar dan struk kertas dibangun dari model baris yang sama, jadi
+    // bentuknya tidak bisa lagi berbeda. Dulu keduanya ditulis terpisah dan
+    // versi HTML jauh lebih bertele-tele daripada yang keluar di printer.
+    return EscPos.buildReceiptHtml(txData, info, {
+        cols: receiptColumns(info),
+        cashierName: (user && user.username) ? user.username : 'Kasir'
     });
-
-    const txCode = tx.transactionCode || tx.code || txData.transactionCode || txData.code || ('TR' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '000001');
-    const customerObj = tx.customer || txData.customer;
-    const custName = customerObj ? customerObj.nickname : (tx.nickname || txData.nickname || 'Guest');
-    const custType = customerObj ? (customerObj.customerType || 'REGULAR') : 'REGULAR';
-    const typeDisplay = (custType === 'EMPLOYEE' || custType === 'KARYAWAN') ? 'Tipe Karyawan' : 'Tipe Pelanggan';
-
-    let totalItemDiscount = 0;
-    const itemsHtml = (items.length > 0) ? items.map(item => {
-        const itemName = item.menu ? item.menu.name : (item.name || 'Menu #' + (item.menuId || ''));
-        const itemQty = item.quantity || 1;
-        const itemPrice = item.price || 0;
-        const itemDisc = (item.discountAmount || 0) * itemQty;
-        totalItemDiscount += itemDisc;
-        const itemGross = itemPrice * itemQty;
-
-        return `
-            <div style="margin-bottom: 5px;">
-                <div class="receipt-row">
-                    <span>${itemQty}x ${itemName}</span>
-                    <span>${formatRp(itemGross)}</span>
-                </div>
-                ${itemDisc > 0 ? `
-                <div class="receipt-row" style="font-size: 10.5px; color: #555; padding-left: 10px;">
-                    <span>* Potongan / Jatah:</span>
-                    <span>-${formatRp(itemDisc)}</span>
-                </div>` : ''}
-            </div>
-        `;
-    }).join('') : `
-        <div class="receipt-row" style="color: #666; font-style: italic;">
-            <span>1x Transaksi Menu</span>
-            <span>${formatRp(tx.totalAmount || txData.totalAmount || 0)}</span>
-        </div>
-    `;
-
-    const totalAmount = (tx.totalAmount !== undefined) ? tx.totalAmount : (txData.totalAmount || 0);
-    const orderDiscount = (tx.discountAmount !== undefined) ? tx.discountAmount : (txData.discountAmount || 0);
-    const rawTax = (info.TAX_PERCENT !== undefined && info.TAX_PERCENT !== '') 
-        ? info.TAX_PERCENT 
-        : ((info.TAX_PERCENTAGE !== undefined && info.TAX_PERCENTAGE !== '') ? info.TAX_PERCENTAGE : '11');
-    const parsedTax = parseFloat(rawTax);
-    const taxPercent = !isNaN(parsedTax) ? parsedTax : 11.0;
-    const taxAmount = (tx.taxAmount !== undefined) ? tx.taxAmount : (txData.taxAmount !== undefined ? txData.taxAmount : 0);
-    // Menu prices are tax-inclusive, so the honest subtotal is the pre-discount gross.
-    // Using the stored DPP made the column fail to add up whenever a discount applied:
-    // 45.045 - 10.000 + 4.955 != 50.000.
-    const grossBeforeDiscount = totalAmount + orderDiscount + totalItemDiscount;
-    const cashTendered = txData.cashReceived || tx.cashReceived || totalAmount;
-    const changeAmount = (cashTendered > totalAmount) ? (cashTendered - totalAmount) : 0;
-    const pointsEarned = (tx.pointsEarned !== undefined) ? tx.pointsEarned : (txData.pointsEarned || 0);
-
-    return `
-        <div class="thermal-receipt-card" id="printable-receipt">
-            <div class="receipt-header">
-                <div class="receipt-store-title">${info.STORE_NAME || 'ARUNIKA COFFEE'}</div>
-                <div style="font-size: 11px; color: #555; font-style: italic; margin-top: 2px;">${info.TAGLINE || 'Every Cup Has A Story'}</div>
-                <div class="receipt-meta-info">
-                    ${info.STORE_ADDRESS || ''}<br>
-                    Telp: ${info.STORE_PHONE || '-'} | IG: ${info.STORE_INSTAGRAM || '-'}
-                </div>
-            </div>
-            
-            <div class="receipt-divider double"></div>
-            
-            <div class="receipt-row">
-                <span>Kode Transaksi:</span>
-                <span style="font-weight: 800; font-family: monospace; font-size: 12px; color: #000;">${txCode}</span>
-            </div>
-            <div class="receipt-row">
-                <span>Tanggal / Waktu:</span>
-                <span>${dateStr} WIB</span>
-            </div>
-            <div class="receipt-row">
-                <span>Kasir:</span>
-                <span>${cashierName}</span>
-            </div>
-            <div class="receipt-row">
-                <span>Member:</span>
-                <span style="font-weight: 700;">${custName}</span>
-            </div>
-            <div class="receipt-row">
-                <span>Tipe Member:</span>
-                <span style="font-weight: 700; color: ${(custType === 'EMPLOYEE') ? '#B78103' : '#2E7D32'};">${typeDisplay}</span>
-            </div>
-            <div class="receipt-row">
-                <span>Metode Bayar:</span>
-                <span style="font-weight: 700;">${tx.paymentMethod || txData.paymentMethod || 'CASH'}</span>
-            </div>
-
-            <div class="receipt-divider"></div>
-
-            <div style="font-weight: 700; margin-bottom: 6px; font-size: 11px; text-transform: uppercase;">Rincian Pesanan:</div>
-            ${itemsHtml}
-
-            <div class="receipt-divider"></div>
-
-            <div class="receipt-row">
-                <span>Subtotal Menu</span>
-                <span>${formatRp(grossBeforeDiscount)}</span>
-            </div>
-
-            ${totalItemDiscount > 0 ? `
-            <div class="receipt-row" style="color: #333;">
-                <span>Total Diskon Menu / Jatah</span>
-                <span>-${formatRp(totalItemDiscount)}</span>
-            </div>` : ''}
-
-            ${orderDiscount > 0 ? `
-            <div class="receipt-row" style="color: #333;">
-                <span>Diskon Voucher</span>
-                <span>-${formatRp(orderDiscount)}</span>
-            </div>` : ''}
-
-            <div class="receipt-divider double"></div>
-
-            <div class="receipt-row bold" style="font-size: 14.5px;">
-                <span>TOTAL AKHIR</span>
-                <span>${formatRp(totalAmount)}</span>
-            </div>
-
-            ${taxPercent > 0 ? `
-            <div class="receipt-row" style="font-size: 9.5px;">
-                <span>Termasuk PB1/PPN ${taxPercent}%</span>
-                <span>${formatRp(taxAmount)}</span>
-            </div>` : ''}
-
-            ${(tx.paymentMethod || txData.paymentMethod) === 'CASH' ? `
-            <div class="receipt-row" style="margin-top: 4px;">
-                <span>Tunai Diterima</span>
-                <span>${formatRp(cashTendered)}</span>
-            </div>
-            <div class="receipt-row bold">
-                <span>Kembalian</span>
-                <span>${formatRp(changeAmount)}</span>
-            </div>` : ''}
-
-            ${pointsEarned > 0 ? `
-            <div class="receipt-divider"></div>
-            <div class="receipt-row" style="font-weight: 700; color: #6F4E37;">
-                <span>Poin Loyalitas</span>
-                <span>+${pointsEarned} Pts</span>
-            </div>` : ''}
-
-            <div class="receipt-divider double"></div>
-            <div class="receipt-footer">
-                <p>${info.RECEIPT_FOOTER || 'Terima kasih atas kunjungan Anda!'}</p>
-                <div style="font-size: 10px; color: #444; margin-top: 8px; letter-spacing: 3px; font-family: monospace;">
-                    * ${txCode} *
-                </div>
-            </div>
-        </div>
-    `;
 }
 
 // Mobile Sidebar Toggle Helper
@@ -594,6 +436,13 @@ let lastReceiptData = null;
 function receiptColumns(settings) {
     const paper = ((settings && settings.RECEIPT_PAPER_SIZE) || '58mm').toString();
     return paper.startsWith('80') ? 48 : 32;
+}
+
+/* Petunjuk "Margins: None, Scale: 100" hanya berlaku untuk dialog cetak browser.
+   Di dalam aplikasi kasir, struk keluar langsung ke printer thermal. */
+function hideBrowserPrintHintIfBridged() {
+    if (typeof EscPos === 'undefined' || !EscPos.hasBridge()) return;
+    document.querySelectorAll('.browser-print-hint').forEach(el => { el.style.display = 'none'; });
 }
 
 async function printReceiptThermal(txData = null) {
@@ -854,4 +703,5 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Initialize shift status widget if present
     updateShiftStatusWidget();
+    hideBrowserPrintHintIfBridged();
 });

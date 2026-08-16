@@ -189,11 +189,47 @@ check('label dipotong, nominal tidak pernah hilang', () => {
     assert.ok(l.endsWith('999.999'));
 });
 
-check('format rupiah', () => {
-    assert.strictEqual(EscPos._rupiah(0), '0');
-    assert.strictEqual(EscPos._rupiah(1000), '1.000');
-    assert.strictEqual(EscPos._rupiah(1234567), '1.234.567');
-    assert.strictEqual(EscPos._rupiah(-2500), '-2.500');
+check('format rupiah selalu memakai awalan Rp', () => {
+    assert.strictEqual(EscPos._rupiah(0), 'Rp 0');
+    assert.strictEqual(EscPos._rupiah(1000), 'Rp 1.000');
+    assert.strictEqual(EscPos._rupiah(1234567), 'Rp 1.234.567');
+    assert.strictEqual(EscPos._rupiah(-2500), '-Rp 2.500');
+});
+
+check('setiap nominal di struk memakai "Rp"', () => {
+    // Sempat hilang: angka tercetak polos tanpa satuan.
+    ['Subtotal', 'TOTAL', 'Tunai', 'Kembali'].forEach(label => {
+        const l = printable.find(x => x.toString().startsWith(label));
+        assert.ok(l, 'baris ' + label + ' tidak ada');
+        assert.ok(/Rp [\d.]+$/.test(l.toString()), label + ' tanpa Rp: |' + l + '|');
+    });
+    const item = printable.find(x => x.toString().trim().startsWith('2 x'));
+    assert.ok(/^\s+2 x Rp /.test(item.toString()), 'harga satuan tanpa Rp: |' + item + '|');
+});
+
+check('diskon tidak dobel minus', () => {
+    const l = printable.find(x => x.toString().startsWith('Diskon Item'));
+    assert.ok(l.toString().endsWith('-Rp 2.500'), 'format diskon salah: |' + l + '|');
+    assert.ok(!l.toString().includes('--'), 'minus dobel');
+});
+
+check('pratinjau HTML dibuat dari model baris yang sama', () => {
+    const html = EscPos.buildReceiptHtml(tx, store, { cols: COLS, cashierName: 'kasir' });
+    assert.ok(html.includes('thermal-receipt-card'), 'kelas kartu struk hilang');
+    assert.ok(html.includes('id="printable-receipt"'), 'id cetak hilang');
+    // Isi HTML harus mengandung baris yang sama dengan yang dikirim ke printer
+    ['Rp 68.000', 'Rp 100.000', 'TOTAL', 'Telp: 081997885072'].forEach(t => {
+        assert.ok(html.includes(t), 'HTML tidak memuat: ' + t);
+    });
+    assert.ok(html.includes('text-align: center'), 'perataan tengah tidak diterapkan di HTML');
+});
+
+check('HTML aman dari karakter berbahaya di nama menu', () => {
+    const jahat = JSON.parse(JSON.stringify(tx));
+    jahat.transaction.items[0].menu.name = '<script>alert(1)</script>';
+    const html = EscPos.buildReceiptHtml(jahat, store, { cols: COLS });
+    assert.ok(!html.includes('<script>'), 'tag tidak di-escape');
+    assert.ok(html.includes('&lt;script&gt;'), 'escaping tidak dilakukan');
 });
 
 check('struk tes memuat penggaris kolom yang utuh', () => {

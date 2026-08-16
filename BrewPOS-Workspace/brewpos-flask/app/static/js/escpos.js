@@ -59,10 +59,11 @@
         return out;
     }
 
+    /* Selalu dengan awalan "Rp" -- di kertas, angka tanpa satuan bikin ragu. */
     function rupiah(n) {
         var v = Math.round(Number(n) || 0);
         var sign = v < 0 ? '-' : '';
-        return sign + Math.abs(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        return sign + 'Rp ' + Math.abs(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
     }
 
     /* Bungkus teks pada batas kolom, memotong kata hanya kalau katanya memang
@@ -122,17 +123,21 @@
     };
 
     /**
-     * Susun struk lengkap.
-     * @param txData payload checkout ({transaction, customer, cashReceived}) atau objek transaksi
-     * @param info   pengaturan toko (STORE_NAME, TAGLINE, ...)
-     * @param opts   { cols, cut, cashierName }
-     * @returns {Uint8Array}
+     * Susun struk sebagai daftar baris.
+     *
+     * Ini satu-satunya tempat tata letak struk ditentukan. Byte printer dan
+     * pratinjau HTML sama-sama dibuat dari daftar ini, supaya keduanya tidak
+     * pernah lagi berbeda bentuk.
+     *
+     * Tiap baris: { t: teks, a: 'l'|'c', s: 'n'|'d'|'t', b: tebal }
+     * Baris khusus: { feed: n } dan { cut: true }
      */
-    function buildReceipt(txData, info, opts) {
+    function buildReceiptLines(txData, info, opts) {
         info = info || {};
         opts = opts || {};
         var cols = opts.cols || 32;
-        var b = new Builder(cols);
+        var out = [];
+        var add = function (t, a, s, bold) { out.push({ t: t, a: a || 'l', s: s || 'n', b: !!bold }); };
 
         var tx = txData.transaction || txData;
         var items = tx.items || txData.items || [];
@@ -146,30 +151,25 @@
         var custName = customerObj ? customerObj.nickname : (tx.nickname || txData.nickname || 'Guest');
         var custType = customerObj ? (customerObj.customerType || 'REGULAR') : 'REGULAR';
 
-        b.raw(CMD.INIT).raw(CMD.CODEPAGE_437);
-
         // --- Kepala ---
-        b.raw(CMD.ALIGN_CENTER).raw(CMD.SIZE_DOUBLE).raw(CMD.BOLD_ON);
-        b.ln(info.STORE_NAME || 'ARUNIKA COFFEE');
-        b.raw(CMD.BOLD_OFF).raw(CMD.SIZE_NORMAL);
-        if (info.TAGLINE) b.ln(info.TAGLINE);
+        add(info.STORE_NAME || 'ARUNIKA COFFEE', 'c', 'd', true);
+        if (info.TAGLINE) add(info.TAGLINE, 'c');
         if (info.STORE_ADDRESS) {
-            wrap(info.STORE_ADDRESS, cols).forEach(function (l) { b.ln(l); });
+            wrap(info.STORE_ADDRESS, cols).forEach(function (l) { add(l, 'c'); });
         }
-        if (info.STORE_PHONE) b.ln('Telp: ' + info.STORE_PHONE);
-        if (info.STORE_INSTAGRAM) b.ln('IG: ' + info.STORE_INSTAGRAM);
+        if (info.STORE_PHONE) add('Telp: ' + info.STORE_PHONE, 'c');
+        if (info.STORE_INSTAGRAM) add('IG: ' + info.STORE_INSTAGRAM, 'c');
 
-        b.raw(CMD.ALIGN_LEFT);
-        b.ln(line('=', cols));
+        add(line('=', cols));
 
         // --- Identitas transaksi ---
-        b.ln(pair('No', txCode, cols));
-        b.ln(pair('Waktu', dateStr, cols));
-        b.ln(pair('Kasir', opts.cashierName || 'Kasir', cols));
-        b.ln(pair('Member', custName, cols));
-        if (custType === 'EMPLOYEE') b.ln(pair('Tipe', 'KARYAWAN', cols));
-        b.ln(pair('Bayar', tx.paymentMethod || txData.paymentMethod || 'CASH', cols));
-        b.ln(line('-', cols));
+        add(pair('No', txCode, cols));
+        add(pair('Waktu', dateStr, cols));
+        add(pair('Kasir', opts.cashierName || 'Kasir', cols));
+        add(pair('Member', custName, cols));
+        if (custType === 'EMPLOYEE') add(pair('Tipe', 'KARYAWAN', cols));
+        add(pair('Bayar', tx.paymentMethod || txData.paymentMethod || 'CASH', cols));
+        add(line('-', cols));
 
         // --- Item ---
         var totalItemDiscount = 0;
@@ -181,15 +181,15 @@
                 var disc = (item.discountAmount || 0) * qty;
                 totalItemDiscount += disc;
 
-                wrap(name, cols).forEach(function (l) { b.ln(l); });
-                b.ln(pair('  ' + qty + ' x ' + rupiah(price), rupiah(price * qty), cols));
-                if (disc > 0) b.ln(pair('  Potongan', '-' + rupiah(disc), cols));
+                wrap(name, cols).forEach(function (l) { add(l); });
+                add(pair('  ' + qty + ' x ' + rupiah(price), rupiah(price * qty), cols));
+                if (disc > 0) add(pair('  Potongan', rupiah(-disc), cols));
             });
         } else {
-            b.ln(pair('1 x Transaksi Menu', rupiah(tx.totalAmount || 0), cols));
+            add(pair('1 x Transaksi Menu', rupiah(tx.totalAmount || 0), cols));
         }
 
-        b.ln(line('-', cols));
+        add(line('-', cols));
 
         // --- Ringkasan uang ---
         var totalAmount = (tx.totalAmount !== undefined) ? tx.totalAmount : (txData.totalAmount || 0);
@@ -202,69 +202,138 @@
         var changeAmount = (cashTendered > totalAmount) ? (cashTendered - totalAmount) : 0;
         var pointsEarned = (tx.pointsEarned !== undefined) ? tx.pointsEarned : (txData.pointsEarned || 0);
 
-        b.ln(pair('Subtotal', rupiah(grossBeforeDiscount), cols));
-        if (totalItemDiscount > 0) b.ln(pair('Diskon Item', '-' + rupiah(totalItemDiscount), cols));
-        if (orderDiscount > 0) b.ln(pair('Diskon Order', '-' + rupiah(orderDiscount), cols));
-        if (taxAmount > 0) b.ln(pair('Termasuk PPN', rupiah(taxAmount), cols));
+        add(pair('Subtotal', rupiah(grossBeforeDiscount), cols));
+        if (totalItemDiscount > 0) add(pair('Diskon Item', rupiah(-totalItemDiscount), cols));
+        if (orderDiscount > 0) add(pair('Diskon Order', rupiah(-orderDiscount), cols));
+        if (taxAmount > 0) add(pair('Termasuk PPN', rupiah(taxAmount), cols));
 
-        b.ln(line('=', cols));
-        b.raw(CMD.SIZE_TALL).raw(CMD.BOLD_ON);
-        b.ln(pair('TOTAL', rupiah(totalAmount), cols));
-        b.raw(CMD.BOLD_OFF).raw(CMD.SIZE_NORMAL);
+        add(line('=', cols));
+        add(pair('TOTAL', rupiah(totalAmount), cols), 'l', 't', true);
 
         if (cashTendered >= totalAmount && (tx.paymentMethod || 'CASH') === 'CASH') {
-            b.ln(pair('Tunai', rupiah(cashTendered), cols));
-            b.ln(pair('Kembali', rupiah(changeAmount), cols));
+            add(pair('Tunai', rupiah(cashTendered), cols));
+            add(pair('Kembali', rupiah(changeAmount), cols));
         }
         if (pointsEarned > 0) {
-            b.ln(line('-', cols));
-            b.ln(pair('Poin didapat', '+' + pointsEarned, cols));
+            add(line('-', cols));
+            add(pair('Poin didapat', '+' + pointsEarned, cols));
             if (customerObj && customerObj.points !== undefined) {
-                b.ln(pair('Total poin', String(customerObj.points), cols));
+                add(pair('Total poin', String(customerObj.points), cols));
             }
         }
 
         // --- Kaki ---
-        b.feed(1).raw(CMD.ALIGN_CENTER);
+        out.push({ feed: 1 });
         if (info.RECEIPT_FOOTER) {
-            wrap(info.RECEIPT_FOOTER, cols).forEach(function (l) { b.ln(l); });
+            wrap(info.RECEIPT_FOOTER, cols).forEach(function (l) { add(l, 'c'); });
         }
-        b.ln('Simpan struk ini');
-        b.ln('sebagai bukti pembayaran');
-        b.raw(CMD.ALIGN_LEFT);
+        add('Simpan struk ini', 'c');
+        add('sebagai bukti pembayaran', 'c');
 
         // Ruang sobek: printer tanpa cutter butuh kertas maju agar teks terakhir
         // lolos dari kepala cetak.
-        b.feed(4);
-        if (opts.cut) b.raw(CMD.CUT_PARTIAL);
+        out.push({ feed: 4 });
+        if (opts.cut) out.push({ cut: true });
 
+        return out;
+    }
+
+    /** Daftar baris -> byte ESC/POS. */
+    function linesToBytes(lines) {
+        var b = new Builder();
+        var align = 'l', size = 'n', bold = false;
+        b.raw(CMD.INIT).raw(CMD.CODEPAGE_437);
+
+        // Kembalikan mode ke normal; dipanggil sebelum memotong kertas dan di akhir
+        // supaya perintah potong benar-benar jadi byte terakhir.
+        var resetState = function () {
+            if (align !== 'l') { b.raw(CMD.ALIGN_LEFT); align = 'l'; }
+            if (size !== 'n') { b.raw(CMD.SIZE_NORMAL); size = 'n'; }
+            if (bold) { b.raw(CMD.BOLD_OFF); bold = false; }
+        };
+
+        lines.forEach(function (l) {
+            if (l.feed) { b.feed(l.feed); return; }
+            if (l.cut) { resetState(); b.raw(CMD.CUT_PARTIAL); return; }
+
+            if (l.a !== align) {
+                b.raw(l.a === 'c' ? CMD.ALIGN_CENTER : CMD.ALIGN_LEFT);
+                align = l.a;
+            }
+            if (l.s !== size) {
+                b.raw(l.s === 'd' ? CMD.SIZE_DOUBLE : (l.s === 't' ? CMD.SIZE_TALL : CMD.SIZE_NORMAL));
+                size = l.s;
+            }
+            if (l.b !== bold) {
+                b.raw(l.b ? CMD.BOLD_ON : CMD.BOLD_OFF);
+                bold = l.b;
+            }
+            b.ln(l.t);
+        });
+
+        resetState();
         return new Uint8Array(b.bytes);
     }
 
+    function escapeHtml(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    /**
+     * Daftar baris -> HTML monospace. Bentuknya sengaja dibuat sama persis dengan
+     * yang keluar di kertas, jadi pratinjau di layar = hasil cetak.
+     */
+    function linesToHtml(lines) {
+        var html = lines.map(function (l) {
+            if (l.cut) return '';
+            if (l.feed) return new Array(l.feed + 1).join('<div>&nbsp;</div>');
+            var style = 'white-space: pre; font-family: inherit;';
+            if (l.a === 'c') style += ' text-align: center;';
+            if (l.s === 'd') style += ' font-size: 1.55em; font-weight: 800; line-height: 1.25;';
+            else if (l.s === 't') style += ' font-size: 1.15em; line-height: 1.3;';
+            if (l.b && l.s !== 'd') style += ' font-weight: 700;';
+            return '<div style="' + style + '">' + (escapeHtml(l.t) || '&nbsp;') + '</div>';
+        }).join('');
+        return '<div class="thermal-receipt-card" id="printable-receipt">' + html + '</div>';
+    }
+
+    /** Struk siap kirim ke printer. */
+    function buildReceipt(txData, info, opts) {
+        return linesToBytes(buildReceiptLines(txData, info, opts));
+    }
+
+    /** Struk yang sama, tapi sebagai HTML untuk pratinjau & dialog cetak browser. */
+    function buildReceiptHtml(txData, info, opts) {
+        return linesToHtml(buildReceiptLines(txData, info, opts));
+    }
+
     /** Struk uji singkat untuk memastikan printer & sambungan bekerja. */
-    function buildTestReceipt(info, opts) {
+    function buildTestReceiptLines(info, opts) {
         opts = opts || {};
         var cols = opts.cols || 32;
-        var b = new Builder(cols);
-        b.raw(CMD.INIT).raw(CMD.CODEPAGE_437);
-        b.raw(CMD.ALIGN_CENTER).raw(CMD.SIZE_DOUBLE).raw(CMD.BOLD_ON);
-        b.ln('TES CETAK');
-        b.raw(CMD.BOLD_OFF).raw(CMD.SIZE_NORMAL);
-        b.ln((info && info.STORE_NAME) || 'ARUNIKA POS');
-        b.raw(CMD.ALIGN_LEFT);
-        b.ln(line('=', cols));
-        b.ln(pair('Lebar kertas', cols + ' kolom', cols));
-        b.ln(pair('Waktu', new Date().toLocaleString('id-ID'), cols));
-        b.ln(line('-', cols));
+        var out = [];
+        var add = function (t, a, s, b) { out.push({ t: t, a: a || 'l', s: s || 'n', b: !!b }); };
+
+        add('TES CETAK', 'c', 'd', true);
+        add((info && info.STORE_NAME) || 'ARUNIKA POS', 'c');
+        add(line('=', cols));
+        add(pair('Lebar kertas', cols + ' kolom', cols));
+        add(pair('Waktu', new Date().toLocaleString('id-ID'), cols));
+        add(line('-', cols));
         // Penggaris kolom: kalau angka terakhir terpotong, berarti kolomnya kebanyakan.
         var ruler = '';
         for (var i = 1; i <= cols; i++) ruler += (i % 10 === 0) ? String(i / 10) : '.';
-        b.ln(ruler);
-        b.ln('Kalau baris di atas utuh,');
-        b.ln('lebar kertas sudah pas.');
-        b.feed(4);
-        if (opts.cut) b.raw(CMD.CUT_PARTIAL);
-        return new Uint8Array(b.bytes);
+        add(ruler);
+        add('Kalau baris di atas utuh,');
+        add('lebar kertas sudah pas.');
+        add(pair('Contoh nominal', rupiah(1250000), cols));
+        out.push({ feed: 4 });
+        if (opts.cut) out.push({ cut: true });
+        return out;
+    }
+
+    function buildTestReceipt(info, opts) {
+        return linesToBytes(buildTestReceiptLines(info, opts));
     }
 
     function bytesToBase64(bytes) {
@@ -290,6 +359,8 @@
 
     var api = {
         buildReceipt: buildReceipt,
+        buildReceiptHtml: buildReceiptHtml,
+        buildReceiptLines: buildReceiptLines,
         buildTestReceipt: buildTestReceipt,
         bytesToBase64: bytesToBase64,
         hasBridge: hasBridge,
