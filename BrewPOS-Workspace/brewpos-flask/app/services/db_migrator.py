@@ -153,6 +153,78 @@ def auto_sync_schema(app):
                 [createdAt] DATETIME NOT NULL DEFAULT GETDATE()
             )
         """),
+        # Omzet harian dari masa sebelum aplikasi dipakai. Sengaja bukan
+        # Transaction: tidak ada rincian menu, dan menyimpannya di sana akan
+        # memotong stok hari ini serta menghitung poin member dua kali.
+        ("HistoricalSales", """
+            CREATE TABLE [HistoricalSales] (
+                [id] INT IDENTITY(1,1) PRIMARY KEY,
+                [date] DATE NOT NULL UNIQUE,
+                [totalAmount] INT NOT NULL DEFAULT 0,
+                [transactionCount] INT NULL,
+                [notes] NVARCHAR(MAX) NULL,
+                [createdAt] DATETIME NOT NULL DEFAULT GETDATE(),
+                [updatedAt] DATETIME NOT NULL DEFAULT GETDATE()
+            )
+        """),
+        # Resep menu: berapa banyak tiap bahan yang terpakai per 1 porsi.
+        # Sempat hanya lahir lewat seed.py, jadi database yang dibangun tanpa
+        # seed tidak punya tabel ini sama sekali -- akibatnya potong stok
+        # otomatis, HPP, dan seluruh fitur resep diam-diam tidak jalan.
+        # Harus dibuat setelah Menu & InventoryItem karena mengacu ke keduanya.
+        ("RecipeIngredient", """
+            CREATE TABLE [RecipeIngredient] (
+                [id] INT IDENTITY(1,1) PRIMARY KEY,
+                [menuId] INT NOT NULL,
+                [inventoryItemId] INT NOT NULL,
+                [quantityNeeded] FLOAT NOT NULL,
+                CONSTRAINT [fk_recipe_menu] FOREIGN KEY ([menuId])
+                    REFERENCES [Menu]([id]) ON DELETE CASCADE,
+                CONSTRAINT [fk_recipe_inventory] FOREIGN KEY ([inventoryItemId])
+                    REFERENCES [InventoryItem]([id]),
+                CONSTRAINT [uq_menu_inventory_ingredient] UNIQUE ([menuId], [inventoryItemId])
+            )
+        """),
+    ]
+
+    # Indeks. MSSQL membuatkan indeks sendiri untuk PRIMARY KEY dan UNIQUE, tapi
+    # TIDAK untuk foreign key -- jadi setiap join dan setiap filter rentang
+    # tanggal di laporan berjalan sebagai pemindaian tabel penuh. Tidak terasa
+    # saat tabelnya masih ratusan baris, mulai menggigit di puluhan ribu.
+    #
+    # Kolom di sini diambil dari yang benar-benar difilter kode, bukan ditebak:
+    # Transaction.createdAt dan Expense.date masing-masing dipakai 11 kali.
+    #
+    # Urutan kolom pada indeks gabungan mengikuti urutan pemakaian: kolom yang
+    # dibandingkan sama-dengan lebih dulu, rentang tanggal terakhir.
+    new_indexes = [
+        # Laporan penjualan: hampir selalu rentang tanggal, sering plus status.
+        ('IX_Transaction_createdAt', 'Transaction', '[createdAt]'),
+        ('IX_Transaction_status_createdAt', 'Transaction', '[status], [createdAt]'),
+        ('IX_Transaction_shiftId', 'Transaction', '[shiftId]'),
+        ('IX_Transaction_customerId', 'Transaction', '[customerId]'),
+        ('IX_Transaction_userId', 'Transaction', '[userId]'),
+        ('IX_Transaction_transactionCode', 'Transaction', '[transactionCode]'),
+        # Setiap struk & setiap laporan margin menjahit tabel ini ke Transaction.
+        ('IX_TransactionItem_transactionId', 'TransactionItem', '[transactionId]'),
+        ('IX_TransactionItem_menuId', 'TransactionItem', '[menuId]'),
+        # Riwayat mutasi stok per bahan, dan hitung pemakaian per rentang.
+        ('IX_InventoryLog_itemId_createdAt', 'InventoryLog', '[itemId], [createdAt]'),
+        ('IX_InventoryLog_createdAt', 'InventoryLog', '[createdAt]'),
+        # Identitas member: cukup salah satu dari HP atau email, dua-duanya dicari.
+        ('IX_Customer_phone', 'Customer', '[phone]'),
+        ('IX_Customer_email', 'Customer', '[email]'),
+        ('IX_Customer_nickname', 'Customer', '[nickname]'),
+        ('IX_Expense_date', 'Expense', '[date]'),
+        ('IX_Expense_categoryId', 'Expense', '[categoryId]'),
+        ('IX_Expense_shiftId', 'Expense', '[shiftId]'),
+        ('IX_Shift_startTime', 'Shift', '[startTime]'),
+        ('IX_Shift_status', 'Shift', '[status]'),
+        ('IX_Menu_categoryId', 'Menu', '[categoryId]'),
+        ('IX_RecipeIngredient_inventoryItemId', 'RecipeIngredient', '[inventoryItemId]'),
+        ('IX_DailyOpnameItem_opnameId', 'DailyOpnameItem', '[opnameId]'),
+        ('IX_Attendance_userId_clockIn', 'Attendance', '[userId], [clockIn]'),
+        ('IX_SystemLog_createdAt', 'SystemLog', '[createdAt]'),
     ]
 
     # One-time backfill: the rupiah value used to be parsed out of the reward name in the
@@ -197,6 +269,24 @@ def auto_sync_schema(app):
                         conn.commit()
                     except Exception as e:
                         print(f"[Schema Sync] FAILED creating table {table_name}: {e}")
+
+                # Indeks dibuat setelah tabel & kolomnya ada. Aman diulang:
+                # tiap pernyataan memeriksa sys.indexes lebih dulu.
+                for nama, tabel, kolom in new_indexes:
+                    try:
+                        conn.execute(text(f"""
+                            IF EXISTS (SELECT * FROM sys.tables WHERE name = '{tabel}')
+                            AND NOT EXISTS (
+                                SELECT * FROM sys.indexes
+                                WHERE name = '{nama}' AND object_id = OBJECT_ID(N'[{tabel}]')
+                            )
+                            BEGIN
+                                CREATE NONCLUSTERED INDEX [{nama}] ON [{tabel}] ({kolom});
+                            END
+                        """))
+                        conn.commit()
+                    except Exception as e:
+                        print(f"[Schema Sync] Index note ({nama}): {e}")
 
                 for sql in shift_backfills:
                     try:
