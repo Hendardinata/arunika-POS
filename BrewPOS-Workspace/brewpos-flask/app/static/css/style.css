@@ -2257,10 +2257,120 @@ body.scroll-locked {
 }
 
 /* ==========================================================================
+   Pratinjau struk di layar
+
+   Isi & tata letaknya sama persis dengan yang keluar di kertas (dibangun dari
+   model baris yang sama di escpos.js), tapi tampilannya dibuat menyerupai
+   gulungan kertas thermal: tepi sobek, garis pemisah sungguhan, spasi lega.
+   ========================================================================== */
+
+/* Latar redup di belakang kertas, kalau tidak tepi sobeknya putih di atas putih
+   dan struk tidak terbaca sebagai lembaran. */
+#receipt-modal-body,
+#report-receipt-body {
+  background: #E9E2DB;
+  padding: 18px 12px !important;
+}
+
+.receipt-paper {
+  position: relative;
+  background: #FFFDFA;
+  border: none;
+  border-radius: 0;
+  padding: 22px 20px 26px;
+  margin: 6px auto;
+  max-width: 320px;
+  box-shadow: 0 6px 22px rgba(70, 45, 30, 0.16);
+  color: #2A2320;
+  letter-spacing: 0.02em;
+}
+
+/* Tepi sobek kertas di atas & bawah */
+.receipt-paper::before,
+.receipt-paper::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 7px;
+  background:
+    linear-gradient(45deg, transparent 33.33%, #FFFDFA 33.33%, #FFFDFA 66.66%, transparent 66.66%),
+    linear-gradient(-45deg, transparent 33.33%, #FFFDFA 33.33%, #FFFDFA 66.66%, transparent 66.66%);
+  background-size: 12px 14px;
+}
+
+.receipt-paper::before {
+  top: -7px;
+  transform: scaleY(-1);
+}
+
+.receipt-paper::after {
+  bottom: -7px;
+}
+
+.receipt-line {
+  white-space: pre;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.receipt-line.center {
+  text-align: center;
+}
+
+.receipt-line.bold {
+  font-weight: 700;
+}
+
+/* Nama toko */
+.receipt-line.title {
+  font-size: 1.5em;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  margin-bottom: 2px;
+}
+
+/* Baris TOTAL: satu-satunya angka yang harus langsung ketemu mata */
+.receipt-line.total {
+  font-size: 1.2em;
+  font-weight: 800;
+  padding: 3px 0;
+}
+
+.receipt-rule {
+  border-top: 1px dashed #C9B9A8;
+  margin: 7px 0;
+}
+
+.receipt-rule.strong {
+  border-top: 1px solid #8A7561;
+}
+
+/* ==========================================================================
    Print CSS Engine: Thermal Receipt & Reports
    ========================================================================== */
 
 @media print {
+  /* Hiasan pratinjau tidak boleh ikut tercetak */
+  .receipt-paper::before,
+  .receipt-paper::after {
+    display: none !important;
+  }
+
+  .receipt-paper {
+    box-shadow: none !important;
+    background: #FFF !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+  }
+
+  #receipt-modal-body,
+  #report-receipt-body {
+    background: #FFF !important;
+    padding: 0 !important;
+  }
+
   /* Global Hide for Non-Print elements */
   .no-print, .sidebar, .topbar, .modal-header, .modal-footer, button, #toast-container, .mobile-cart-bar {
     display: none !important;

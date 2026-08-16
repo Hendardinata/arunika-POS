@@ -221,7 +221,26 @@ check('pratinjau HTML dibuat dari model baris yang sama', () => {
     ['Rp 68.000', 'Rp 100.000', 'TOTAL', 'Telp: 081997885072'].forEach(t => {
         assert.ok(html.includes(t), 'HTML tidak memuat: ' + t);
     });
-    assert.ok(html.includes('text-align: center'), 'perataan tengah tidak diterapkan di HTML');
+    assert.ok(/class="receipt-line[^"]*center/.test(html), 'perataan tengah tidak ditandai di HTML');
+});
+
+check('garis pemisah digambar sebagai garis, bukan deretan "="', () => {
+    // Di kertas tetap "====", di layar jadi elemen garis supaya enak dilihat.
+    const html = EscPos.buildReceiptHtml(tx, store, { cols: COLS });
+    assert.ok(html.includes('receipt-rule strong'), 'garis tebal tidak ada di HTML');
+    assert.ok(html.includes('receipt-rule"'), 'garis putus-putus tidak ada di HTML');
+    assert.ok(!html.includes('===='), 'deretan "=" masih ikut tercetak di layar');
+    assert.ok(!html.includes('----'), 'deretan "-" masih ikut tercetak di layar');
+
+    // Sementara byte printer harus tetap memuat garis karakternya
+    const teks = Buffer.from(EscPos.buildReceipt(tx, store, { cols: COLS })).toString('latin1');
+    assert.ok(teks.includes('='.repeat(COLS)), 'garis "=" hilang dari struk printer');
+    assert.ok(teks.includes('-'.repeat(COLS)), 'garis "-" hilang dari struk printer');
+});
+
+check('HTML tidak memuat baris maju kertas', () => {
+    const html = EscPos.buildReceiptHtml(tx, store, { cols: COLS });
+    assert.ok(!/&nbsp;<\/div>\s*<div[^>]*>&nbsp;/.test(html), 'baris kosong beruntun ikut dirender');
 });
 
 check('HTML aman dari karakter berbahaya di nama menu', () => {

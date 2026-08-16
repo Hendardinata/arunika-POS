@@ -138,6 +138,7 @@
         var cols = opts.cols || 32;
         var out = [];
         var add = function (t, a, s, bold) { out.push({ t: t, a: a || 'l', s: s || 'n', b: !!bold }); };
+        var sep = function (ch) { out.push({ sep: ch }); };
 
         var tx = txData.transaction || txData;
         var items = tx.items || txData.items || [];
@@ -160,7 +161,7 @@
         if (info.STORE_PHONE) add('Telp: ' + info.STORE_PHONE, 'c');
         if (info.STORE_INSTAGRAM) add('IG: ' + info.STORE_INSTAGRAM, 'c');
 
-        add(line('=', cols));
+        sep('=');
 
         // --- Identitas transaksi ---
         add(pair('No', txCode, cols));
@@ -169,7 +170,7 @@
         add(pair('Member', custName, cols));
         if (custType === 'EMPLOYEE') add(pair('Tipe', 'KARYAWAN', cols));
         add(pair('Bayar', tx.paymentMethod || txData.paymentMethod || 'CASH', cols));
-        add(line('-', cols));
+        sep('-');
 
         // --- Item ---
         var totalItemDiscount = 0;
@@ -189,7 +190,7 @@
             add(pair('1 x Transaksi Menu', rupiah(tx.totalAmount || 0), cols));
         }
 
-        add(line('-', cols));
+        sep('-');
 
         // --- Ringkasan uang ---
         var totalAmount = (tx.totalAmount !== undefined) ? tx.totalAmount : (txData.totalAmount || 0);
@@ -207,7 +208,7 @@
         if (orderDiscount > 0) add(pair('Diskon Order', rupiah(-orderDiscount), cols));
         if (taxAmount > 0) add(pair('Termasuk PPN', rupiah(taxAmount), cols));
 
-        add(line('=', cols));
+        sep('=');
         add(pair('TOTAL', rupiah(totalAmount), cols), 'l', 't', true);
 
         if (cashTendered >= totalAmount && (tx.paymentMethod || 'CASH') === 'CASH') {
@@ -215,7 +216,7 @@
             add(pair('Kembali', rupiah(changeAmount), cols));
         }
         if (pointsEarned > 0) {
-            add(line('-', cols));
+            sep('-');
             add(pair('Poin didapat', '+' + pointsEarned, cols));
             if (customerObj && customerObj.points !== undefined) {
                 add(pair('Total poin', String(customerObj.points), cols));
@@ -239,8 +240,9 @@
     }
 
     /** Daftar baris -> byte ESC/POS. */
-    function linesToBytes(lines) {
-        var b = new Builder();
+    function linesToBytes(lines, cols) {
+        cols = cols || 32;
+        var b = new Builder(cols);
         var align = 'l', size = 'n', bold = false;
         b.raw(CMD.INIT).raw(CMD.CODEPAGE_437);
 
@@ -255,6 +257,7 @@
         lines.forEach(function (l) {
             if (l.feed) { b.feed(l.feed); return; }
             if (l.cut) { resetState(); b.raw(CMD.CUT_PARTIAL); return; }
+            if (l.sep) { b.ln(line(l.sep, cols)); return; }
 
             if (l.a !== align) {
                 b.raw(l.a === 'c' ? CMD.ALIGN_CENTER : CMD.ALIGN_LEFT);
@@ -285,21 +288,25 @@
      */
     function linesToHtml(lines) {
         var html = lines.map(function (l) {
-            if (l.cut) return '';
-            if (l.feed) return new Array(l.feed + 1).join('<div>&nbsp;</div>');
-            var style = 'white-space: pre; font-family: inherit;';
-            if (l.a === 'c') style += ' text-align: center;';
-            if (l.s === 'd') style += ' font-size: 1.55em; font-weight: 800; line-height: 1.25;';
-            else if (l.s === 't') style += ' font-size: 1.15em; line-height: 1.3;';
-            if (l.b && l.s !== 'd') style += ' font-weight: 700;';
-            return '<div style="' + style + '">' + (escapeHtml(l.t) || '&nbsp;') + '</div>';
+            // Perintah potong & maju kertas tidak punya arti di layar.
+            if (l.cut || l.feed) return '';
+            // Garis pemisah digambar sebagai garis sungguhan, bukan deretan "=".
+            // Isinya tetap sama dengan yang dicetak, cuma cara menampilkannya beda.
+            if (l.sep) return '<div class="receipt-rule' + (l.sep === '=' ? ' strong' : '') + '"></div>';
+
+            var cls = 'receipt-line';
+            if (l.a === 'c') cls += ' center';
+            if (l.s === 'd') cls += ' title';
+            else if (l.s === 't') cls += ' total';
+            if (l.b && l.s !== 'd') cls += ' bold';
+            return '<div class="' + cls + '">' + (escapeHtml(l.t) || '&nbsp;') + '</div>';
         }).join('');
-        return '<div class="thermal-receipt-card" id="printable-receipt">' + html + '</div>';
+        return '<div class="thermal-receipt-card receipt-paper" id="printable-receipt">' + html + '</div>';
     }
 
     /** Struk siap kirim ke printer. */
     function buildReceipt(txData, info, opts) {
-        return linesToBytes(buildReceiptLines(txData, info, opts));
+        return linesToBytes(buildReceiptLines(txData, info, opts), (opts || {}).cols || 32);
     }
 
     /** Struk yang sama, tapi sebagai HTML untuk pratinjau & dialog cetak browser. */
@@ -313,13 +320,14 @@
         var cols = opts.cols || 32;
         var out = [];
         var add = function (t, a, s, b) { out.push({ t: t, a: a || 'l', s: s || 'n', b: !!b }); };
+        var sep = function (ch) { out.push({ sep: ch }); };
 
         add('TES CETAK', 'c', 'd', true);
         add((info && info.STORE_NAME) || 'ARUNIKA POS', 'c');
-        add(line('=', cols));
+        sep('=');
         add(pair('Lebar kertas', cols + ' kolom', cols));
         add(pair('Waktu', new Date().toLocaleString('id-ID'), cols));
-        add(line('-', cols));
+        sep('-');
         // Penggaris kolom: kalau angka terakhir terpotong, berarti kolomnya kebanyakan.
         var ruler = '';
         for (var i = 1; i <= cols; i++) ruler += (i % 10 === 0) ? String(i / 10) : '.';
@@ -333,7 +341,7 @@
     }
 
     function buildTestReceipt(info, opts) {
-        return linesToBytes(buildTestReceiptLines(info, opts));
+        return linesToBytes(buildTestReceiptLines(info, opts), (opts || {}).cols || 32);
     }
 
     function bytesToBase64(bytes) {
