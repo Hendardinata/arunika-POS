@@ -467,11 +467,105 @@ async function printReceiptThermal(txData = null) {
     }
 }
 
-/* Dipanggil tombol "Cetak Struk": coba printer Bluetooth dulu, baru dialog cetak. */
+/*
+ * Struk lewat printer USB di PC. Dipisah dari printReceiptThermal karena
+ * jembatannya beda: Android pakai Bluetooth, PC pakai WebUSB. Bytenya sama.
+ *
+ * Mengembalikan false kalau printer USB belum dipilih atau browsernya tidak
+ * mendukung -- pemanggil lalu jatuh ke dialog cetak.
+ */
+/* Byte struk untuk transaksi ini. Dipakai semua jalur printer, supaya hasil di
+   Bluetooth, USB, dan jembatan lokal tidak mungkin berbeda bentuk. */
+async function byteStruk(txData = null) {
+    const data = txData || lastReceiptData;
+    if (!data) return null;
+    const settings = await getStoreSettings();
+    const user = getUser();
+    return EscPos.buildReceipt(data, settings, {
+        cols: receiptColumns(settings),
+        cut: (settings && settings.RECEIPT_AUTO_CUT) !== '0',
+        cashierName: (user && user.username) ? user.username : 'Kasir'
+    });
+}
+
+/*
+ * Jembatan printer lokal di PC kasir (printer_agent.py). Jalur ini yang dipakai
+ * kalau printer tercolok di PC kasir sementara servernya di mesin lain: driver
+ * Windows resmi tetap terpakai, dan bytenya sama persis dengan Android.
+ */
+async function printReceiptAgent(txData = null) {
+    if (typeof EscPos === 'undefined') return false;
+    if (!(await EscPos.agentAvailable())) return false;
+
+    const bytes = await byteStruk(txData);
+    if (!bytes) return false;
+    await EscPos.sendToAgent(bytes);
+    return true;
+}
+
+async function printReceiptUsb(txData = null) {
+    if (typeof EscPos === 'undefined' || !EscPos.usbSupported()) return false;
+
+    const device = await EscPos.getUsbPrinter();
+    if (!device) return false;   // belum pernah diizinkan; jangan paksa dialog di sini
+
+    const bytes = await byteStruk(txData);
+    if (!bytes) return false;
+    await EscPos.sendToUsb(bytes, device);
+    return true;
+}
+
+/*
+ * Kenapa struk tidak keluar lewat printer USB. Dialog cetak browser selalu
+ * bisa dipakai, tapi hasilnya buram: teks digambar dengan antialiasing lalu
+ * dipaksa jadi hitam-putih oleh kepala thermal, hurufnya keluar putus-putus.
+ * Jatuh ke sana tanpa memberi tahu membuat pengguna mengira sudah mentok,
+ * padahal jalur yang tajam cuma butuh satu langkah lagi.
+ */
+async function alasanPrinterUsbTidakDipakai() {
+    if (typeof EscPos === 'undefined') return 'Modul struk gagal dimuat.';
+
+    if (!EscPos.usbSupported()) {
+        if (typeof window !== 'undefined' && window.isSecureContext === false) {
+            return `Printer USB dimatikan browser karena halaman dibuka lewat ` +
+                   `${window.location.protocol}//${window.location.host}. ` +
+                   `WebUSB hanya jalan di HTTPS atau localhost.`;
+        }
+        return 'Browser ini tidak mendukung WebUSB. Pakai Chrome atau Edge versi baru.';
+    }
+    if (!(await EscPos.getUsbPrinter())) {
+        return 'Printer USB belum dipilih. Buka Pengaturan → Hubungkan Printer USB (cukup sekali).';
+    }
+    return null;
+}
+
+/* Dipanggil tombol "Cetak Struk": printer Bluetooth (Android), lalu printer USB
+   (PC), baru dialog cetak browser sebagai jalan terakhir. */
 async function printReceiptSmart(containerId = null, txData = null) {
     if (await printReceiptThermal(txData)) {
         showToast('Struk dikirim ke printer', 'success');
         return;
+    }
+    try {
+        // Jembatan lokal lebih dulu: jalan di http biasa dan tetap memakai
+        // driver resmi printer, jadi tidak menuntut apa-apa dari pengguna
+        // selain menjalankan programnya.
+        if (await printReceiptAgent(txData)) {
+            showToast('Struk dikirim ke printer', 'success');
+            return;
+        }
+        if (await printReceiptUsb(txData)) {
+            showToast('Struk dikirim ke printer USB', 'success');
+            return;
+        }
+        // Bukan galat, tapi pengguna tetap harus tahu kenapa hasilnya buram.
+        const alasan = await alasanPrinterUsbTidakDipakai();
+        if (alasan) showToast(alasan, 'warning');
+    } catch (e) {
+        // Printer USB sudah dipilih tapi gagal dipakai: beri tahu, jangan
+        // diam-diam jatuh ke dialog cetak yang hasilnya buram.
+        console.error('Gagal mengirim ke printer USB:', e);
+        showToast('Printer USB gagal: ' + e.message + '. Memakai dialog cetak.', 'warning');
     }
     printReceipt(containerId);
 }
@@ -508,24 +602,28 @@ async function printReceipt(containerId = null, forcedPaperSize = null) {
     // browser's 96dpi px assumption ---
     // A cheap 203dpi thermal head prints 384 dots on 58mm paper (48.0mm) and 576 dots
     // on 80mm paper (72.1mm). Those are the real printable widths; the rest of the
-    // roll is dead margin. Standard line length is 32 characters on 58mm and 48 on
-    // 80mm, and a monospace glyph advances 0.6em, which fixes the body font size:
-    //   58mm -> 46.5mm usable / 32 chars / 0.6 = 2.42mm
-    //   80mm -> 70.5mm usable / 48 chars / 0.6 = 2.45mm
-    // Near enough to share one value. RECEIPT_PRINT_SCALE is the calibration knob for
-    // printers whose driver does not hit the nominal size exactly.
+    // roll is dead margin. Standard line length is 32 characters on 58mm, 48 on 80mm,
+    // and a monospace glyph advances 0.6em -- which is what fixes the body font size.
+    //
+    // The figures below are deliberately ~1mm narrower than the true printable width.
+    // Filling it exactly leaves zero tolerance: the browser rounds mm to device dots,
+    // and one dot of rounding pushes the last character of every right-aligned line
+    // off the paper. RECEIPT_PRINT_SCALE is the calibration knob for drivers that do
+    // not hit the nominal size.
     const scalePct = parseFloat(settings && settings.RECEIPT_PRINT_SCALE) || 100;
     const scale = Math.min(200, Math.max(50, scalePct)) / 100;
-    const mm = (v) => (v * scale).toFixed(2) + 'mm';
+    const mm = (v) => (v * scale).toFixed(3) + 'mm';
+
+    const cols = is58mm ? 32 : 48;
+    const contentMm = is58mm ? 45.5 : 69.5;   // ruang teks, sudah termasuk kelonggaran
+    const sidePadMm = 0.75;
 
     const pageSizeCss = is58mm ? '58mm auto' : '80mm auto';
-    const bodyWidthCss = is58mm ? '48mm' : '72mm';
-    const sidePaddingCss = is58mm ? '0.75mm' : '0.75mm';
+    const bodyWidthCss = mm(contentMm + sidePadMm * 2);
+    const sidePaddingCss = mm(sidePadMm);
 
-    const fontSizeCss = mm(2.42);
-    const titleSizeCss = mm(3.4);
-    const boldSizeCss = mm(2.9);
-    const metaSizeCss = mm(2.1);
+    // Satu sumber angka: lebar isi / jumlah kolom / lebar maju glyph monospace.
+    const fontSizeCss = mm(contentMm / cols / 0.6);
     const lineHeightCss = '1.3';
     const dividerMargin = mm(1.1) + ' 0';
     const doubleMargin = mm(1.5) + ' 0';
@@ -574,17 +672,26 @@ async function printReceipt(containerId = null, forcedPaperSize = null) {
                     background: transparent !important;
                     font-size: inherit !important;
                 }
-                .receipt-header { text-align: center; margin-bottom: ${mm(1.5)}; }
-                .receipt-store-title { font-weight: 700; font-size: ${titleSizeCss}; text-transform: uppercase; }
-                .receipt-meta-info { font-size: ${metaSizeCss}; color: #000; margin-top: ${mm(0.5)}; line-height: 1.25; }
-                .receipt-divider { border-top: 1px dashed #000; margin: ${dividerMargin}; }
-                .receipt-divider.double { border-top: 1px solid #000; margin: ${doubleMargin}; }
-                .receipt-row { display: flex; justify-content: space-between; gap: ${mm(1)}; margin-bottom: ${mm(0.4)}; font-size: ${fontSizeCss}; }
-                .receipt-row.bold { font-weight: 700; font-size: ${boldSizeCss}; }
-                .receipt-footer { text-align: center; font-size: ${metaSizeCss}; margin-top: ${mm(2)}; }
-                .receipt-logo { display: none !important; }
-                /* Long menu names must wrap inside the slip, never widen it */
-                * { word-break: break-word; overflow-wrap: anywhere; }
+                /* Kelas-kelas ini dipancarkan linesToHtml() di escpos.js -- kalau di sana
+                   berubah, aturan di bawah wajib ikut (dijaga oleh test_escpos.js). */
+
+                /* white-space: pre wajib. Perataan kanan di jalur HTML sepenuhnya
+                   bergantung pada spasi padding buatan pair(); tanpa pre, browser
+                   meringkasnya jadi satu spasi dan semua nilai jadi rata kiri. */
+                .receipt-line { white-space: pre; line-height: ${lineHeightCss}; }
+                .receipt-line.center { text-align: center; }
+                .receipt-line.bold { font-weight: 700; }
+                /* Nama toko: em, bukan mm, supaya ikut skala kalibrasi. pre-wrap
+                   bukan pre -- nama panjang harus membungkus, bukan menjulur. */
+                .receipt-line.title { font-size: 1.4em; font-weight: 700; white-space: pre-wrap; line-height: 1.25; }
+                /* TOTAL: HANYA lebih tebal & lebih tinggi, JANGAN diperbesar lebarnya.
+                   Barisnya sudah dipadding tepat ${cols} karakter oleh pair(), jadi font
+                   yang lebih lebar pasti menjulur keluar kertas. Printer pun cuma
+                   menggandakan tinggi (SIZE_TALL), bukan lebar. */
+                .receipt-line.total { font-weight: 700; line-height: 1.7; padding: 0.4mm 0; }
+                .receipt-rule { border-top: 1px dashed #000; margin: ${dividerMargin}; }
+                .receipt-rule.strong { border-top: 1px solid #000; margin: ${doubleMargin}; }
+                /* .receipt-gap tingginya inline dari escpos.js, tidak perlu aturan di sini. */
             </style>
         </head>
         <body>

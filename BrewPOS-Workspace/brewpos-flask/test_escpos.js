@@ -13,9 +13,25 @@ const COLS = 32;
 let pass = 0;
 const fails = [];
 
+// Pemeriksaan yang mengembalikan Promise ikut ditunggu. Tanpa ini tes async
+// selalu "lulus" karena galatnya jatuh setelah ringkasan tercetak.
+const tertunda = [];
+
+function lulus(label) { console.log('  OK   ' + label); pass++; }
+function gagal(label, e) {
+    console.log(' FAIL  ' + label + '\n         ' + e.message);
+    fails.push(label);
+}
+
 function check(label, fn) {
-    try { fn(); console.log('  OK   ' + label); pass++; }
-    catch (e) { console.log(' FAIL  ' + label + '\n         ' + e.message); fails.push(label); }
+    try {
+        const hasil = fn();
+        if (hasil && typeof hasil.then === 'function') {
+            tertunda.push(hasil.then(() => lulus(label), (e) => gagal(label, e)));
+            return;
+        }
+        lulus(label);
+    } catch (e) { gagal(label, e); }
 }
 
 const store = {
@@ -274,6 +290,85 @@ check('HTML aman dari karakter berbahaya di nama menu', () => {
     assert.ok(html.includes('&lt;script&gt;'), 'escaping tidak dilakukan');
 });
 
+check('CSS dialog cetak menata semua kelas yang dipancarkan', () => {
+    /*
+     * Struk di layar dan struk di dialog cetak browser memakai markup yang sama,
+     * tapi stylesheet-nya beda berkas: style.css untuk layar, template <style> di
+     * dalam printReceipt() (app.js) untuk iframe cetak. Pernah keduanya berpisah
+     * jalan -- markup diganti, CSS layar ikut, CSS cetak tidak -- dan hasil cetak
+     * di PC keluar rata kiri semua tanpa garis pemisah. Ini penjaganya.
+     */
+    const fs = require('fs');
+    const appJs = fs.readFileSync('./app/static/js/app.js', 'utf8');
+    const css = appJs.slice(appJs.indexOf('<style>'), appJs.indexOf('</style>'));
+    assert.ok(css.length > 100, 'blok <style> dialog cetak tidak ditemukan di app.js');
+
+    // Sengaja tidak punya aturan CSS:
+    //   receipt-gap   -> tingginya inline dari escpos.js
+    //   receipt-paper -> lebar diatur .thermal-receipt-card di iframe
+    const tanpaAturan = new Set(['receipt-gap', 'receipt-paper']);
+
+    const html = EscPos.buildReceiptHtml(tx, store, { cols: COLS, cut: true });
+    const kelas = new Set();
+    for (const m of html.matchAll(/class="([^"]+)"/g)) {
+        m[1].trim().split(/\s+/).forEach(c => kelas.add(c));
+    }
+    assert.ok(kelas.size >= 5, 'kelas yang terbaca terlalu sedikit: ' + [...kelas]);
+
+    [...kelas].filter(c => !tanpaAturan.has(c)).forEach(c => {
+        assert.ok(new RegExp('\\.' + c + '\\b').test(css),
+            'kelas .' + c + ' dipancarkan tapi tidak ditata di CSS dialog cetak');
+    });
+});
+
+check('baris selebar penuh tidak boleh diperbesar fontnya', () => {
+    /*
+     * pair() memadding baris sampai tepat selebar kolom printer. Begitu font
+     * baris itu diperbesar, 32 karakternya menjulur keluar kertas dan nominal
+     * di ujung kanan terpotong -- persis yang terjadi pada .receipt-line.total
+     * yang sempat diberi font-size sendiri. Printer pun hanya menggandakan
+     * tinggi (SIZE_TALL), bukan lebar.
+     *
+     * .title dikecualikan: isinya nama toko yang rata tengah, bukan hasil pair().
+     */
+    const fs = require('fs');
+    const appJs = fs.readFileSync('./app/static/js/app.js', 'utf8');
+    const css = appJs.slice(appJs.indexOf('<style>'), appJs.indexOf('</style>'));
+
+    ['total', 'bold'].forEach(kelas => {
+        const m = css.match(new RegExp('\\.receipt-line\\.' + kelas + '\\s*\\{([^}]*)\\}'));
+        assert.ok(m, 'aturan .receipt-line.' + kelas + ' tidak ada di CSS dialog cetak');
+        assert.ok(!/font-size/.test(m[1]),
+            '.receipt-line.' + kelas + ' memakai font-size; baris sepanjang ' + COLS +
+            ' karakter akan menjulur keluar kertas: |' + m[1].trim() + '|');
+    });
+});
+
+check('lebar isi struk cetak menyisakan kelonggaran dari lebar cetak printer', () => {
+    // Kertas 58mm: kepala cetak 203dpi menjangkau ~46,5mm. Mengisinya pas-pasan
+    // berarti satu dot pembulatan browser sudah cukup membuang karakter terakhir.
+    const fs = require('fs');
+    const appJs = fs.readFileSync('./app/static/js/app.js', 'utf8');
+    const m = appJs.match(/contentMm\s*=\s*is58mm\s*\?\s*([\d.]+)\s*:\s*([\d.]+)/);
+    assert.ok(m, 'lebar isi (contentMm) tidak ditemukan di app.js');
+
+    const [, mm58, mm80] = m.map(Number);
+    assert.ok(mm58 <= 46.0, `lebar isi 58mm terlalu mepet: ${mm58}mm (maks 46,0mm)`);
+    assert.ok(mm80 <= 70.0, `lebar isi 80mm terlalu mepet: ${mm80}mm (maks 70,0mm)`);
+    // Terlalu sempit juga salah: strukmya jadi kekecilan di tengah kertas.
+    assert.ok(mm58 >= 44.0 && mm80 >= 67.0, 'lebar isi terlalu sempit, struk jadi kekecilan');
+});
+
+check('CSS dialog cetak mempertahankan spasi perataan', () => {
+    // pair() merata-kanankan nilai dengan spasi. Tanpa white-space: pre browser
+    // meringkasnya jadi satu spasi dan semua nominal jatuh ke kiri.
+    const fs = require('fs');
+    const appJs = fs.readFileSync('./app/static/js/app.js', 'utf8');
+    const css = appJs.slice(appJs.indexOf('<style>'), appJs.indexOf('</style>'));
+    assert.ok(/\.receipt-line\s*\{[^}]*white-space:\s*pre/.test(css),
+        'white-space: pre hilang dari .receipt-line di CSS dialog cetak');
+});
+
 check('struk tes memuat penggaris kolom yang utuh', () => {
     const lines = extractLines(EscPos.buildTestReceipt(store, { cols: COLS }));
     const ruler = lines.find(l => /^[.\d]{10,}$/.test(l));
@@ -289,10 +384,54 @@ check('base64 bolak-balik utuh', () => {
     assert.ok(Buffer.from(b64, 'base64').equals(Buffer.from(bytes)));
 });
 
+check('endpoint printer USB dipilih dari antarmuka kelas printer', () => {
+    // Printer thermal USB sering mengekspos beberapa antarmuka (kelas 7 untuk
+    // printer, kadang kelas 3/255 untuk hal lain). Salah pilih = data terkirim
+    // ke tempat yang tidak mencetak apa-apa.
+    const device = {
+        configuration: {
+            interfaces: [
+                { interfaceNumber: 0, alternate: { interfaceClass: 3, endpoints: [{ direction: 'out', endpointNumber: 9 }] } },
+                { interfaceNumber: 1, alternate: { interfaceClass: 7, endpoints: [
+                    { direction: 'in', endpointNumber: 2 },
+                    { direction: 'out', endpointNumber: 3 }
+                ] } }
+            ]
+        }
+    };
+    const t = EscPos._findPrinterEndpoint(device);
+    assert.deepStrictEqual(t, { iface: 1, endpoint: 3 }, 'endpoint keluar printer salah');
+});
+
+check('perangkat tanpa antarmuka printer ditolak, bukan ditebak', () => {
+    const bukan = { configuration: { interfaces: [
+        { interfaceNumber: 0, alternate: { interfaceClass: 8, endpoints: [{ direction: 'out', endpointNumber: 1 }] } }
+    ] } };
+    assert.strictEqual(EscPos._findPrinterEndpoint(bukan), null);
+    assert.strictEqual(EscPos._findPrinterEndpoint({ configuration: null }), null);
+});
+
+check('printer USB yang cuma punya endpoint masuk tidak dianggap siap', () => {
+    const searah = { configuration: { interfaces: [
+        { interfaceNumber: 0, alternate: { interfaceClass: 7, endpoints: [{ direction: 'in', endpointNumber: 1 }] } }
+    ] } };
+    assert.strictEqual(EscPos._findPrinterEndpoint(searah), null);
+});
+
+check('tanpa WebUSB, jalur USB menolak dengan sopan alih-alih melempar', async () => {
+    // Node tidak punya navigator.usb -- persis seperti browser lama.
+    assert.strictEqual(EscPos.usbSupported(), false);
+    assert.strictEqual(await EscPos.getUsbPrinter(), null);
+    await assert.rejects(() => EscPos.requestUsbPrinter(), /tidak mendukung WebUSB/);
+});
+
 check('tanpa jembatan Android, sendToBridge menolak dengan sopan', () => {
     assert.strictEqual(EscPos.hasBridge(), false);
     assert.strictEqual(EscPos.sendToBridge(bytes), false);
 });
 
-console.log('\n' + (fails.length ? `GAGAL (${fails.length}): ${fails.join(', ')}` : `SEMUA LULUS (${pass} pemeriksaan)`));
-process.exit(fails.length ? 1 : 0);
+Promise.all(tertunda).then(() => {
+    console.log('\n' + (fails.length ? `GAGAL (${fails.length}): ${fails.join(', ')}`
+                                     : `SEMUA LULUS (${pass} pemeriksaan)`));
+    process.exit(fails.length ? 1 : 0);
+});

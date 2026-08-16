@@ -308,10 +308,13 @@
             document.getElementById('cfg-paper-size').value = map['RECEIPT_PAPER_SIZE'] || '58mm';
             document.getElementById('cfg-print-scale').value = map['RECEIPT_PRINT_SCALE'] || '100';
             document.getElementById('cfg-auto-cut').value = map['RECEIPT_AUTO_CUT'] || '1';
-            renderPrinterBridgeStatus();
         } catch (e) {
             showToast('Gagal memuat pengaturan: ' + e.message, 'error');
         }
+        // Di luar try: status printer adalah alat diagnosis. Kalau ikut terkubur
+        // saat pemuatan pengaturan gagal, justru hilang tepat ketika paling
+        // dibutuhkan -- dan bagiannya terlihat kosong tanpa penjelasan.
+        renderPrinterBridgeStatus();
     }
 
     /* Jembatan printer hanya ada di dalam aplikasi Android; di browser biasa
@@ -325,9 +328,16 @@
             : '<span class="badge-chip warning"><i class="fas fa-link-slash"></i> Aplikasi printer tidak terdeteksi</span>'
               + ' <span class="text-muted">&mdash; struk akan dibuka lewat dialog cetak biasa</span>';
 
-        // Alat bantu hanya berguna di dalam aplikasi Android
+        if (!ready) {
+            renderJembatanPrinterStatus(el);
+            renderUsbPrinterStatus(el);
+        }
+
+        // Tombol uji cetak berguna di aplikasi Android (Bluetooth) maupun di PC
+        // yang browsernya bisa menyetir printer USB langsung.
         const tools = document.getElementById('printer-tools');
-        if (tools) tools.style.display = ready ? 'flex' : 'none';
+        const bisaCetak = ready || (typeof EscPos !== 'undefined' && EscPos.usbSupported());
+        if (tools) tools.style.display = bisaCetak ? 'flex' : 'none';
 
         // Galat terakhir dari sisi Android ditarik ke sini supaya tidak perlu
         // kabel USB untuk membacanya.
@@ -341,17 +351,111 @@
         }
     }
 
+    /*
+     * Di PC, printer thermal USB bisa disetir langsung dari Chrome/Edge lewat
+     * WebUSB. Ini bukan sekadar alternatif: dialog cetak browser menggambar
+     * teks jadi gambar beserta antialiasingnya, dan kepala thermal yang cuma
+     * kenal hitam-atau-kosong mengubah abu-abu itu jadi bintik -- teks kecil
+     * keluar buram. Lewat WebUSB printer memakai font bawaannya, hasilnya tajam.
+     */
+    /* Jembatan printer lokal: satu-satunya jalur yang tetap memakai driver
+       resmi printer, jadi ini yang pertama diperiksa dan ditonjolkan. */
+    async function renderJembatanPrinterStatus(el) {
+        if (typeof EscPos === 'undefined' || typeof EscPos.agentAvailable !== 'function') return;
+
+        const baris = document.createElement('div');
+        baris.style.cssText = 'margin-top: 8px; font-size: 0.6875rem;';
+        baris.innerHTML = '<span class="text-muted">Memeriksa jembatan printer lokal...</span>';
+        el.appendChild(baris);
+
+        if (await EscPos.agentAvailable()) {
+            baris.innerHTML = '<span class="badge-chip success"><i class="fas fa-print"></i> '
+                + 'Jembatan printer aktif</span> <span class="text-muted">&mdash; struk dicetak '
+                + 'lewat driver resmi printer di PC ini</span>';
+            return;
+        }
+        baris.innerHTML = '<span class="badge-chip warning"><i class="fas fa-plug-circle-xmark"></i> '
+            + 'Jembatan printer tidak berjalan</span>'
+            + '<div class="text-muted" style="margin-top: 4px;">Jalankan <code>python printer_agent.py</code> '
+            + 'di PC yang printernya tercolok, lalu muat ulang halaman ini. '
+            + 'Tanpa itu struk keluar lewat dialog cetak dan hurufnya putus-putus.</div>';
+    }
+
+    async function renderUsbPrinterStatus(el) {
+        if (typeof EscPos === 'undefined' || !EscPos.usbSupported()) {
+            // Dua sebab yang beda jauh penanganannya, jangan disatukan:
+            // browser lama vs halaman yang dibuka lewat http:// alamat IP.
+            // navigator.usb memang tidak ada di konteks tak-aman, jadi tanpa
+            // pemisahan ini pengguna disuruh ganti browser padahal browsernya
+            // sudah benar.
+            const tidakAman = (typeof window !== 'undefined') && window.isSecureContext === false;
+            el.innerHTML += '<div class="text-danger" style="margin-top: 6px; font-size: 0.6875rem;">'
+                + '<i class="fas fa-triangle-exclamation"></i> '
+                + (tidakAman
+                    ? 'Printer USB dimatikan browser karena halaman ini dibuka lewat <b>'
+                      + window.location.protocol + '//' + window.location.host + '</b>. '
+                      + 'WebUSB hanya jalan di HTTPS atau localhost. Buka POS lewat '
+                      + '<b>http://localhost:5000</b> dari PC yang printernya tercolok, '
+                      + 'atau pasang HTTPS di servernya.'
+                    : 'Browser ini tidak mendukung WebUSB. Pakai Chrome atau Edge versi baru.')
+                + '</div>';
+            return;
+        }
+
+        const device = await EscPos.getUsbPrinter();
+        const nama = device ? (device.productName || 'Printer USB') : null;
+        el.innerHTML += '<div id="usb-printer-row" style="margin-top: 8px; display: flex; '
+            + 'align-items: center; gap: 8px; flex-wrap: wrap;">'
+            + (device
+                ? '<span class="badge-chip success"><i class="fas fa-plug"></i> Printer USB: ' + nama + '</span>'
+                : '<span class="badge-chip info"><i class="fas fa-plug-circle-plus"></i> Printer USB belum dipilih</span>')
+            + '<button type="button" class="btn btn-secondary btn-sm" onclick="pilihPrinterUsb()">'
+            + '<i class="fas fa-usb"></i> ' + (device ? 'Ganti Printer USB' : 'Hubungkan Printer USB')
+            + '</button></div>';
+    }
+
+    /* requestDevice wajib dipanggil dari dalam klik -- di luar gestur pengguna
+       browser menolak memunculkan dialog pemilihan perangkat. */
+    async function pilihPrinterUsb() {
+        try {
+            await EscPos.requestUsbPrinter();
+            showToast('Printer USB terhubung. Coba Cetak Struk Uji.', 'success');
+            renderPrinterBridgeStatus();
+        } catch (e) {
+            // Pengguna menutup dialog tanpa memilih: itu bukan galat.
+            if (e && e.name === 'NotFoundError') return;
+            showToast('Gagal menghubungkan printer USB: ' + e.message, 'error');
+        }
+    }
+
     async function runTestPrint() {
         const settings = await getStoreSettings();
         const cols = document.getElementById('cfg-paper-size').value.startsWith('80') ? 48 : 32;
         const cut = document.getElementById('cfg-auto-cut').value !== '0';
+        const bytes = EscPos.buildTestReceipt(settings, { cols, cut });
 
         if (typeof EscPos !== 'undefined' && EscPos.hasBridge()) {
-            EscPos.sendToBridge(EscPos.buildTestReceipt(settings, { cols, cut }));
+            EscPos.sendToBridge(bytes);
             showToast('Struk uji dikirim ke printer', 'success');
             return;
         }
-        showToast('Aplikasi printer tidak terdeteksi. Buka lewat aplikasi kasir untuk mencetak ke printer Bluetooth.', 'warning');
+
+        if (typeof EscPos !== 'undefined' && EscPos.usbSupported()) {
+            try {
+                // Kalau belum pernah diizinkan, minta sekarang -- tombol ini klik pengguna.
+                const device = (await EscPos.getUsbPrinter()) || (await EscPos.requestUsbPrinter());
+                await EscPos.sendToUsb(bytes, device);
+                showToast('Struk uji dikirim ke printer USB', 'success');
+                renderPrinterBridgeStatus();
+                return;
+            } catch (e) {
+                if (!e || e.name !== 'NotFoundError') {
+                    showToast('Printer USB gagal: ' + e.message, 'error');
+                }
+                return;
+            }
+        }
+        showToast('Printer tidak terdeteksi. Buka lewat aplikasi kasir (Bluetooth) atau hubungkan printer USB lewat Chrome.', 'warning');
     }
 
     async function saveSystemSettings(e) {

@@ -379,7 +379,135 @@
         return true;
     }
 
+    /* ---------------------------------------------------------------------
+       Printer USB langsung dari browser (WebUSB)
+
+       Dialog cetak browser menggambar teks jadi gambar dulu, lengkap dengan
+       antialiasing. Kepala thermal cuma bisa hitam atau kosong, jadi abu-abu
+       hasil antialiasing keluar sebagai bintik dan teks kecil jadi buram.
+       Lewat jalur ini byte ESC/POS dikirim apa adanya dan printer memakai font
+       bawaannya sendiri -- sama persis dengan hasil di Android.
+
+       Chrome/Edge saja, dan halaman harus HTTPS atau localhost. Di luar itu
+       pemanggil jatuh kembali ke dialog cetak.
+       --------------------------------------------------------------------- */
+    var USB_CLASS_PRINTER = 7;
+
+    function usbSupported() {
+        return typeof global.navigator !== 'undefined' &&
+               !!global.navigator.usb &&
+               typeof global.navigator.usb.requestDevice === 'function';
+    }
+
+    /** Cari antarmuka & endpoint keluar milik kelas printer. */
+    function findPrinterEndpoint(device) {
+        var conf = device.configuration;
+        if (!conf) return null;
+        for (var i = 0; i < conf.interfaces.length; i++) {
+            var alt = conf.interfaces[i].alternate;
+            if (alt.interfaceClass !== USB_CLASS_PRINTER) continue;
+            for (var j = 0; j < alt.endpoints.length; j++) {
+                if (alt.endpoints[j].direction === 'out') {
+                    return { iface: conf.interfaces[i].interfaceNumber,
+                             endpoint: alt.endpoints[j].endpointNumber };
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Printer yang izinnya sudah pernah diberikan, tanpa memunculkan dialog. */
+    function getUsbPrinter() {
+        if (!usbSupported()) return Promise.resolve(null);
+        return global.navigator.usb.getDevices().then(function (list) {
+            for (var i = 0; i < list.length; i++) {
+                var d = list[i];
+                if (d.configuration === null || findPrinterEndpoint(d)) return d;
+            }
+            return list.length ? list[0] : null;
+        }).catch(function () { return null; });
+    }
+
+    /**
+     * Minta izin ke satu printer. WAJIB dipanggil dari dalam penanganan klik --
+     * di luar gestur pengguna, browser menolak dialognya.
+     */
+    function requestUsbPrinter() {
+        if (!usbSupported()) return Promise.reject(new Error('Browser ini tidak mendukung WebUSB'));
+        return global.navigator.usb.requestDevice({
+            filters: [{ classCode: USB_CLASS_PRINTER }]
+        });
+    }
+
+    /** Kirim byte ke printer USB. Melempar kalau gagal, supaya pemanggil bisa jatuh balik. */
+    function sendToUsb(bytes, device) {
+        return Promise.resolve(device || getUsbPrinter()).then(function (dev) {
+            if (!dev) throw new Error('Printer USB belum dipilih');
+            return dev.open()
+                .then(function () {
+                    return dev.configuration ? null : dev.selectConfiguration(1);
+                })
+                .then(function () {
+                    var target = findPrinterEndpoint(dev);
+                    if (!target) throw new Error('Perangkat ini bukan printer yang bisa dipakai');
+                    return dev.claimInterface(target.iface).then(function () {
+                        return dev.transferOut(target.endpoint, new Uint8Array(bytes));
+                    }).then(function (hasil) {
+                        if (hasil && hasil.status !== 'ok') {
+                            throw new Error('Printer menolak data: ' + hasil.status);
+                        }
+                        // Lepaskan lagi supaya aplikasi lain tetap bisa memakai printer.
+                        return dev.releaseInterface(target.iface).catch(function () {});
+                    });
+                })
+                .then(function () { return true; });
+        });
+    }
+
+    /* ---------------------------------------------------------------------
+       Jembatan printer lokal (printer_agent.py di PC kasir)
+
+       Dipakai saat printer tercolok di PC kasir sementara servernya di mesin
+       lain. Byte struk dikirim ke program kecil di 127.0.0.1, yang meneruskan
+       ke driver Windows resmi dalam mode RAW -- driver resminya tetap terpakai,
+       tidak perlu ditukar Zadig seperti pada WebUSB.
+
+       Alamatnya sengaja http://127.0.0.1: halaman http biasa boleh
+       menghubunginya, dan browser memperlakukan localhost sebagai tepercaya.
+       --------------------------------------------------------------------- */
+    var AGENT_URL = 'http://127.0.0.1:9110';
+
+    /** Jembatan lokal hidup? Dijawab cepat supaya tombol cetak tidak menggantung. */
+    function agentAvailable(timeoutMs) {
+        if (typeof global.fetch !== 'function') return Promise.resolve(false);
+        var batal = typeof AbortController === 'function' ? new AbortController() : null;
+        var jam = setTimeout(function () { if (batal) batal.abort(); }, timeoutMs || 1200);
+
+        return global.fetch(AGENT_URL + '/status', batal ? { signal: batal.signal } : {})
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (j) { return !!(j && j.ok && j.siap); })
+            .catch(function () { return false; })
+            .then(function (hasil) { clearTimeout(jam); return hasil; });
+    }
+
+    /** Kirim byte ke jembatan lokal. Melempar dengan pesan dari agen kalau gagal. */
+    function sendToAgent(bytes) {
+        return global.fetch(AGENT_URL + '/print', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data: bytesToBase64(bytes) })
+        }).then(function (r) {
+            return r.json().catch(function () { return {}; }).then(function (j) {
+                if (!r.ok || !j.ok) throw new Error(j.error || ('Jembatan printer menolak (' + r.status + ')'));
+                return true;
+            });
+        });
+    }
+
     var api = {
+        agentAvailable: agentAvailable,
+        sendToAgent: sendToAgent,
+        agentUrl: AGENT_URL,
         buildReceipt: buildReceipt,
         buildReceiptHtml: buildReceiptHtml,
         buildReceiptLines: buildReceiptLines,
@@ -387,8 +515,13 @@
         bytesToBase64: bytesToBase64,
         hasBridge: hasBridge,
         sendToBridge: sendToBridge,
+        usbSupported: usbSupported,
+        getUsbPrinter: getUsbPrinter,
+        requestUsbPrinter: requestUsbPrinter,
+        sendToUsb: sendToUsb,
         // diekspor untuk pengujian
-        _toAscii: toAscii, _pair: pair, _wrap: wrap, _rupiah: rupiah
+        _toAscii: toAscii, _pair: pair, _wrap: wrap, _rupiah: rupiah,
+        _findPrinterEndpoint: findPrinterEndpoint
     };
 
     global.EscPos = api;
