@@ -287,9 +287,18 @@
      * yang keluar di kertas, jadi pratinjau di layar = hasil cetak.
      */
     function linesToHtml(lines) {
-        var html = lines.map(function (l) {
-            // Perintah potong & maju kertas tidak punya arti di layar.
-            if (l.cut || l.feed) return '';
+        // Maju kertas & potong di ujung hanya urusan mekanis printer, tidak perlu
+        // jadi ruang kosong di layar. Tapi jeda di tengah dokumen itu bagian dari
+        // tata letak -- tanpa itu footer menempel ke baris kembalian.
+        var body = lines.slice();
+        while (body.length && (body[body.length - 1].feed || body[body.length - 1].cut)) body.pop();
+
+        var html = body.map(function (l) {
+            if (l.cut) return '';
+            if (l.feed) {
+                return '<div class="receipt-gap" style="height: ' +
+                       (Math.min(l.feed, 2) * 0.6).toFixed(2) + 'em;"></div>';
+            }
             // Garis pemisah digambar sebagai garis sungguhan, bukan deretan "=".
             // Isinya tetap sama dengan yang dicetak, cuma cara menampilkannya beda.
             if (l.sep) return '<div class="receipt-rule' + (l.sep === '=' ? ' strong' : '') + '"></div>';

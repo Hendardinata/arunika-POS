@@ -243,6 +243,20 @@ check('HTML tidak memuat baris maju kertas', () => {
     assert.ok(!/&nbsp;<\/div>\s*<div[^>]*>&nbsp;/.test(html), 'baris kosong beruntun ikut dirender');
 });
 
+check('jeda sebelum footer tetap ada di layar', () => {
+    // Tanpa ini footer menempel langsung ke baris kembalian.
+    const html = EscPos.buildReceiptHtml(tx, store, { cols: COLS });
+    const gapIdx = html.indexOf('receipt-gap');
+    assert.ok(gapIdx > 0, 'jeda hilang dari pratinjau');
+    assert.ok(html.indexOf('Terima kasih') > gapIdx, 'jeda tidak berada sebelum footer');
+});
+
+check('maju kertas di ujung tidak jadi ruang kosong di layar', () => {
+    const html = EscPos.buildReceiptHtml(tx, store, { cols: COLS, cut: true });
+    const ekor = html.slice(html.lastIndexOf('sebagai bukti pembayaran'));
+    assert.ok(!ekor.includes('receipt-gap'), 'maju kertas terakhir ikut dirender');
+});
+
 check('HTML aman dari karakter berbahaya di nama menu', () => {
     const jahat = JSON.parse(JSON.stringify(tx));
     jahat.transaction.items[0].menu.name = '<script>alert(1)</script>';
