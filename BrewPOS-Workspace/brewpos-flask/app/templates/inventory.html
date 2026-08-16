@@ -41,6 +41,7 @@
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
             <input type="text" id="inventory-search" class="form-control" style="max-width: 200px;" placeholder="Cari bahan..." oninput="filterInventory()">
             <button class="btn btn-primary btn-sm" onclick="openPurchaseModal()"><i class="fas fa-cart-plus"></i> Beli / Restok Bahan</button>
+            <button class="btn btn-secondary btn-sm" onclick="openProductionModal()"><i class="fas fa-mug-hot"></i> Catat Produksi / Seduhan</button>
             <button class="btn btn-secondary btn-sm" onclick="openNewItemModal()"><i class="fas fa-plus"></i> Tambah Master Bahan</button>
         </div>
     </div>
@@ -175,6 +176,74 @@
                 <button type="button" class="btn btn-secondary" onclick="closeModal('modal-purchase')">Batal</button>
                 <button type="submit" class="btn btn-primary" id="btn-save-purchase">
                     <i class="fas fa-check-circle"></i> Simpan Pembelian & Update HPP
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!--
+    Produksi / seduhan batch. Dipakai saat bahan mentah diolah jadi bahan
+    setengah jadi -- misalnya bubuk kopi diseduh mokapot jadi Base Espresso.
+    Dengan ini barista tidak perlu menebak berapa gram kopi per cup: cukup ukur
+    sekali per batch, sisanya dihitung sistem.
+-->
+<div id="modal-production" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 560px;">
+        <div class="modal-header">
+            <div>
+                <h3 class="modal-title"><i class="fas fa-mug-hot text-primary"></i> Catat Produksi / Seduhan</h3>
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+                    Contoh: 60 gram bubuk kopi diseduh mokapot jadi 300 ml Base Espresso.
+                </p>
+            </div>
+            <button class="modal-close" onclick="closeModal('modal-production')">&times;</button>
+        </div>
+        <form id="production-form" onsubmit="submitProduction(event)">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Bahan yang Dipakai</label>
+                    <div id="production-input-rows"></div>
+                    <button type="button" class="btn btn-secondary btn-sm" style="margin-top: 8px;" onclick="addProductionInputRow()">
+                        <i class="fas fa-plus"></i> Tambah Bahan
+                    </button>
+                </div>
+
+                <div style="border-top: 1px solid var(--border-light); padding-top: 14px;">
+                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">Hasilnya Jadi Bahan</label>
+                            <select id="production-output-id" class="form-control" onchange="calculateProductionCost()" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Jumlah Hasil (<span id="production-output-unit">satuan</span>)</label>
+                            <input type="number" step="any" min="0" id="production-output-qty" class="form-control"
+                                   placeholder="Contoh: 300" oninput="calculateProductionCost()" required>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="background: linear-gradient(135deg, #FAF8F5, #F4EAE1); border: 1px solid var(--border-color); padding: 10px 14px; border-radius: var(--radius-sm); margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary);">Modal Bahan Terpakai:</span>
+                        <strong id="production-total-cost-display" style="font-size: 0.9375rem; color: var(--text-primary);">Rp 0</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                        <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary);">Modal Hasil per Satuan:</span>
+                        <strong id="production-unit-cost-display" style="font-size: 0.9375rem; color: var(--color-primary);">Rp 0 / unit</strong>
+                    </div>
+                    <p id="production-cost-hint" style="font-size: 0.6875rem; color: var(--text-muted); margin-top: 6px;"></p>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Catatan (Opsional)</label>
+                    <input type="text" id="production-notes" class="form-control" placeholder="Contoh: Seduhan mokapot pagi">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('modal-production')">Batal</button>
+                <button type="submit" class="btn btn-primary" id="btn-save-production">
+                    <i class="fas fa-check-circle"></i> Simpan Produksi
                 </button>
             </div>
         </form>
@@ -567,6 +636,118 @@
             });
             showToast(res.message || 'Pembelian bahan berhasil dicatat!', 'success');
             closeModal('modal-purchase');
+            loadInventory();
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    /* ---------------------------------------------------------------------
+       Produksi / seduhan batch
+
+       Harga bahan mentah dipindahkan ke bahan hasil, bukan dicatat sebagai
+       pengeluaran baru -- biayanya sudah tercatat waktu pembelian.
+       --------------------------------------------------------------------- */
+    function materialOptionsHtml(selectedId) {
+        return rawInventory.map(it =>
+            `<option value="${it.id}" data-unit="${it.unit}" data-cost="${it.costPerUnit || 0}"` +
+            `${String(it.id) === String(selectedId) ? ' selected' : ''}>${it.name} (${it.unit})</option>`
+        ).join('');
+    }
+
+    function addProductionInputRow(selectedId = null) {
+        const wrap = document.getElementById('production-input-rows');
+        const row = document.createElement('div');
+        row.className = 'production-input-row';
+        row.style.cssText = 'display: grid; grid-template-columns: 2fr 1fr auto; gap: 8px; margin-bottom: 8px; align-items: center;';
+        row.innerHTML = `
+            <select class="form-control production-input-item" onchange="calculateProductionCost()" required>
+                ${materialOptionsHtml(selectedId)}
+            </select>
+            <input type="number" step="any" min="0" class="form-control production-input-qty"
+                   placeholder="Jumlah" oninput="calculateProductionCost()" required>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="removeProductionInputRow(this)" title="Hapus bahan ini">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+        wrap.appendChild(row);
+        calculateProductionCost();
+    }
+
+    function removeProductionInputRow(btn) {
+        const rows = document.querySelectorAll('.production-input-row');
+        // Selalu sisakan satu baris, kalau habis formnya jadi tidak bisa diisi lagi.
+        if (rows.length <= 1) return;
+        btn.closest('.production-input-row').remove();
+        calculateProductionCost();
+    }
+
+    function openProductionModal(preselectedOutputId = null) {
+        document.getElementById('production-form').reset();
+        document.getElementById('production-input-rows').innerHTML = '';
+        document.getElementById('production-output-id').innerHTML = materialOptionsHtml(preselectedOutputId);
+        addProductionInputRow();
+        calculateProductionCost();
+        openModal('modal-production');
+    }
+
+    function calculateProductionCost() {
+        let total = 0;
+        let adaTanpaHarga = false;
+
+        document.querySelectorAll('.production-input-row').forEach(row => {
+            const sel = row.querySelector('.production-input-item');
+            const qty = parseFloat(row.querySelector('.production-input-qty').value) || 0;
+            const opt = sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex] : null;
+            const cost = opt ? parseFloat(opt.dataset.cost) || 0 : 0;
+            if (qty > 0 && cost <= 0) adaTanpaHarga = true;
+            total += qty * cost;
+        });
+
+        const outSel = document.getElementById('production-output-id');
+        const outOpt = outSel.selectedIndex >= 0 ? outSel.options[outSel.selectedIndex] : null;
+        const unit = outOpt ? (outOpt.dataset.unit || 'unit') : 'unit';
+        const outQty = parseFloat(document.getElementById('production-output-qty').value) || 0;
+        document.getElementById('production-output-unit').textContent = unit;
+
+        document.getElementById('production-total-cost-display').textContent = formatRp(Math.round(total));
+        // Modal per ml sering di bawah Rp 1, jadi jangan dibulatkan ke rupiah penuh.
+        const perUnit = outQty > 0 ? total / outQty : 0;
+        document.getElementById('production-unit-cost-display').textContent =
+            (perUnit > 0 && perUnit < 1 ? 'Rp ' + perUnit.toFixed(2) : formatRp(Math.round(perUnit))) + ` / ${unit}`;
+
+        document.getElementById('production-cost-hint').textContent = adaTanpaHarga
+            ? 'Ada bahan yang belum punya harga beli, jadi modal hasil masih terlalu murah. Isi harganya lewat Edit Bahan atau catat pembeliannya.'
+            : '';
+    }
+
+    async function submitProduction(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-save-production');
+        btn.disabled = true;
+
+        const inputs = [...document.querySelectorAll('.production-input-row')].map(row => ({
+            itemId: parseInt(row.querySelector('.production-input-item').value, 10),
+            quantity: parseFloat(row.querySelector('.production-input-qty').value)
+        }));
+
+        try {
+            const res = await apiFetch('/inventory/production', {
+                method: 'POST',
+                body: JSON.stringify({
+                    outputItemId: parseInt(document.getElementById('production-output-id').value, 10),
+                    outputQty: parseFloat(document.getElementById('production-output-qty').value),
+                    inputs,
+                    notes: document.getElementById('production-notes').value
+                })
+            });
+            showToast(res.message || 'Produksi berhasil dicatat', 'success');
+            // Peringatan (stok minus / bahan tanpa harga) tetap ditampilkan supaya
+            // salah ketik jumlah tidak lewat begitu saja.
+            (res.warnings || []).forEach(w => showToast(w, 'warning'));
+            closeModal('modal-production');
             loadInventory();
         } catch (err) {
             showToast(err.message, 'error');

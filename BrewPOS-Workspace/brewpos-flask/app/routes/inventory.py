@@ -22,6 +22,23 @@ def _save_upload_file(file, prefix='inv'):
     return f"/uploads/{filename}"
 
 
+def _recalc_hpp_for_item(item_id):
+    """
+    Harga bahan berubah -> modal setiap menu yang memakainya ikut berubah.
+    Dipanggil dari pembelian, produksi, dan koreksi harga manual, supaya HPP
+    tidak pernah tertinggal di angka lama.
+    """
+    from app.models.menu import Menu, RecipeIngredient
+    affected = RecipeIngredient.query.filter_by(inventoryItemId=item_id).all()
+    for r in affected:
+        m = Menu.query.get(r.menuId)
+        if m and m.recipeIngredients:
+            calc = sum(int(round(ri.quantityNeeded * (ri.inventoryItem.costPerUnit or 0)))
+                       for ri in m.recipeIngredients)
+            if calc > 0:
+                m.hpp = calc
+
+
 @inventory_bp.route('', methods=['GET'])
 def get_inventory():
     try:
@@ -50,12 +67,14 @@ def create_inventory_item():
             min_stock = float(data.get('minStock', 10))
             unit = data.get('unit', 'pcs')
             image_url = data.get('imageUrl')
+            cost_per_unit = data.get('costPerUnit')
         else:
             name = request.form.get('name')
             stock = float(request.form.get('stock', 0))
             min_stock = float(request.form.get('minStock', 10))
             unit = request.form.get('unit', 'pcs')
             image_url = request.form.get('imageUrl')
+            cost_per_unit = request.form.get('costPerUnit')
             if 'image' in request.files:
                 image_url = _save_upload_file(request.files['image'], 'inventory')
 
@@ -68,6 +87,10 @@ def create_inventory_item():
             unit=unit or 'pcs',
             imageUrl=image_url
         )
+        # Harga boleh dikosongkan dulu -- bahan tetap tercatat dengan harga 0 dan
+        # bisa diisi belakangan lewat form Edit Bahan atau lewat Pembelian.
+        if cost_per_unit not in (None, ''):
+            item.costPerUnit = float(cost_per_unit)
         if hasattr(item, 'minStock'):
             item.minStock = min_stock
         db.session.add(item)
@@ -111,6 +134,7 @@ def update_inventory_item(id):
             if 'minStock' in data and hasattr(item, 'minStock'):
                 item.minStock = float(data['minStock'])
             if 'isActive' in data: item.isActive = bool(data['isActive'])
+            cost_per_unit = data.get('costPerUnit')
         else:
             if 'name' in request.form: item.name = request.form['name']
             if 'unit' in request.form: item.unit = request.form['unit']
@@ -120,6 +144,17 @@ def update_inventory_item(id):
             if 'image' in request.files:
                 uploaded = _save_upload_file(request.files['image'], 'inventory')
                 if uploaded: item.imageUrl = uploaded
+            cost_per_unit = request.form.get('costPerUnit')
+
+        # Koreksi harga beli menyusul. Form ini sempat mengirim costPerUnit tapi
+        # tidak pernah dibaca di sini -- harga terlihat tersimpan padahal hilang.
+        if cost_per_unit not in (None, ''):
+            new_cost = float(cost_per_unit)
+            if new_cost < 0:
+                return jsonify({'error': 'Harga pokok tidak boleh negatif'}), 400
+            if new_cost != (item.costPerUnit or 0.0):
+                item.costPerUnit = new_cost
+                _recalc_hpp_for_item(item.id)
 
         db.session.commit()
         d = item.to_dict()
@@ -264,6 +299,17 @@ def purchase_material():
 
         unit_cost = round(total_cost / quantity, 2) if quantity > 0 else 0.0
 
+        # Tanggal pembelian dipakai baris pengeluaran DAN mutasi stok. Dulu cuma
+        # pengeluarannya yang mundur, sementara mutasi stok tetap bertanggal hari
+        # ini -- satu pembelian muncul di dua tanggal berbeda di dua laporan, dan
+        # riwayat stok tidak bisa dicocokkan dengan nota fisiknya.
+        purchase_date = datetime.utcnow()
+        if purchase_date_str:
+            try:
+                purchase_date = datetime.fromisoformat(purchase_date_str)
+            except ValueError:
+                pass    # tanggal tidak terbaca: pakai hari ini, jangan gagalkan pembelian
+
         # Update item stock & cost
         item.stock = (item.stock or 0.0) + quantity
         item.costPerUnit = unit_cost
@@ -277,7 +323,8 @@ def purchase_material():
             costPerUnit=unit_cost,
             supplier=supplier,
             notes=notes or f"Pembelian dari {supplier or 'Supplier'}",
-            receiptUrl=receipt_url
+            receiptUrl=receipt_url,
+            createdAt=purchase_date
         )
         db.session.add(log)
 
@@ -292,13 +339,6 @@ def purchase_material():
             admin_user = User.query.first()
             exp_user_id = int(user_id) if user_id else (admin_user.id if admin_user else 1)
 
-            purchase_date = datetime.utcnow()
-            if purchase_date_str:
-                try:
-                    purchase_date = datetime.fromisoformat(purchase_date_str)
-                except Exception:
-                    pass
-
             expense = Expense(
                 amount=int(total_cost),
                 date=purchase_date,
@@ -311,14 +351,7 @@ def purchase_material():
 
         # Recalculate Menu HPP for all menus using this ingredient
         if recalc_hpp:
-            from app.models.menu import Menu, RecipeIngredient
-            affected_recipes = RecipeIngredient.query.filter_by(inventoryItemId=item.id).all()
-            for r in affected_recipes:
-                m = Menu.query.get(r.menuId)
-                if m and m.recipeIngredients:
-                    calc_hpp = sum(int(round(ri.quantityNeeded * (ri.inventoryItem.costPerUnit or 0))) for ri in m.recipeIngredients)
-                    if calc_hpp > 0:
-                        m.hpp = calc_hpp
+            _recalc_hpp_for_item(item.id)
 
         db.session.commit()
 
@@ -336,6 +369,111 @@ def purchase_material():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Gagal mencatat pembelian', 'details': str(e)}), 500
+
+
+@inventory_bp.route('/production', methods=['POST'])
+def produce_material():
+    """
+    Olah bahan jadi bahan setengah jadi. Contoh nyatanya: 60 g bubuk kopi
+    diseduh mokapot jadi 300 ml Base Espresso.
+
+    Gunanya supaya barista tidak perlu menebak berapa gram kopi yang jatuh ke
+    tiap cup. Cukup ukur sekali per batch, sisanya sistem yang hitung: stok
+    bahan mentah berkurang, stok hasil bertambah, dan harga per ml hasil
+    diturunkan dari harga bahan yang dipakai.
+
+    Harga hasil memakai rata-rata tertimbang, bukan batch terakhir -- base yang
+    masih tersisa dari seduhan sebelumnya ikut diperhitungkan, jadi nilai stok
+    tidak melompat setiap kali menyeduh dengan harga kopi yang berbeda.
+    """
+    try:
+        data = request.get_json() or {}
+        output_id = int(data.get('outputItemId') or 0)
+        output_qty = float(data.get('outputQty') or 0)
+        raw_inputs = data.get('inputs') or []
+        notes = (data.get('notes') or '').strip()
+
+        if output_qty <= 0:
+            return jsonify({'error': 'Jumlah hasil produksi harus lebih dari 0'}), 400
+        if not raw_inputs:
+            return jsonify({'error': 'Bahan yang dipakai belum diisi'}), 400
+
+        output = InventoryItem.query.get(output_id)
+        if not output:
+            return jsonify({'error': 'Bahan hasil tidak ditemukan'}), 404
+
+        # Kumpulkan dulu, jangan ubah stok apa pun sebelum semuanya sah -- kalau
+        # baris ketiga bermasalah, dua baris pertama tidak boleh terlanjur terpotong.
+        parsed = []
+        for row in raw_inputs:
+            src = InventoryItem.query.get(int(row.get('itemId') or 0))
+            if not src:
+                return jsonify({'error': f"Bahan dengan id {row.get('itemId')} tidak ditemukan"}), 404
+            if src.id == output.id:
+                return jsonify({'error': 'Bahan hasil tidak boleh dipakai sebagai bahan masukan'}), 400
+            qty = float(row.get('quantity') or 0)
+            if qty <= 0:
+                return jsonify({'error': f"Jumlah {src.name} harus lebih dari 0"}), 400
+            parsed.append((src, qty))
+
+        batch_label = notes or f"Produksi {output.name}"
+        total_input_cost = 0.0
+        warnings = []
+
+        for src, qty in parsed:
+            unit_cost = src.costPerUnit or 0.0
+            line_cost = qty * unit_cost
+            total_input_cost += line_cost
+
+            src.stock = (src.stock or 0.0) - qty
+            if src.stock < 0:
+                warnings.append(f"Stok {src.name} jadi minus ({src.stock:g} {src.unit})")
+            if unit_cost <= 0:
+                warnings.append(f"{src.name} belum punya harga beli, modal hasil jadi terlalu murah")
+
+            db.session.add(InventoryLog(
+                itemId=src.id, quantity=qty, type='OUT',
+                costPerUnit=unit_cost, totalCost=line_cost,
+                notes=f"{batch_label}: dipakai untuk {output_qty:g} {output.unit} {output.name}"
+            ))
+
+        # Rata-rata tertimbang: nilai stok lama + nilai batch baru, dibagi stok total.
+        prev_value = (output.stock or 0.0) * (output.costPerUnit or 0.0)
+        output.stock = (output.stock or 0.0) + output_qty
+        # 4 desimal, bukan 2: harga per ml sering di bawah Rp 1 dan pembulatan
+        # ke rupiah penuh akan menghapusnya jadi nol.
+        output.costPerUnit = round((prev_value + total_input_cost) / output.stock, 4) if output.stock > 0 else 0.0
+
+        batch_unit_cost = round(total_input_cost / output_qty, 4)
+        db.session.add(InventoryLog(
+            itemId=output.id, quantity=output_qty, type='IN',
+            costPerUnit=batch_unit_cost, totalCost=total_input_cost,
+            notes=f"{batch_label}: dari " + ", ".join(f"{q:g} {s.unit} {s.name}" for s, q in parsed)
+        ))
+
+        # Biaya bahan sudah tercatat saat pembelian. Produksi cuma memindahkan
+        # nilai antar bahan, jadi tidak ada Expense baru di sini -- kalau dicatat
+        # lagi, modal terhitung dua kali.
+        _recalc_hpp_for_item(output.id)
+        db.session.commit()
+
+        user_id = get_current_user_id()
+        log_activity('PRODUCE_MATERIAL', int(user_id) if user_id else None,
+                     f"Produksi {output_qty:g} {output.unit} {output.name} "
+                     f"(modal Rp {int(total_input_cost):,})".replace(',', '.'),
+                     'InventoryItem', output.id)
+
+        return jsonify({
+            'message': f"Produksi {output.name} berhasil dicatat",
+            'item': output.to_dict(),
+            'totalCost': round(total_input_cost, 2),
+            'batchCostPerUnit': batch_unit_cost,
+            'averageCostPerUnit': output.costPerUnit,
+            'warnings': warnings
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Gagal mencatat produksi', 'details': str(e)}), 500
 
 
 @inventory_bp.route('/transactions', methods=['GET'])
