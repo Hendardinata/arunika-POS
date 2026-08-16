@@ -50,6 +50,22 @@ def create_app(config_class=Config):
             print(f"[StoreProfile] Falling back to defaults: {e}")
         return defaults
 
+    @app.url_defaults
+    def _bust_static_cache(endpoint, values):
+        """
+        Tempelkan waktu ubah berkas ke URL aset statis, jadi /static/js/app.js
+        jadi ...?v=1723800000. Tanpa ini browser menyajikan CSS/JS versi lama
+        sampai pengguna hard-refresh, dan perbaikan tampilan terlihat seperti
+        tidak berpengaruh sama sekali.
+        """
+        if endpoint != 'static' or 'filename' not in values:
+            return
+        try:
+            path = os.path.join(app.static_folder, values['filename'])
+            values['v'] = int(os.stat(path).st_mtime)
+        except OSError:
+            pass  # berkas hilang -- biarkan url_for jalan seperti biasa
+
     # Static uploads handler for /uploads/<path:filename>
     @app.route('/uploads/<path:filename>')
     def uploaded_file(filename):
@@ -67,6 +83,7 @@ def create_app(config_class=Config):
         auth_bp, category_bp, menu_bp, checkout_bp, customer_bp,
         analytics_bp, gamification_bp, inventory_bp, expenses_bp,
         settings_bp, shift_bp, attendance_bp, role_access_bp, recipe_bp, logs_bp,
+        historical_bp,
         monitoring_bp, web_bp
     )
 
@@ -85,6 +102,7 @@ def create_app(config_class=Config):
     app.register_blueprint(role_access_bp)
     app.register_blueprint(recipe_bp)
     app.register_blueprint(logs_bp)
+    app.register_blueprint(historical_bp)
     app.register_blueprint(monitoring_bp)
     app.register_blueprint(web_bp)
 

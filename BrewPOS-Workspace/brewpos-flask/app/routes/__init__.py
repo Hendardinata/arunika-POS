@@ -13,6 +13,7 @@ from app.routes.attendance import attendance_bp
 from app.routes.role_access import role_access_bp
 from app.routes.recipe import recipe_bp
 from app.routes.logs import logs_bp
+from app.routes.historical_sales import historical_bp
 from app.routes.monitoring import monitoring_bp
 from app.routes.web import web_bp
 
@@ -32,6 +33,7 @@ __all__ = [
     'role_access_bp',
     'recipe_bp',
     'logs_bp',
+    'historical_bp',
     'monitoring_bp',
     'web_bp'
 ]

@@ -142,6 +142,86 @@
                 </table>
             </div>
         </div>
+
+        <!--
+            Omzet dari masa sebelum aplikasi ini dipakai. Catatan lamanya cuma
+            sampai "tanggal sekian omzetnya sekian", jadi yang dipindahkan hanya
+            angkanya. Sengaja tidak masuk sebagai transaksi: tanpa rincian menu
+            ia akan memalsukan laporan per menu, memotong stok hari ini, dan
+            menghitung poin member dua kali.
+        -->
+        <div class="card no-print" style="margin-top: 20px;">
+            <div class="card-header">
+                <div>
+                    <h3 class="card-title"><i class="fas fa-clock-rotate-left text-primary"></i> Omzet Sebelum Aplikasi Dipakai</h3>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+                        Satu baris per tanggal. Hanya menambah angka omzet di laporan &mdash;
+                        tidak memotong stok, tidak memberi poin, tidak masuk hitungan modal/margin.
+                    </p>
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="bukaFormOmzetLama()">
+                    <i class="fas fa-plus"></i> Tambah Omzet Harian
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="custom-table">
+                    <thead>
+                        <tr>
+                            <th>Tanggal</th>
+                            <th>Omzet</th>
+                            <th>Jumlah Struk</th>
+                            <th>Catatan</th>
+                            <th style="text-align: right;">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="omzet-lama-body">
+                        <tr><td colspan="5" class="text-center text-muted" style="padding: 24px;">Memuat...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-omzet-lama" class="modal-backdrop">
+        <div class="modal-dialog" style="max-width: 440px;">
+            <div class="modal-header">
+                <div>
+                    <h3 class="modal-title"><i class="fas fa-clock-rotate-left text-primary"></i> Omzet Harian Sebelum Go-Live</h3>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+                        Ambil dari buku kas atau catatan lama. Tanggal yang sudah pernah diisi
+                        akan diperbarui, bukan ditambah lagi.
+                    </p>
+                </div>
+                <button class="modal-close" onclick="closeModal('modal-omzet-lama')">&times;</button>
+            </div>
+            <form onsubmit="simpanOmzetLama(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Tanggal</label>
+                        <input type="date" id="omzet-lama-tanggal" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Total Omzet Hari Itu (Rp)</label>
+                        <input type="number" min="0" id="omzet-lama-total" class="form-control"
+                               placeholder="Contoh: 1500000" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Jumlah Struk (Opsional)</label>
+                        <input type="number" min="0" id="omzet-lama-jumlah" class="form-control"
+                               placeholder="Kosongkan kalau tidak tercatat">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Catatan (Opsional)</label>
+                        <input type="text" id="omzet-lama-catatan" class="form-control"
+                               placeholder="Contoh: dari buku kas warung">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('modal-omzet-lama')">Batal</button>
+                    <button type="submit" class="btn btn-primary" id="btn-simpan-omzet-lama">Simpan</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <!-- TAB 2: LAPORAN TRANSAKSI BATAL (VOID) -->
@@ -528,7 +608,99 @@
         document.getElementById('rep-printed-date').textContent = new Date().toLocaleString('id-ID');
 
         loadReportData('all');
+        muatOmzetLama();
     });
+
+    /* ------------------------------------------------------------------
+       Omzet sebelum aplikasi dipakai. Hanya angka pendapatan -- tidak ada
+       rincian menu di catatan lama, jadi tidak boleh menyentuh stok, poin,
+       modal, maupun laporan per menu.
+       ------------------------------------------------------------------ */
+    async function muatOmzetLama() {
+        const tbody = document.getElementById('omzet-lama-body');
+        if (!tbody) return;
+        try {
+            const res = await apiFetch('/historical-sales');
+            const baris = res.items || [];
+            if (!baris.length) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted" style="padding: 24px;">
+                    Belum ada. Tambahkan kalau toko sudah berjualan sebelum aplikasi ini dipakai.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = baris.map(b => `
+                <tr>
+                    <td>${new Date(b.date + 'T00:00:00').toLocaleDateString('id-ID', { dateStyle: 'medium' })}</td>
+                    <td><strong>${formatRp(b.totalAmount)}</strong></td>
+                    <td>${b.transactionCount != null ? b.transactionCount : '<span class="text-muted">-</span>'}</td>
+                    <td>${b.notes ? escapeHtmlSafe(b.notes) : '<span class="text-muted">-</span>'}</td>
+                    <td style="text-align: right;">
+                        <button class="btn btn-secondary btn-sm" onclick="hapusOmzetLama(${b.id})" title="Hapus">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('') + `
+                <tr style="background: #FAF8F5;">
+                    <td><strong>Total ${res.days} hari</strong></td>
+                    <td colspan="4"><strong>${formatRp(res.totalAmount)}</strong></td>
+                </tr>`;
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-danger text-center" style="padding: 24px;">
+                Gagal memuat: ${e.message}</td></tr>`;
+        }
+    }
+
+    function escapeHtmlSafe(t) {
+        const d = document.createElement('div');
+        d.textContent = t;
+        return d.innerHTML;
+    }
+
+    function bukaFormOmzetLama() {
+        document.getElementById('omzet-lama-tanggal').value = '';
+        document.getElementById('omzet-lama-total').value = '';
+        document.getElementById('omzet-lama-jumlah').value = '';
+        document.getElementById('omzet-lama-catatan').value = '';
+        // Tanggal ke depan tidak masuk akal untuk riwayat; ditolak server juga,
+        // tapi lebih baik tidak bisa dipilih sejak awal.
+        document.getElementById('omzet-lama-tanggal').max = new Date().toISOString().slice(0, 10);
+        openModal('modal-omzet-lama');
+    }
+
+    async function simpanOmzetLama(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-simpan-omzet-lama');
+        btn.disabled = true;
+        try {
+            await apiFetch('/historical-sales', {
+                method: 'POST',
+                body: JSON.stringify({
+                    date: document.getElementById('omzet-lama-tanggal').value,
+                    totalAmount: document.getElementById('omzet-lama-total').value,
+                    transactionCount: document.getElementById('omzet-lama-jumlah').value,
+                    notes: document.getElementById('omzet-lama-catatan').value
+                })
+            });
+            showToast('Omzet harian tersimpan', 'success');
+            closeModal('modal-omzet-lama');
+            muatOmzetLama();
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    async function hapusOmzetLama(id) {
+        if (!confirm('Hapus omzet harian ini?')) return;
+        try {
+            await apiFetch(`/historical-sales/${id}`, { method: 'DELETE' });
+            showToast('Dihapus', 'success');
+            muatOmzetLama();
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
 
     function switchReportSection(sec) {
         activeSection = sec;

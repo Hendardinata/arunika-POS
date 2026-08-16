@@ -117,11 +117,32 @@ def get_analytics():
                 menu_popularity[menu_name]['count'] += item.quantity
                 menu_popularity[menu_name]['revenue'] += (price_val * item.quantity)
 
+        # Omzet dari masa sebelum go-live: hanya menyumbang angka pendapatan.
+        # Sengaja TIDAK ikut ke HPP, margin, atau profitabilitas per menu --
+        # catatan lamanya tidak punya rincian menu, jadi angka apa pun di sana
+        # akan mengarang. Dipisah juga di keluaran supaya kelihatan asalnya.
+        from app.models.historical_sales import HistoricalSales
+        hist_query = HistoricalSales.query
+        if start_date:
+            hist_query = hist_query.filter(HistoricalSales.date >= start_date.date())
+        if end_date:
+            hist_query = hist_query.filter(HistoricalSales.date <= end_date.date())
+        historical = hist_query.all()
+
+        historical_revenue = sum(h.totalAmount for h in historical)
+        for h in historical:
+            label = h.date.strftime('%d %b')
+            sales_by_date[label] = sales_by_date.get(label, 0) + h.totalAmount
+
         chart_data = [{'date': d, 'revenue': rev, 'total': rev} for d, rev in sales_by_date.items()]
         popular_menus = sorted(list(menu_popularity.values()), key=lambda x: x['count'], reverse=True)[:10]
 
         return jsonify({
+            # totalRevenue tetap murni dari kasir, supaya perhitungan HPP dan
+            # margin di bawahnya tidak ikut bergeser oleh angka tanpa rincian.
             'totalRevenue': total_revenue,
+            'historicalRevenue': historical_revenue,
+            'totalRevenueWithHistorical': total_revenue + historical_revenue,
             'totalExpenses': total_expenses,
             'totalHpp': total_hpp,
             'netProfit': net_profit,
