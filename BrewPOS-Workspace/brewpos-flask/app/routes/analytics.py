@@ -1,14 +1,49 @@
 from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify
-from sqlalchemy import func
+from sqlalchemy import extract, func
 from sqlalchemy.orm import joinedload, selectinload
 from app.extensions import db
 from app.models.transaction import Transaction, TransactionItem
 from app.models.expense import Expense, ExpenseCategory
 from app.models.customer import Customer
 from app.models.menu import Menu
+from app.models.category import Category
 from app.models.inventory import InventoryItem, InventoryLog, DailyOpname
 from app.models.shift import Shift
+
+
+def _tx_filters(start_date, end_date, status='COMPLETED'):
+    """Syarat rentang tanggal untuk transaksi, dipakai bersama semua agregasi."""
+    f = []
+    if status:
+        f.append(Transaction.status == status)
+    if start_date:
+        f.append(Transaction.createdAt >= start_date)
+    if end_date:
+        f.append(Transaction.createdAt <= end_date)
+    return f
+
+
+def _exp_filters(start_date, end_date):
+    f = []
+    if start_date:
+        f.append(Expense.date >= start_date)
+    if end_date:
+        f.append(Expense.date <= end_date)
+    return f
+
+
+def _bagian_tanggal(kolom):
+    """
+    Kolom pengelompokan per hari: (tahun, bulan, tanggal).
+
+    Bukan cast(kolom, Date) -- pemroses hasil SQLAlchemy untuk tipe Date gagal
+    di SQLite karena CAST di sana tidak benar-benar mengubah tipe. Bukan
+    func.date() juga, karena itu hanya ada di SQLite sementara produksi memakai
+    MSSQL. extract() diterjemahkan ke kedua dialek dan mengembalikan angka,
+    jadi tidak ada penguraian string yang bisa meleset.
+    """
+    return (extract('year', kolom), extract('month', kolom), extract('day', kolom))
 
 
 def _tx_dengan_rincian(query):
@@ -62,28 +97,23 @@ def get_analytics():
     try:
         start_date, end_date, days = _parse_date_filter()
 
-        tx_query = Transaction.query.filter(Transaction.status == 'COMPLETED')
-        exp_query = Expense.query
+        # Dijumlahkan database, bukan ditarik dulu ke Python. Dengan 20.000
+        # transaksi setahun, memuat semua barisnya butuh ~2,8 detik di SQLite
+        # lokal -- dan lewat MSSQL di jaringan, 60.000 baris itu harus melintas
+        # kabel dulu sebelum satu angka pun bisa dihitung.
+        total_revenue, total_transactions = db.session.query(
+            func.coalesce(func.sum(Transaction.totalAmount), 0),
+            func.count(Transaction.id)
+        ).filter(*_tx_filters(start_date, end_date)).one()
 
-        if start_date:
-            tx_query = tx_query.filter(Transaction.createdAt >= start_date)
-            exp_query = exp_query.filter(Expense.date >= start_date)
-        if end_date:
-            tx_query = tx_query.filter(Transaction.createdAt <= end_date)
-            exp_query = exp_query.filter(Expense.date <= end_date)
+        total_expenses = int(db.session.query(
+            func.coalesce(func.sum(Expense.amount), 0)
+        ).filter(*_exp_filters(start_date, end_date)).scalar() or 0)
 
-        transactions_with_items = _tx_dengan_rincian(tx_query).all()
-        total_transactions = len(transactions_with_items)
-        total_revenue = sum(t.totalAmount for t in transactions_with_items)
-
-        expenses_list = exp_query.all()
-        total_expenses = sum(e.amount for e in expenses_list)
-
-        # Calculate HPP
-        total_hpp = sum(
-            sum((item.hpp or 0) * item.quantity for item in tx.items)
-            for tx in transactions_with_items
-        )
+        total_hpp = int(db.session.query(
+            func.coalesce(func.sum(TransactionItem.hpp * TransactionItem.quantity), 0)
+        ).join(Transaction, Transaction.id == TransactionItem.transactionId)
+            .filter(*_tx_filters(start_date, end_date)).scalar() or 0)
 
         net_profit = total_revenue - total_hpp - total_expenses
         total_customers = Customer.query.count()
@@ -114,25 +144,41 @@ def get_analytics():
                 date_str = d.strftime('%d %b')
                 sales_by_date[date_str] = 0
 
-        for tx in transactions_with_items:
-            date_str = tx.createdAt.strftime('%d %b') if tx.createdAt else 'Unknown'
-            sales_by_date[date_str] = sales_by_date.get(date_str, 0) + tx.totalAmount
+        # Deret harian: satu baris per tanggal dari database, bukan satu baris
+        # per transaksi ditarik ke sini lalu dijumlahkan.
+        bagian = _bagian_tanggal(Transaction.createdAt)
+        for th, bl, tg, jml in db.session.query(
+                *bagian, func.coalesce(func.sum(Transaction.totalAmount), 0)
+        ).filter(*_tx_filters(start_date, end_date)).group_by(*bagian).all():
+            if th is None:
+                continue
+            label = datetime(int(th), int(bl), int(tg)).strftime('%d %b')
+            sales_by_date[label] = sales_by_date.get(label, 0) + int(jml)
 
-            for item in tx.items:
-                menu_name = item.menu.name if item.menu else f"Menu #{item.menuId}"
-                category_name = item.menu.category.name if item.menu and item.menu.category else 'Menu'
-                price_val = item.price or (item.menu.price if item.menu else 0)
+        # Menu terlaris: dikelompokkan database, dan hanya 10 teratas yang
+        # diambil -- sebelumnya SELURUH rincian transaksi dimuat hanya untuk
+        # menghasilkan sepuluh baris ini.
+        popular_rows = db.session.query(
+            Menu.name, Category.name,
+            func.max(TransactionItem.price),
+            func.coalesce(func.sum(TransactionItem.quantity), 0),
+            func.coalesce(func.sum(TransactionItem.price * TransactionItem.quantity), 0),
+        ).select_from(TransactionItem) \
+            .join(Transaction, Transaction.id == TransactionItem.transactionId) \
+            .outerjoin(Menu, Menu.id == TransactionItem.menuId) \
+            .outerjoin(Category, Category.id == Menu.categoryId) \
+            .filter(*_tx_filters(start_date, end_date)) \
+            .group_by(Menu.name, Category.name) \
+            .order_by(func.sum(TransactionItem.quantity).desc()).limit(10).all()
 
-                if menu_name not in menu_popularity:
-                    menu_popularity[menu_name] = {
-                        'name': menu_name,
-                        'category': category_name,
-                        'price': price_val,
-                        'count': 0,
-                        'revenue': 0
-                    }
-                menu_popularity[menu_name]['count'] += item.quantity
-                menu_popularity[menu_name]['revenue'] += (price_val * item.quantity)
+        for nama, kategori, harga, jumlah, omzet in popular_rows:
+            menu_popularity[nama or 'Menu terhapus'] = {
+                'name': nama or 'Menu terhapus',
+                'category': kategori or 'Menu',
+                'price': int(harga or 0),
+                'count': int(jumlah),
+                'revenue': int(omzet),
+            }
 
         # Omzet dari masa sebelum go-live: hanya menyumbang angka pendapatan.
         # Sengaja TIDAK ikut ke HPP, margin, atau profitabilitas per menu --
@@ -182,38 +228,66 @@ def get_comprehensive_reports():
         start_date, end_date, days = _parse_date_filter()
 
         # 1. SALES REPORT
+        #
+        # Baris rinciannya dibatasi. Tabel laporan tidak mungkin menampilkan
+        # 20.000 baris dengan berguna, tapi sebelumnya semuanya diserialisasi
+        # jadi JSON -- itu yang membuat laporan setahun butuh lima detik. Angka
+        # ringkasan di bawah tetap dihitung dari SELURUH rentang, jadi totalnya
+        # tidak berubah; yang dibatasi hanya daftar barisnya.
+        BARIS_MAKS = min(2000, max(50, int(request.args.get('limit') or 500)))
+
         tx_query = Transaction.query.order_by(Transaction.createdAt.desc())
         if start_date: tx_query = tx_query.filter(Transaction.createdAt >= start_date)
         if end_date: tx_query = tx_query.filter(Transaction.createdAt <= end_date)
-        all_tx = _tx_dengan_rincian(tx_query).all()
+        all_tx = _tx_dengan_rincian(tx_query).limit(BARIS_MAKS * 2).all()
+
+        # Total sebenarnya per status, lepas dari batas baris di atas.
+        jumlah_status = dict(db.session.query(
+            Transaction.status, func.count(Transaction.id)
+        ).filter(*_tx_filters(start_date, end_date, status=None)).group_by(Transaction.status).all())
 
         completed_tx = [t for t in all_tx if t.status == 'COMPLETED']
         void_tx = [t for t in all_tx if t.status == 'VOID']
 
-        total_gross = sum(t.subTotal + (t.discountAmount or 0) for t in completed_tx)
-        total_discounts = sum((t.discountAmount or 0) + sum((it.discountAmount or 0) * it.quantity for it in t.items) for t in completed_tx)
-        total_tax = sum(t.taxAmount for t in completed_tx)
-        total_parking = sum(t.parkingFee for t in completed_tx)
-        total_net_sales = sum(t.totalAmount for t in completed_tx)
-        total_void_amount = sum(t.totalAmount for t in void_tx)
+        # Ringkasan dihitung SQL atas seluruh rentang, bukan dari all_tx yang
+        # sudah dibatasi -- kalau tidak, total omzet ikut terpotong dan laporan
+        # berbohong tanpa kelihatan.
+        f_ok = _tx_filters(start_date, end_date)
+        total_gross, total_tax, total_parking, total_net_sales, disc_order = db.session.query(
+            func.coalesce(func.sum(Transaction.subTotal + func.coalesce(Transaction.discountAmount, 0)), 0),
+            func.coalesce(func.sum(Transaction.taxAmount), 0),
+            func.coalesce(func.sum(Transaction.parkingFee), 0),
+            func.coalesce(func.sum(Transaction.totalAmount), 0),
+            func.coalesce(func.sum(Transaction.discountAmount), 0),
+        ).filter(*f_ok).one()
 
-        # Payment Methods breakdown
-        by_payment = {}
-        for t in completed_tx:
-            m = t.paymentMethod or 'CASH'
-            by_payment[m] = by_payment.get(m, 0) + t.totalAmount
+        disc_item = int(db.session.query(
+            func.coalesce(func.sum(TransactionItem.discountAmount * TransactionItem.quantity), 0)
+        ).join(Transaction, Transaction.id == TransactionItem.transactionId)
+            .filter(*f_ok).scalar() or 0)
+        total_discounts = int(disc_order or 0) + disc_item
+
+        total_void_amount = int(db.session.query(
+            func.coalesce(func.sum(Transaction.totalAmount), 0)
+        ).filter(*_tx_filters(start_date, end_date, status='VOID')).scalar() or 0)
+
+        by_payment = {
+            (m or 'CASH'): int(v) for m, v in db.session.query(
+                Transaction.paymentMethod, func.coalesce(func.sum(Transaction.totalAmount), 0)
+            ).filter(*f_ok).group_by(Transaction.paymentMethod).all()
+        }
 
         # 2. COGS / HPP & MENU PROFITABILITY
         menus = Menu.query.all()
         menu_sales_map = {}
-        for t in completed_tx:
-            for it in t.items:
-                m_id = it.menuId
-                if m_id not in menu_sales_map:
-                    menu_sales_map[m_id] = {'soldQty': 0, 'revenue': 0, 'actualHpp': 0}
-                menu_sales_map[m_id]['soldQty'] += it.quantity
-                menu_sales_map[m_id]['revenue'] += (it.price * it.quantity)
-                menu_sales_map[m_id]['actualHpp'] += ((it.hpp or 0) * it.quantity)
+        for m_id, qty, omzet, hpp in db.session.query(
+                TransactionItem.menuId,
+                func.coalesce(func.sum(TransactionItem.quantity), 0),
+                func.coalesce(func.sum(TransactionItem.price * TransactionItem.quantity), 0),
+                func.coalesce(func.sum(TransactionItem.hpp * TransactionItem.quantity), 0),
+        ).join(Transaction, Transaction.id == TransactionItem.transactionId)                 .filter(*f_ok).group_by(TransactionItem.menuId).all():
+            menu_sales_map[m_id] = {'soldQty': int(qty), 'revenue': int(omzet),
+                                    'actualHpp': int(hpp)}
 
         cogs_list = []
         total_all_hpp = 0
@@ -295,13 +369,20 @@ def get_comprehensive_reports():
                 'totalTax': total_tax,
                 'totalParking': total_parking,
                 'totalNet': total_net_sales,
-                'totalOrders': len(completed_tx),
-                'totalVoid': len(void_tx),
+                'totalOrders': int(jumlah_status.get('COMPLETED', 0)),
+                'totalVoid': int(jumlah_status.get('VOID', 0)),
                 'totalVoidAmount': total_void_amount,
                 'byPaymentMethod': by_payment
             },
-            'transactions': [t.to_dict(include_items=True, include_customer=True) for t in completed_tx],
-            'voidTransactions': [t.to_dict(include_items=True, include_customer=True) for t in void_tx],
+            'transactions': [t.to_dict(include_items=True, include_customer=True)
+                             for t in completed_tx[:BARIS_MAKS]],
+            'voidTransactions': [t.to_dict(include_items=True, include_customer=True)
+                                 for t in void_tx[:BARIS_MAKS]],
+            # Klien perlu tahu daftarnya dipotong, supaya tidak menyimpulkan
+            # jumlah transaksi dari panjang array.
+            'transactionsShown': min(len(completed_tx), BARIS_MAKS),
+            'transactionsTotal': int(jumlah_status.get('COMPLETED', 0)),
+            'transactionsTruncated': int(jumlah_status.get('COMPLETED', 0)) > BARIS_MAKS,
             'cogsReport': cogs_list,
             'purchasesReport': {
                 'totalOpex': total_opex,
@@ -665,12 +746,9 @@ def get_sales_by_cashier():
     from app.models.user import User
 
     start_date, end_date, _ = _parse_date_filter()
-    q = Transaction.query
-    if start_date:
-        q = q.filter(Transaction.createdAt >= start_date)
-    if end_date:
-        q = q.filter(Transaction.createdAt <= end_date)
 
+    # Dikelompokkan database per kasir. Sebelumnya seluruh transaksi rentang itu
+    # dimuat ke Python -- 20.000 baris untuk menghasilkan empat baris ringkasan.
     baris = {}
 
     def slot(uid, nama):
@@ -680,22 +758,49 @@ def get_sales_by_cashier():
                           'discountGiven': 0, 'byPayment': {}}
         return baris[uid]
 
-    for tx in _tx_dengan_rincian(q.options(joinedload(Transaction.cashier))).all():
-        nama = tx.cashier.username if tx.cashier else 'Tidak tercatat'
-        r = slot(tx.userId, nama)
+    nama_user = {u.id: u.username for u in User.query.all()}
 
-        if tx.status == 'VOID':
-            r['voidCount'] += 1
-            r['voidAmount'] += tx.totalAmount
-            continue
+    def label(uid):
+        return nama_user.get(uid, 'Tidak tercatat')
 
-        r['orders'] += 1
-        r['revenue'] += tx.totalAmount
-        r['discountGiven'] += (tx.discountAmount or 0)
-        r['items'] += sum(i.quantity for i in tx.items)
-        r['hpp'] += sum((i.hpp or 0) * i.quantity for i in tx.items)
-        metode = tx.paymentMethod or 'LAINNYA'
-        r['byPayment'][metode] = r['byPayment'].get(metode, 0) + tx.totalAmount
+    # Sah: jumlah struk, omzet, diskon
+    for uid, jml, omzet, diskon in db.session.query(
+            Transaction.userId,
+            func.count(Transaction.id),
+            func.coalesce(func.sum(Transaction.totalAmount), 0),
+            func.coalesce(func.sum(Transaction.discountAmount), 0),
+    ).filter(*_tx_filters(start_date, end_date)).group_by(Transaction.userId).all():
+        r = slot(uid, label(uid))
+        r['orders'] = int(jml)
+        r['revenue'] = int(omzet)
+        r['discountGiven'] = int(diskon or 0)
+
+    # Cup terjual & modal, dari rincian
+    for uid, cup, hpp in db.session.query(
+            Transaction.userId,
+            func.coalesce(func.sum(TransactionItem.quantity), 0),
+            func.coalesce(func.sum(TransactionItem.hpp * TransactionItem.quantity), 0),
+    ).select_from(TransactionItem)             .join(Transaction, Transaction.id == TransactionItem.transactionId)             .filter(*_tx_filters(start_date, end_date))             .group_by(Transaction.userId).all():
+        r = slot(uid, label(uid))
+        r['items'] = int(cup)
+        r['hpp'] = int(hpp)
+
+    # Rincian metode bayar
+    for uid, metode, omzet in db.session.query(
+            Transaction.userId, Transaction.paymentMethod,
+            func.coalesce(func.sum(Transaction.totalAmount), 0),
+    ).filter(*_tx_filters(start_date, end_date))             .group_by(Transaction.userId, Transaction.paymentMethod).all():
+        slot(uid, label(uid))['byPayment'][metode or 'LAINNYA'] = int(omzet)
+
+    # Void dipisah: tidak boleh menaikkan omzet, tapi harus tetap terlihat.
+    for uid, jml, omzet in db.session.query(
+            Transaction.userId,
+            func.count(Transaction.id),
+            func.coalesce(func.sum(Transaction.totalAmount), 0),
+    ).filter(*_tx_filters(start_date, end_date, status='VOID'))             .group_by(Transaction.userId).all():
+        r = slot(uid, label(uid))
+        r['voidCount'] = int(jml)
+        r['voidAmount'] = int(omzet)
 
     hasil = []
     for r in baris.values():
