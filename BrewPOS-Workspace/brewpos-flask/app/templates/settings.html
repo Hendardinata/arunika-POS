@@ -93,6 +93,25 @@
                 </div>
             </div>
 
+            <div style="background: #FAF8F5; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 12px;">
+                <div style="font-size: 0.8125rem; font-weight: 700; margin-bottom: 4px;">
+                    <i class="fas fa-cash-register text-primary"></i> Sesi Kas
+                </div>
+                <p style="font-size: 0.6875rem; color: var(--text-muted); margin-bottom: 10px;">
+                    Mencocokkan uang di laci: modal awal + penjualan tunai &minus; pengeluaran tunai,
+                    dibandingkan dengan uang yang benar-benar dihitung. Kalau dimatikan, penjualan
+                    tetap jalan dan siapa yang melayani tetap tercatat &mdash; yang hilang hanya
+                    perhitungan selisih kasnya.
+                </p>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label class="form-label">Pakai sesi kas?</label>
+                    <select id="cfg-cash-session" class="form-control">
+                        <option value="1">Ya &mdash; buka &amp; tutup sesi untuk mencocokkan laci</option>
+                        <option value="0">Tidak &mdash; jualan tanpa sesi kas</option>
+                    </select>
+                </div>
+            </div>
+
             <!--
                 Tutup buku. Bukan pengganti sesi kas: sesi kas menjawab "uang di
                 laci cocok tidak", tutup buku menjawab "laporan periode ini boleh
@@ -337,6 +356,7 @@
             document.getElementById('cfg-paper-size').value = map['RECEIPT_PAPER_SIZE'] || '58mm';
             document.getElementById('cfg-print-scale').value = map['RECEIPT_PRINT_SCALE'] || '100';
             document.getElementById('cfg-auto-cut').value = map['RECEIPT_AUTO_CUT'] || '1';
+            document.getElementById('cfg-cash-session').value = map['CASH_SESSION_ENABLED'] || '1';
         } catch (e) {
             showToast('Gagal memuat pengaturan: ' + e.message, 'error');
         }
@@ -559,7 +579,8 @@
             { key: 'POINT_EXPIRATION_DAYS', value: document.getElementById('cfg-expiry').value },
             { key: 'RECEIPT_PAPER_SIZE', value: document.getElementById('cfg-paper-size').value },
             { key: 'RECEIPT_PRINT_SCALE', value: document.getElementById('cfg-print-scale').value || '100' },
-            { key: 'RECEIPT_AUTO_CUT', value: document.getElementById('cfg-auto-cut').value }
+            { key: 'RECEIPT_AUTO_CUT', value: document.getElementById('cfg-auto-cut').value },
+            { key: 'CASH_SESSION_ENABLED', value: document.getElementById('cfg-cash-session').value }
         ];
 
         try {

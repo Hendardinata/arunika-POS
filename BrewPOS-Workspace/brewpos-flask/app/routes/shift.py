@@ -15,8 +15,26 @@ shift_bp = Blueprint('shift', __name__, url_prefix='/api/shift')
 STALE_SHIFT_HOURS = 18
 
 
+def cash_session_enabled():
+    """
+    Sesi kas bisa dimatikan lewat pengaturan.
+
+    Gunanya kontrol kas: modal awal + transaksi tunai - pengeluaran tunai
+    dibandingkan dengan uang yang benar-benar dihitung di laci. Kedai yang
+    kasirnya pemilik sendiri sering tidak membutuhkannya, dan penanda "perlu
+    ditutup" yang muncul terus jadi gangguan tanpa manfaat.
+
+    Mematikannya tidak menghilangkan jejak siapa yang melayani: itu disimpan di
+    Transaction.userId, terpisah dari sesi kas.
+    """
+    from app.models.system_settings import get_setting
+    return get_setting('CASH_SESSION_ENABLED', '1') != '0'
+
+
 def _sweep_stale_shifts():
     """Tandai sesi OPEN yang sudah kelewat lama. Dipanggil saat baca, tanpa scheduler."""
+    if not cash_session_enabled():
+        return
     cutoff = datetime.utcnow() - timedelta(hours=STALE_SHIFT_HOURS)
     stale = Shift.query.filter(Shift.status == 'OPEN', Shift.startTime < cutoff).all()
     if not stale:
@@ -65,6 +83,10 @@ def open_shift():
     data = request.get_json() or {}
     starting_cash = int(data.get('startingCash', 0))
     user_id = g.user.get('id')
+
+    if not cash_session_enabled():
+        return jsonify({'error': 'Sesi kas dimatikan di Pengaturan. '
+                                 'Penjualan tetap bisa jalan tanpa sesi.'}), 409
 
     try:
         _sweep_stale_shifts()

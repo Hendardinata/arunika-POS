@@ -187,6 +187,17 @@ async function updateShiftStatusWidget() {
     const widget = document.getElementById('shift-status-widget');
     if (!widget) return;
 
+    // Sesi kas dimatikan: sembunyikan pill-nya sekalian. Kalau cuma didiamkan,
+    // ia menampilkan "Tutup" selamanya dan terbaca seperti ada yang salah.
+    // Penjualan tetap jalan tanpa sesi -- siapa yang melayani tetap tercatat di
+    // Transaction.userId, terpisah dari sesi kas.
+    const settings = await getStoreSettings();
+    if (settings && settings.CASH_SESSION_ENABLED === '0') {
+        widget.style.display = 'none';
+        return;
+    }
+    widget.style.display = '';
+
     try {
         const data = await apiFetch('/shift/current');
         if (data && data.currentShift) {
