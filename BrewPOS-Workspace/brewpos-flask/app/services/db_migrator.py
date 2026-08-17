@@ -153,6 +153,22 @@ def auto_sync_schema(app):
                 [createdAt] DATETIME NOT NULL DEFAULT GETDATE()
             )
         """),
+        # Uang keluar-masuk laci di luar penjualan & belanja: setor brankas,
+        # tambah receh, diambil pemilik. Tanpa ini laci tidak akan pernah cocok
+        # begitu salah satunya terjadi -- dan di kafe 16 jam itu terjadi harian.
+        ("CashMovement", """
+            CREATE TABLE [CashMovement] (
+                [id] INT IDENTITY(1,1) PRIMARY KEY,
+                [shiftId] INT NOT NULL,
+                [type] NVARCHAR(20) NOT NULL,
+                [amount] INT NOT NULL,
+                [reason] NVARCHAR(255) NOT NULL,
+                [userId] INT NULL,
+                [createdAt] DATETIME NOT NULL DEFAULT GETDATE(),
+                CONSTRAINT [fk_cashmovement_shift] FOREIGN KEY ([shiftId])
+                    REFERENCES [Shift]([id]) ON DELETE CASCADE
+            )
+        """),
         # Omzet harian dari masa sebelum aplikasi dipakai. Sengaja bukan
         # Transaction: tidak ada rincian menu, dan menyimpannya di sana akan
         # memotong stok hari ini serta menghitung poin member dua kali.
@@ -219,6 +235,7 @@ def auto_sync_schema(app):
         ('IX_Expense_categoryId', 'Expense', '[categoryId]'),
         ('IX_Expense_shiftId', 'Expense', '[shiftId]'),
         ('IX_Shift_startTime', 'Shift', '[startTime]'),
+        ('IX_CashMovement_shiftId', 'CashMovement', '[shiftId]'),
         ('IX_Shift_status', 'Shift', '[status]'),
         ('IX_Menu_categoryId', 'Menu', '[categoryId]'),
         ('IX_RecipeIngredient_inventoryItemId', 'RecipeIngredient', '[inventoryItemId]'),

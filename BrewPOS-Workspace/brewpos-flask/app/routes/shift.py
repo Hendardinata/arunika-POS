@@ -3,16 +3,18 @@ from flask import Blueprint, request, jsonify, g
 from sqlalchemy import func
 from app.extensions import db
 from app.models.expense import Expense
-from app.models.shift import Shift
+from app.models.shift import Shift, CashMovement
 from app.models.attendance import ShiftHandover
 from app.models.user import User
 from app.models.transaction import Transaction
-from app.middleware.auth import token_required
+from app.middleware.auth import token_required, is_supervisor
+from app.models.system_settings import get_setting_int
+from app.services.system_logger import log_activity
 
 shift_bp = Blueprint('shift', __name__, url_prefix='/api/shift')
 
 # Sesi yang terlupa ditutup tidak boleh menggantung selamanya dan merusak angka kas.
-STALE_SHIFT_HOURS = 18
+STALE_SHIFT_HOURS = 20   # bawaan; ditimpa pengaturan SHIFT_MAX_HOURS
 
 
 def cash_session_enabled():
@@ -35,7 +37,8 @@ def _sweep_stale_shifts():
     """Tandai sesi OPEN yang sudah kelewat lama. Dipanggil saat baca, tanpa scheduler."""
     if not cash_session_enabled():
         return
-    cutoff = datetime.utcnow() - timedelta(hours=STALE_SHIFT_HOURS)
+    batas = get_setting_int('SHIFT_MAX_HOURS', STALE_SHIFT_HOURS)
+    cutoff = datetime.utcnow() - timedelta(hours=batas)
     stale = Shift.query.filter(Shift.status == 'OPEN', Shift.startTime < cutoff).all()
     if not stale:
         return
@@ -171,6 +174,110 @@ def handover_shift():
         return jsonify({'error': 'Internal server error'}), 500
 
 
+def hitung_kas_seharusnya(shift):
+    """
+    Isi laci yang seharusnya. -> (expected, rincian)
+
+    modal awal + penjualan tunai - belanja dari laci - setoran keluar + tambahan masuk
+
+    Dua suku terakhir yang sebelumnya tidak ada. Tanpa keduanya, setiap kali
+    uang disetor ke brankas atau receh ditambah, selisihnya muncul sebagai
+    "kas kurang/lebih" yang tidak bisa dijelaskan siapa pun.
+    """
+    cash_income = sum(
+        t.totalAmount for t in
+        Transaction.query.filter_by(shiftId=shift.id, status='COMPLETED').all()
+        if t.paymentMethod == 'CASH'
+    )
+    cash_expense = int(db.session.query(func.coalesce(func.sum(Expense.amount), 0)).filter(
+        Expense.shiftId == shift.id,
+        Expense.paymentSource == 'CASH_DRAWER'
+    ).scalar() or 0)
+
+    gerakan = CashMovement.query.filter_by(shiftId=shift.id).all()
+    drops = sum(m.amount for m in gerakan if m.type == 'DROP')
+    paid_ins = sum(m.amount for m in gerakan if m.type == 'PAID_IN')
+
+    expected = shift.startingCash + cash_income - cash_expense - drops + paid_ins
+    return expected, {
+        'startingCash': shift.startingCash,
+        'cashSales': cash_income,
+        'cashExpenses': cash_expense,
+        'cashDrops': drops,
+        'cashPaidIns': paid_ins,
+        'expectedEndingCash': expected,
+    }
+
+
+@shift_bp.route('/cash-movement', methods=['POST'])
+@token_required
+def add_cash_movement():
+    """Catat uang keluar/masuk laci di luar penjualan dan belanja."""
+    data = request.get_json() or {}
+    jenis = (data.get('type') or '').upper()
+    alasan = (data.get('reason') or '').strip()
+
+    if jenis not in ('DROP', 'PAID_IN'):
+        return jsonify({'error': 'Jenis harus DROP (keluar) atau PAID_IN (masuk)'}), 400
+    try:
+        jumlah = int(data.get('amount') or 0)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Jumlah harus berupa angka'}), 400
+    if jumlah <= 0:
+        return jsonify({'error': 'Jumlah harus lebih dari 0'}), 400
+    # Alasan wajib: inilah satu-satunya jejak kenapa uang berpindah. Tanpa itu
+    # catatannya tidak bisa dibedakan dari uang hilang.
+    if len(alasan) < 3:
+        return jsonify({'error': 'Alasan wajib diisi (mis. "setor ke brankas")'}), 400
+
+    shift = _get_open_shift()
+    if not shift:
+        return jsonify({'error': 'Belum ada sesi kas terbuka'}), 409
+
+    gerakan = CashMovement(shiftId=shift.id, type=jenis, amount=jumlah,
+                           reason=alasan, userId=g.user.get('id'))
+    db.session.add(gerakan)
+    db.session.commit()
+
+    log_activity('CASH_MOVEMENT', g.user.get('id'),
+                 f"{'Keluar' if jenis == 'DROP' else 'Masuk'} laci Rp {jumlah:,}".replace(',', '.')
+                 + f" - {alasan}", 'Shift', shift.id)
+    return jsonify(gerakan.to_dict()), 201
+
+
+@shift_bp.route('/cash-movement', methods=['GET'])
+@token_required
+def list_cash_movements():
+    shift = _get_open_shift()
+    if not shift:
+        return jsonify({'items': [], 'net': 0})
+    gerakan = CashMovement.query.filter_by(shiftId=shift.id) \
+        .order_by(CashMovement.createdAt.desc()).all()
+    return jsonify({
+        'items': [m.to_dict() for m in gerakan],
+        'net': sum(m.signed_amount() for m in gerakan),
+    })
+
+
+@shift_bp.route('/cash-movement/<int:id>', methods=['DELETE'])
+@token_required
+def delete_cash_movement(id):
+    """Hapus catatan yang salah input. Hanya selama sesinya masih terbuka."""
+    gerakan = CashMovement.query.get(id)
+    if not gerakan:
+        return jsonify({'error': 'Catatan tidak ditemukan'}), 404
+    if not is_supervisor():
+        return jsonify({'error': 'Menghapus catatan kas memerlukan Head Barista ke atas'}), 403
+
+    shift = Shift.query.get(gerakan.shiftId)
+    if shift and shift.status == 'CLOSED':
+        return jsonify({'error': 'Sesi sudah ditutup, catatan kasnya tidak bisa diubah'}), 409
+
+    db.session.delete(gerakan)
+    db.session.commit()
+    return jsonify({'message': 'Dihapus'})
+
+
 @shift_bp.route('/close', methods=['POST'])
 @token_required
 def close_shift():
@@ -184,21 +291,21 @@ def close_shift():
         if not shift:
             return jsonify({'error': 'No open shift found'}), 404
 
-        # Calculate expected cash from CASH transactions
-        cash_income = 0
-        transactions = Transaction.query.filter_by(shiftId=shift.id, status='COMPLETED').all()
-        for t in transactions:
-            if t.paymentMethod == 'CASH':
-                cash_income += t.totalAmount
+        expected_ending_cash, rincian = hitung_kas_seharusnya(shift)
+        selisih = ending_cash - expected_ending_cash
 
-        # Uang yang diambil dari laci untuk belanja ikut dihitung, kalau tidak
-        # setiap pembelian tunai muncul sebagai "kas kurang" yang palsu.
-        cash_expense = db.session.query(func.coalesce(func.sum(Expense.amount), 0)).filter(
-            Expense.shiftId == shift.id,
-            Expense.paymentSource == 'CASH_DRAWER'
-        ).scalar() or 0
-
-        expected_ending_cash = shift.startingCash + cash_income - int(cash_expense)
+        # Selisih besar wajib dijelaskan. Kalau boleh ditutup tanpa keterangan,
+        # angkanya cuma jadi hiasan: tidak ada yang menelusuri, dan bulan depan
+        # tidak ada yang ingat kenapa kurang Rp 200.000.
+        toleransi = get_setting_int('CASH_DIFF_TOLERANCE', 5000)
+        if abs(selisih) > toleransi and not closing_note:
+            return jsonify({
+                'error': f'Selisih kas Rp {abs(selisih):,}'.replace(',', '.')
+                         + f" ({'lebih' if selisih > 0 else 'kurang'}). "
+                         + 'Wajib diisi keterangan sebelum sesi ditutup.',
+                'requiresNote': True,
+                'difference': selisih,
+            }), 400
 
         shift.status = 'CLOSED'
         shift.endTime = datetime.utcnow()
@@ -208,7 +315,16 @@ def close_shift():
         shift.closingNote = closing_note
 
         db.session.commit()
-        return jsonify(shift.to_dict())
+
+        if selisih:
+            log_activity('CASH_DIFFERENCE', user_id,
+                         f"Sesi #{shift.id} selisih Rp {selisih:,}".replace(',', '.')
+                         + f" ({closing_note or 'tanpa keterangan'})", 'Shift', shift.id)
+
+        hasil = shift.to_dict()
+        hasil['breakdown'] = rincian
+        hasil['difference'] = selisih
+        return jsonify(hasil)
     except Exception as e:
         db.session.rollback()
         print(f"Error closing shift: {e}")

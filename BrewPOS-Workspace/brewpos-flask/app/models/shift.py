@@ -1,6 +1,51 @@
 from datetime import datetime
 from app.extensions import db
 
+
+class CashMovement(db.Model):
+    """
+    Uang keluar-masuk laci di luar penjualan dan pengeluaran belanja.
+
+    Tanpa ini rekonsiliasi kas mustahil di kafe sungguhan. Laci yang buka 16 jam
+    pasti kepenuhan uang dan sebagian disetor ke brankas; receh habis dan perlu
+    ditambah modal; pemilik mengambil uang. Semua itu bukan penjualan dan bukan
+    pengeluaran belanja, jadi sebelumnya tidak terwakili sama sekali -- dan
+    sekali terjadi, laci tidak akan pernah cocok lagi sampai sesi ditutup dengan
+    selisih besar yang tidak bisa dijelaskan siapa pun.
+
+    DROP    = uang dikeluarkan dari laci (setor brankas, diambil pemilik)
+    PAID_IN = uang dimasukkan ke laci (tambah modal, tukar receh)
+    """
+    __tablename__ = 'CashMovement'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    shiftId = db.Column(db.Integer, db.ForeignKey('Shift.id', ondelete='CASCADE'), nullable=False)
+    type = db.Column(db.String(20), nullable=False)          # DROP | PAID_IN
+    amount = db.Column(db.Integer, nullable=False)           # selalu positif
+    reason = db.Column(db.String(255), nullable=False)       # wajib: ini jejak auditnya
+    userId = db.Column(db.Integer, db.ForeignKey('User.id'), nullable=True)
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    user = db.relationship('User', foreign_keys=[userId], lazy='joined')
+
+    def signed_amount(self):
+        """Pengaruhnya ke isi laci: DROP mengurangi, PAID_IN menambah."""
+        return -self.amount if self.type == 'DROP' else self.amount
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'shiftId': self.shiftId,
+            'type': self.type,
+            'amount': self.amount,
+            'signedAmount': self.signed_amount(),
+            'reason': self.reason,
+            'userId': self.userId,
+            'userName': self.user.username if self.user else None,
+            'createdAt': self.createdAt.isoformat() if self.createdAt else None,
+        }
+
+
 class Shift(db.Model):
     __tablename__ = 'Shift'
 

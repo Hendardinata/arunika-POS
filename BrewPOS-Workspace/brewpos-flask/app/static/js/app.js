@@ -211,7 +211,7 @@ async function updateShiftStatusWidget() {
                 ? `<span class="status-dot"></span> ${s.label}<span class="shift-text"> &middot; perlu ditutup</span>`
                 : `<span class="status-dot"></span> ${s.label}<span class="shift-text"> &middot; ${keeper}</span>`;
             widget.title = stale
-                ? `Sesi ini sudah lebih dari 18 jam terbuka. Modal Awal: ${formatRp(s.startingCash)}`
+                ? `Sesi ini terbuka melewati batas jam. Modal Awal: ${formatRp(s.startingCash)}`
                 : `Modal Awal: ${formatRp(s.startingCash)}`;
         } else {
             widget.className = 'shift-status-pill closed';
@@ -250,7 +250,7 @@ async function openShiftModal() {
             const staleWarn = stale ? `
                 <div style="background: var(--color-danger-bg); border: 1px solid rgba(211, 47, 47, 0.25); padding: 10px 14px; border-radius: var(--radius-sm); margin-bottom: 14px; font-size: 12.5px;">
                     <i class="fas fa-triangle-exclamation text-danger"></i>
-                    Sesi ini sudah terbuka lebih dari 18 jam dan ditandai <strong>perlu ditinjau</strong>. Tutup dan cocokkan kasnya.
+                    Sesi ini sudah terbuka melewati batas jam dan ditandai <strong>perlu ditinjau</strong>. Tutup dan cocokkan kasnya.
                 </div>
             ` : '';
 
@@ -272,22 +272,42 @@ async function openShiftModal() {
 
                 ${handoverBtn}
 
+                <!-- Uang keluar-masuk laci di luar penjualan & belanja. Tanpa ini
+                     laci tidak akan pernah cocok begitu ada yang disetor ke
+                     brankas atau receh ditambah. -->
+                <div style="border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <strong style="font-size: 13px;"><i class="fas fa-right-left text-primary"></i> Uang Keluar/Masuk Laci</strong>
+                        <button class="btn btn-secondary btn-sm" onclick="bukaFormGerakanKas()">
+                            <i class="fas fa-plus"></i> Catat
+                        </button>
+                    </div>
+                    <div id="cash-movement-list" style="font-size: 12px;">Memuat...</div>
+                </div>
+
                 <div class="form-group">
                     <label class="form-label">Total Uang Tunai di Laci Kasir (Rp)</label>
                     <input type="number" id="shift-ending-cash" class="form-control" placeholder="Contoh: 1250000" required>
                     <small class="text-muted" style="font-size: 11.5px; margin-top: 4px; display: block;">
-                        Hitung seluruh uang fisik di laci kasir saat ini untuk rekonsiliasi akhir sesi.
+                        Hitung uang fisiknya dulu, jangan menebak dari sistem &mdash; kalau angkanya
+                        disalin dari perkiraan, selisih kas tidak akan pernah ketahuan.
                     </small>
+                    <button type="button" class="btn btn-secondary btn-sm" style="margin-top: 6px;"
+                            onclick="togglePenghitungPecahan()">
+                        <i class="fas fa-calculator"></i> Bantu hitung per pecahan
+                    </button>
+                    <div id="denom-counter" style="display: none; margin-top: 8px; background: #FAF8F5; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 10px;"></div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Catatan Penutupan (Opsional)</label>
-                    <input type="text" id="shift-closing-note" class="form-control" placeholder="Contoh: selisih karena kembalian kurang">
+                    <label class="form-label">Catatan Penutupan</label>
+                    <input type="text" id="shift-closing-note" class="form-control" placeholder="Wajib diisi bila selisihnya besar">
                 </div>
 
                 <button class="btn btn-danger" style="width: 100%; margin-top: 8px;" onclick="submitCloseShift()">
                     <i class="fas fa-door-closed"></i> Tutup & Rekonsiliasi Sesi Kas
                 </button>
             `;
+            muatGerakanKas();
         } else {
             content.innerHTML = `
                 <p style="margin-bottom: 18px; font-size: 13px; color: var(--text-secondary);">
@@ -323,6 +343,110 @@ async function submitOpenShift() {
     }
 }
 
+/* ----------------------------------------------------------------------
+   Uang keluar-masuk laci
+
+   Setoran ke brankas saat laci penuh, tambah receh, uang diambil pemilik.
+   Bukan penjualan dan bukan belanja, jadi sebelumnya tidak terwakili sama
+   sekali -- dan sekali terjadi, laci tidak pernah cocok lagi.
+   ---------------------------------------------------------------------- */
+async function muatGerakanKas() {
+    const el = document.getElementById('cash-movement-list');
+    if (!el) return;
+    try {
+        const data = await apiFetch('/shift/cash-movement');
+        if (!data.items.length) {
+            el.innerHTML = '<span class="text-muted">Belum ada. Catat di sini kalau uang '
+                         + 'disetor ke brankas, ditambah receh, atau diambil.</span>';
+            return;
+        }
+        el.innerHTML = data.items.map(m => `
+            <div style="display: flex; justify-content: space-between; gap: 8px; padding: 3px 0;">
+                <span>${m.type === 'DROP' ? '&minus;' : '+'} ${formatRp(m.amount)}
+                    <span class="text-muted">&middot; ${m.reason}</span></span>
+                <button class="btn btn-secondary btn-sm" style="padding: 0 6px;"
+                        onclick="hapusGerakanKas(${m.id})" title="Hapus">&times;</button>
+            </div>`).join('')
+            + `<div style="border-top: 1px solid var(--border-light); margin-top: 6px; padding-top: 6px;">
+                 <strong>Bersih: ${data.net < 0 ? '&minus;' : '+'} ${formatRp(Math.abs(data.net))}</strong>
+               </div>`;
+    } catch (e) {
+        el.innerHTML = `<span class="text-danger">Gagal memuat: ${e.message}</span>`;
+    }
+}
+
+async function bukaFormGerakanKas() {
+    const arah = prompt('Uang KELUAR atau MASUK laci?\n\nKetik: keluar / masuk');
+    if (!arah) return;
+    const jenis = arah.trim().toLowerCase().startsWith('k') ? 'DROP' : 'PAID_IN';
+
+    const nominal = parseInt(prompt(jenis === 'DROP'
+        ? 'Berapa yang dikeluarkan dari laci? (Rp)'
+        : 'Berapa yang dimasukkan ke laci? (Rp)'), 10);
+    if (!nominal || nominal <= 0) return;
+
+    const alasan = prompt(jenis === 'DROP'
+        ? 'Untuk apa? (mis. setor ke brankas, diambil pemilik)'
+        : 'Dari mana? (mis. tambah receh dari brankas)');
+    if (!alasan) return;
+
+    try {
+        await apiFetch('/shift/cash-movement', {
+            method: 'POST',
+            body: JSON.stringify({ type: jenis, amount: nominal, reason: alasan })
+        });
+        showToast('Tercatat', 'success');
+        muatGerakanKas();
+    } catch (e) {
+        showToast(e.message, 'error');
+    }
+}
+
+async function hapusGerakanKas(id) {
+    if (!confirm('Hapus catatan ini?')) return;
+    try {
+        await apiFetch(`/shift/cash-movement/${id}`, { method: 'DELETE' });
+        muatGerakanKas();
+    } catch (e) {
+        showToast(e.message, 'error');
+    }
+}
+
+/* Penghitung pecahan: menghitung uang fisik lebih akurat daripada menjumlah
+   di kepala, dan hasilnya mengisi kolom uang laci. */
+const PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100];
+
+function togglePenghitungPecahan() {
+    const box = document.getElementById('denom-counter');
+    if (!box) return;
+    if (box.style.display === 'block') { box.style.display = 'none'; return; }
+
+    box.innerHTML = PECAHAN.map(p => `
+        <div style="display: grid; grid-template-columns: 90px 1fr 100px; gap: 6px; align-items: center; margin-bottom: 4px;">
+            <span style="font-size: 12px;">${formatRp(p)}</span>
+            <input type="number" min="0" class="form-control denom-qty" data-nilai="${p}"
+                   placeholder="0" oninput="hitungPecahan()" style="padding: 4px 8px; font-size: 12px;">
+            <span class="denom-sub text-muted" style="font-size: 12px; text-align: right;">Rp 0</span>
+        </div>`).join('')
+        + `<div style="border-top: 1px solid var(--border-color); margin-top: 6px; padding-top: 6px; text-align: right;">
+             <strong id="denom-total">Rp 0</strong>
+           </div>`;
+    box.style.display = 'block';
+}
+
+function hitungPecahan() {
+    let total = 0;
+    document.querySelectorAll('.denom-qty').forEach((inp, i) => {
+        const nilai = parseInt(inp.dataset.nilai, 10);
+        const jml = parseInt(inp.value, 10) || 0;
+        const sub = nilai * jml;
+        total += sub;
+        document.querySelectorAll('.denom-sub')[i].textContent = formatRp(sub);
+    });
+    document.getElementById('denom-total').textContent = formatRp(total);
+    document.getElementById('shift-ending-cash').value = total;
+}
+
 async function submitShiftHandover() {
     try {
         await apiFetch('/shift/handover', { method: 'POST', body: JSON.stringify({}) });
@@ -347,12 +471,25 @@ async function submitCloseShift() {
             method: 'POST',
             body: JSON.stringify({ endingCash, closingNote: noteEl ? noteEl.value : '' })
         });
-        const diff = res.endingCash - res.expectedEndingCash;
-        let diffMsg = 'Kas pas!';
-        if (diff > 0) diffMsg = `Lebih kas: ${formatRp(diff)}`;
-        if (diff < 0) diffMsg = `Kurang kas: ${formatRp(Math.abs(diff))}`;
+        const b = res.breakdown || {};
+        const diff = res.difference !== undefined ? res.difference
+                                                  : res.endingCash - res.expectedEndingCash;
+        // Rinciannya ditampilkan setelah tutup, bukan sebelum: kalau angka
+        // harapan terlihat lebih dulu, orang tinggal menyalinnya dan selisih
+        // kas tidak akan pernah ketahuan.
+        showToast(
+            `Sesi ditutup. Modal ${formatRp(b.startingCash || 0)}`
+            + ` + tunai ${formatRp(b.cashSales || 0)}`
+            + ` - belanja ${formatRp(b.cashExpenses || 0)}`
+            + ` - keluar ${formatRp(b.cashDrops || 0)}`
+            + ` + masuk ${formatRp(b.cashPaidIns || 0)}`
+            + ` = ${formatRp(res.expectedEndingCash)}`,
+            'info');
+        showToast(
+            diff === 0 ? 'Kas pas.'
+                       : (diff > 0 ? `Kas LEBIH ${formatRp(diff)}` : `Kas KURANG ${formatRp(Math.abs(diff))}`),
+            diff === 0 ? 'success' : 'warning');
 
-        showToast(`Sesi kas ditutup. Ekspektasi: ${formatRp(res.expectedEndingCash)} (${diffMsg})`, 'success');
         closeModal('modal-shift');
         updateShiftStatusWidget();
     } catch (err) {

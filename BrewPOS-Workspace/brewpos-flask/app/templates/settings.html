@@ -103,12 +103,29 @@
                     tetap jalan dan siapa yang melayani tetap tercatat &mdash; yang hilang hanya
                     perhitungan selisih kasnya.
                 </p>
-                <div class="form-group" style="margin-bottom: 0;">
+                <div class="form-group">
                     <label class="form-label">Pakai sesi kas?</label>
                     <select id="cfg-cash-session" class="form-control">
                         <option value="1">Ya &mdash; buka &amp; tutup sesi untuk mencocokkan laci</option>
                         <option value="0">Tidak &mdash; jualan tanpa sesi kas</option>
                     </select>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label">Batas Lama Sesi (jam)</label>
+                        <input type="number" id="cfg-shift-max-hours" class="form-control" min="1" max="72" placeholder="20">
+                        <small class="text-muted" style="font-size: 0.6875rem;">
+                            Lewat ini sesi ditandai "perlu ditinjau". Isi lebih panjang dari jam buka
+                            terpanjang Anda &mdash; buka 08.00&ndash;24.00 berarti minimal 18.
+                        </small>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label">Toleransi Selisih Kas (Rp)</label>
+                        <input type="number" id="cfg-cash-tolerance" class="form-control" min="0" placeholder="5000">
+                        <small class="text-muted" style="font-size: 0.6875rem;">
+                            Di atas ini, penutupan sesi wajib diberi keterangan.
+                        </small>
+                    </div>
                 </div>
             </div>
 
@@ -357,6 +374,8 @@
             document.getElementById('cfg-print-scale').value = map['RECEIPT_PRINT_SCALE'] || '100';
             document.getElementById('cfg-auto-cut').value = map['RECEIPT_AUTO_CUT'] || '1';
             document.getElementById('cfg-cash-session').value = map['CASH_SESSION_ENABLED'] || '1';
+            document.getElementById('cfg-shift-max-hours').value = map['SHIFT_MAX_HOURS'] || '20';
+            document.getElementById('cfg-cash-tolerance').value = map['CASH_DIFF_TOLERANCE'] || '5000';
         } catch (e) {
             showToast('Gagal memuat pengaturan: ' + e.message, 'error');
         }
@@ -580,7 +599,9 @@
             { key: 'RECEIPT_PAPER_SIZE', value: document.getElementById('cfg-paper-size').value },
             { key: 'RECEIPT_PRINT_SCALE', value: document.getElementById('cfg-print-scale').value || '100' },
             { key: 'RECEIPT_AUTO_CUT', value: document.getElementById('cfg-auto-cut').value },
-            { key: 'CASH_SESSION_ENABLED', value: document.getElementById('cfg-cash-session').value }
+            { key: 'CASH_SESSION_ENABLED', value: document.getElementById('cfg-cash-session').value },
+            { key: 'SHIFT_MAX_HOURS', value: document.getElementById('cfg-shift-max-hours').value },
+            { key: 'CASH_DIFF_TOLERANCE', value: document.getElementById('cfg-cash-tolerance').value }
         ];
 
         try {
