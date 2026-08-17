@@ -266,7 +266,25 @@ async function openShiftModal() {
                         <p><strong>Mulai Sejak:</strong> Jam ${startTimeStr} WIB</p>
                         <p><strong>Dibuka oleh:</strong> ${openedBy}</p>
                         <p><strong>Penjaga sekarang:</strong> ${keeper}${isMine ? ' (Anda)' : ''}</p>
-                        ${s.handovers && s.handovers.length ? `<p><strong>Pergantian penjaga:</strong> ${s.handovers.length}x</p>` : ''}
+                        ${s.handovers && s.handovers.length ? `
+                            <p><strong>Pergantian penjaga:</strong> ${s.handovers.length}x</p>
+                            ${s.handovers.map(h => {
+                                const jam = new Date(h.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+                                // Selisih ditampilkan per giliran: inilah gunanya
+                                // menghitung laci saat berganti penjaga.
+                                if (h.countedCash === null || h.countedCash === undefined) {
+                                    return `<p style="margin-left: 10px; font-size: 12px;">${jam} &middot;
+                                        ${h.fromUsername || '-'} &rarr; ${h.toUsername}
+                                        <span class="text-muted">(kas tidak dihitung)</span></p>`;
+                                }
+                                const d = h.difference;
+                                const label = d === 0 ? 'pas'
+                                    : `${d > 0 ? 'lebih' : 'kurang'} ${formatRp(Math.abs(d))}`;
+                                return `<p style="margin-left: 10px; font-size: 12px;">${jam} &middot;
+                                    ${h.fromUsername || '-'} &rarr; ${h.toUsername} &middot;
+                                    <strong class="${d === 0 ? 'text-success' : 'text-danger'}">${label}</strong></p>`;
+                            }).join('')}
+                        ` : ''}
                     </div>
                 </div>
 
@@ -448,12 +466,56 @@ function hitungPecahan() {
 }
 
 async function submitShiftHandover() {
+    /*
+     * Hitungan laci saat berganti penjaga -- opsional.
+     *
+     * Kalau diisi, selisih kas bisa dilokalisir ke giliran siapa; tanpa itu
+     * selisih hanya diketahui totalnya di akhir sesi 16 jam, dan tidak ada yang
+     * bisa dimintai keterangan. Tetap opsional karena pergantian sebentar
+     * (ke belakang, salat) tidak perlu dihitung, dan memaksanya justru membuat
+     * orang mengarang angka.
+     */
+    const jawab = prompt(
+        'Hitung uang di laci sekarang? Ini mengunci tanggung jawab giliran '
+        + 'penjaga sebelumnya.\n\n'
+        + 'Isi jumlahnya, atau kosongkan lalu OK untuk lewati.');
+    if (jawab === null) return;
+
+    const body = {};
+    const dihitung = parseInt(jawab, 10);
+    if (jawab.trim() !== '' && !isNaN(dihitung)) body.countedCash = dihitung;
+
     try {
-        await apiFetch('/shift/handover', { method: 'POST', body: JSON.stringify({}) });
+        const res = await apiFetch('/shift/handover', {
+            method: 'POST', body: JSON.stringify(body)
+        });
+        const h = res.handover || {};
+        if (h.countedCash !== null && h.countedCash !== undefined) {
+            const d = h.difference;
+            showToast(
+                d === 0 ? `Kas pas saat serah terima (${formatRp(h.countedCash)}).`
+                        : `Giliran sebelumnya ${d > 0 ? 'LEBIH' : 'KURANG'} ${formatRp(Math.abs(d))}.`,
+                d === 0 ? 'success' : 'warning');
+        }
         showToast('Anda tercatat sebagai penjaga sesi kas sekarang.', 'success');
         openShiftModal();
         updateShiftStatusWidget();
     } catch (err) {
+        // Selisih besar ditolak sampai diberi keterangan; minta di sini juga.
+        if (err.data && err.data.requiresNote) {
+            const alasan = prompt(err.message + '\n\nKeterangannya apa?');
+            if (!alasan) return;
+            body.note = alasan;
+            try {
+                await apiFetch('/shift/handover', { method: 'POST', body: JSON.stringify(body) });
+                showToast('Serah terima tercatat berikut keterangannya.', 'success');
+                openShiftModal();
+                updateShiftStatusWidget();
+            } catch (e2) {
+                showToast(e2.message, 'error');
+            }
+            return;
+        }
         showToast(err.message, 'error');
     }
 }

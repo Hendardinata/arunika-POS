@@ -11,6 +11,13 @@ class ShiftHandover(db.Model):
     fromUserId = db.Column(db.Integer, db.ForeignKey('User.id'), nullable=True)
     toUserId = db.Column(db.Integer, db.ForeignKey('User.id'), nullable=False)
     note = db.Column(db.String(500), nullable=True)
+    # Hitungan laci saat penjaga berganti. Tanpa ini selisih kas hanya diketahui
+    # jumlahnya, bukan terjadi di giliran siapa -- dan pada sesi 16 jam yang
+    # dijaga bergantian, itu berarti tidak ada yang bisa dimintai keterangan.
+    # Boleh kosong: pergantian sebentar (ke belakang, salat) tidak perlu dihitung.
+    countedCash = db.Column(db.Integer, nullable=True)
+    expectedCash = db.Column(db.Integer, nullable=True)
+    difference = db.Column(db.Integer, nullable=True)
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     fromUser = db.relationship('User', foreign_keys=[fromUserId], lazy='joined')
@@ -25,6 +32,9 @@ class ShiftHandover(db.Model):
             'toUserId': self.toUserId,
             'toUsername': self.toUser.username if self.toUser else None,
             'note': self.note,
+            'countedCash': self.countedCash,
+            'expectedCash': self.expectedCash,
+            'difference': self.difference,
             'createdAt': self.createdAt.isoformat() if self.createdAt else None
         }
 

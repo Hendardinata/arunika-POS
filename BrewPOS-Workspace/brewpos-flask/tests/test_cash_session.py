@@ -12,6 +12,7 @@ import pytest
 from app.extensions import db
 from app.models.customer import Customer
 from app.models.expense import Expense, ExpenseCategory
+from app.models.attendance import ShiftHandover
 from app.models.shift import CashMovement, Shift
 from app.models.system_settings import SystemSettings
 from app.models.transaction import Transaction
@@ -114,7 +115,9 @@ def test_kas_seharusnya_memperhitungkan_semua_arus(client, app, sesi, admin_head
     assert res.status_code == 200, res.get_json()
     isi = res.get_json()
 
-    assert isi['breakdown'] == {
+    b = isi['breakdown']
+    assert {k: b[k] for k in ('startingCash', 'cashSales', 'cashExpenses',
+                              'cashDrops', 'cashPaidIns', 'expectedEndingCash')} == {
         'startingCash': 300000, 'cashSales': 1200000, 'cashExpenses': 150000,
         'cashDrops': 800000, 'cashPaidIns': 200000, 'expectedEndingCash': 750000,
     }
@@ -265,3 +268,84 @@ def test_daftar_gerakan_kas_menjumlahkan_bersihnya(client, sesi, admin_headers):
     isi = client.get('/api/shift/cash-movement', headers=admin_headers).get_json()
     assert len(isi['items']) == 2
     assert isi['net'] == -600000
+
+
+# --- Serah terima penjaga ---------------------------------------------------
+
+def _handover_ke(client, headers, user_id, **kw):
+    muatan = {'toUserId': user_id}
+    muatan.update(kw)
+    return client.post('/api/shift/handover', headers=headers, json=muatan)
+
+
+def test_serah_terima_tanpa_hitung_kas_tetap_boleh(client, app, sesi, admin_headers):
+    """Pergantian sebentar (ke belakang, salat) tidak perlu dihitung."""
+    kasir = User.query.filter_by(role='CASHIER').first()
+    res = _handover_ke(client, admin_headers, kasir.id)
+    assert res.status_code == 201, res.get_json()
+    assert res.get_json()['handover']['countedCash'] is None
+
+
+def test_hitung_kas_saat_serah_terima_tercatat(client, app, sesi, admin_headers):
+    _jual_tunai(sesi, 500000)
+    kasir = User.query.filter_by(role='CASHIER').first()
+
+    res = _handover_ke(client, admin_headers, kasir.id, countedCash=800000)
+    assert res.status_code == 201, res.get_json()
+    h = res.get_json()['handover']
+    assert h['expectedCash'] == 800000      # 300.000 modal + 500.000 tunai
+    assert h['difference'] == 0
+
+
+def test_selisih_giliran_pertama_tidak_dibebankan_ke_penjaga_berikutnya(client, app, sesi, admin_headers):
+    """
+    Inti fiturnya. Giliran A kurang 50.000 dan laci tidak dibetulkan. Giliran B
+    berjalan pas. B tidak boleh ikut tercatat kurang -- kalau iya, orang berhenti
+    percaya angkanya dan kontrolnya mati.
+    """
+    kasir = User.query.filter_by(role='CASHIER').first()
+    _jual_tunai(sesi, 500000)
+
+    # Giliran A: seharusnya 800.000, fisik cuma 750.000
+    res = _handover_ke(client, admin_headers, kasir.id, countedCash=750000,
+                       note='Kurang, belum ketemu sebabnya')
+    assert res.get_json()['handover']['difference'] == -50000
+
+    # Giliran B: jual 200.000 lagi, laci jadi 950.000 -- pas untuk gilirannya
+    _jual_tunai(sesi, 200000)
+    tutup = client.post('/api/shift/close', headers=admin_headers, json={'endingCash': 950000})
+    assert tutup.status_code == 200, tutup.get_json()
+    assert tutup.get_json()['difference'] == 0
+
+
+def test_penutupan_tetap_melaporkan_ringkasan_seluruh_sesi(client, app, sesi, admin_headers):
+    """Giliran dinilai sendiri-sendiri, tapi uang toko tetap dihitung utuh."""
+    kasir = User.query.filter_by(role='CASHIER').first()
+    _jual_tunai(sesi, 500000)
+    _handover_ke(client, admin_headers, kasir.id, countedCash=750000, note='kurang 50rb')
+    _jual_tunai(sesi, 200000)
+
+    isi = client.post('/api/shift/close', headers=admin_headers,
+                      json={'endingCash': 950000}).get_json()
+    sesi_penuh = isi['breakdown']['sesiPenuh']
+    assert sesi_penuh['startingCash'] == MODAL_AWAL
+    assert sesi_penuh['cashSales'] == 700000
+    assert sesi_penuh['expectedEndingCash'] == 1000000   # selisih 50rb masih terlihat di sini
+
+
+def test_selisih_besar_saat_serah_terima_wajib_dijelaskan(client, app, sesi, admin_headers):
+    _jual_tunai(sesi, 500000)
+    kasir = User.query.filter_by(role='CASHIER').first()
+
+    res = _handover_ke(client, admin_headers, kasir.id, countedCash=600000)
+    assert res.status_code == 400
+    assert res.get_json()['requiresNote'] is True
+    assert res.get_json()['difference'] == -200000
+
+    db.session.expire_all()
+    assert ShiftHandover.query.count() == 0, 'serah terima tidak boleh terlanjur tercatat'
+
+
+def test_hitungan_negatif_ditolak(client, app, sesi, admin_headers):
+    kasir = User.query.filter_by(role='CASHIER').first()
+    assert _handover_ke(client, admin_headers, kasir.id, countedCash=-1).status_code == 400

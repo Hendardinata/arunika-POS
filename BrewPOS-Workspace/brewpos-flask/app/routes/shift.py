@@ -163,49 +163,118 @@ def handover_shift():
             toUserId=to_user_id,
             note=note
         )
+
+        # Hitung laci saat berganti penjaga. Opsional: pergantian sebentar
+        # (ke belakang, salat) tidak perlu dihitung, dan memaksanya akan
+        # membuat orang mengarang angka.
+        selisih = None
+        if data.get('countedCash') not in (None, ''):
+            try:
+                dihitung = int(data.get('countedCash'))
+            except (TypeError, ValueError):
+                return jsonify({'error': 'Hitungan kas harus berupa angka'}), 400
+            if dihitung < 0:
+                return jsonify({'error': 'Hitungan kas tidak boleh negatif'}), 400
+
+            saldo_awal, sejak, _ = _titik_awal_segmen(shift)
+            diharapkan, _ = hitung_kas_seharusnya(shift, saldo_awal, sejak)
+            selisih = dihitung - diharapkan
+
+            toleransi = get_setting_int('CASH_DIFF_TOLERANCE', 5000)
+            if abs(selisih) > toleransi and not note:
+                return jsonify({
+                    'error': f'Selisih kas Rp {abs(selisih):,}'.replace(',', '.')
+                             + f" ({'lebih' if selisih > 0 else 'kurang'}) pada giliran ini. "
+                             + 'Wajib diisi keterangan sebelum serah terima.',
+                    'requiresNote': True, 'difference': selisih,
+                }), 400
+
+            handover.countedCash = dihitung
+            handover.expectedCash = diharapkan
+            handover.difference = selisih
+
         shift.currentUserId = to_user_id
         db.session.add(handover)
         db.session.commit()
 
-        return jsonify(shift.to_dict()), 201
+        if selisih:
+            log_activity('CASH_DIFFERENCE', user_id,
+                         f"Serah terima sesi #{shift.id}: selisih Rp {selisih:,}".replace(',', '.')
+                         + f" pada giliran {handover.fromUser.username if handover.fromUser else '-'}"
+                         + f" ({note or 'tanpa keterangan'})", 'Shift', shift.id)
+
+        hasil = shift.to_dict()
+        hasil['handover'] = handover.to_dict()
+        return jsonify(hasil), 201
     except Exception as e:
         db.session.rollback()
         print(f"Error handing over shift: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
 
-def hitung_kas_seharusnya(shift):
+def _titik_awal_segmen(shift):
+    """
+    Dari mana penghitungan laci dimulai. -> (saldo_awal, waktu_awal, penjaga)
+
+    Kalau sudah pernah ada serah terima yang menghitung laci, penghitungan
+    dimulai dari hitungan itu -- bukan dari modal awal sesi. Ini yang membuat
+    selisih bisa dilokalisir: kalau giliran pertama kurang Rp 50.000 dan
+    lacinya tidak dibetulkan, penjaga berikutnya tidak ikut disalahkan untuk
+    kekurangan yang bukan miliknya.
+    """
+    terakhir = ShiftHandover.query.filter(
+        ShiftHandover.shiftId == shift.id,
+        ShiftHandover.countedCash.isnot(None)
+    ).order_by(ShiftHandover.createdAt.desc()).first()
+
+    if terakhir:
+        return terakhir.countedCash, terakhir.createdAt, terakhir.toUserId
+    return shift.startingCash, shift.startTime, shift.currentUserId
+
+
+def hitung_kas_seharusnya(shift, saldo_awal=None, sejak=None):
     """
     Isi laci yang seharusnya. -> (expected, rincian)
 
-    modal awal + penjualan tunai - belanja dari laci - setoran keluar + tambahan masuk
+    saldo awal + penjualan tunai - belanja dari laci - setoran keluar + tambahan masuk
 
     Dua suku terakhir yang sebelumnya tidak ada. Tanpa keduanya, setiap kali
     uang disetor ke brankas atau receh ditambah, selisihnya muncul sebagai
     "kas kurang/lebih" yang tidak bisa dijelaskan siapa pun.
+
+    saldo_awal & sejak dipakai untuk menghitung satu giliran saja; tanpa
+    keduanya, dihitung sejak sesi dibuka.
     """
-    cash_income = sum(
-        t.totalAmount for t in
-        Transaction.query.filter_by(shiftId=shift.id, status='COMPLETED').all()
-        if t.paymentMethod == 'CASH'
-    )
+    if saldo_awal is None:
+        saldo_awal = shift.startingCash
+    if sejak is None:
+        sejak = shift.startTime
+
+    tx = Transaction.query.filter(
+        Transaction.shiftId == shift.id, Transaction.status == 'COMPLETED',
+        Transaction.createdAt >= sejak).all()
+    cash_income = sum(t.totalAmount for t in tx if t.paymentMethod == 'CASH')
+
     cash_expense = int(db.session.query(func.coalesce(func.sum(Expense.amount), 0)).filter(
         Expense.shiftId == shift.id,
-        Expense.paymentSource == 'CASH_DRAWER'
+        Expense.paymentSource == 'CASH_DRAWER',
+        Expense.date >= sejak
     ).scalar() or 0)
 
-    gerakan = CashMovement.query.filter_by(shiftId=shift.id).all()
+    gerakan = CashMovement.query.filter(
+        CashMovement.shiftId == shift.id, CashMovement.createdAt >= sejak).all()
     drops = sum(m.amount for m in gerakan if m.type == 'DROP')
     paid_ins = sum(m.amount for m in gerakan if m.type == 'PAID_IN')
 
-    expected = shift.startingCash + cash_income - cash_expense - drops + paid_ins
+    expected = saldo_awal + cash_income - cash_expense - drops + paid_ins
     return expected, {
-        'startingCash': shift.startingCash,
+        'startingCash': saldo_awal,
         'cashSales': cash_income,
         'cashExpenses': cash_expense,
         'cashDrops': drops,
         'cashPaidIns': paid_ins,
         'expectedEndingCash': expected,
+        'since': sejak.isoformat() if sejak else None,
     }
 
 
@@ -291,8 +360,17 @@ def close_shift():
         if not shift:
             return jsonify({'error': 'No open shift found'}), 404
 
-        expected_ending_cash, rincian = hitung_kas_seharusnya(shift)
+        # Dihitung dari serah terima terakhir yang menghitung laci, bukan dari
+        # modal awal sesi -- kalau tidak, penjaga terakhir menanggung selisih
+        # yang sudah terjadi jauh sebelum gilirannya.
+        saldo_awal, sejak, _ = _titik_awal_segmen(shift)
+        expected_ending_cash, rincian = hitung_kas_seharusnya(shift, saldo_awal, sejak)
         selisih = ending_cash - expected_ending_cash
+
+        # Ringkasan seluruh sesi tetap dilaporkan untuk pemilik: giliran boleh
+        # dinilai sendiri-sendiri, tapi uang toko dihitung utuh.
+        _, rincian_sesi = hitung_kas_seharusnya(shift)
+        rincian['sesiPenuh'] = rincian_sesi
 
         # Selisih besar wajib dijelaskan. Kalau boleh ditutup tanpa keterangan,
         # angkanya cuma jadi hiasan: tidak ada yang menelusuri, dan bulan depan

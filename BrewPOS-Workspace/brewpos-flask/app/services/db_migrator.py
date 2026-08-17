@@ -118,6 +118,11 @@ def auto_sync_schema(app):
         # ekspektasi kas saat sesi ditutup.
         ("Expense", "paymentSource", "NVARCHAR(20) NOT NULL DEFAULT 'CASH_DRAWER'"),
         ("Expense", "shiftId", "INT NULL"),
+        # Hitungan laci saat penjaga berganti, supaya selisih kas bisa
+        # dilokalisir ke giliran siapa, bukan hanya diketahui totalnya.
+        ("ShiftHandover", "countedCash", "INT NULL"),
+        ("ShiftHandover", "expectedCash", "INT NULL"),
+        ("ShiftHandover", "difference", "INT NULL"),
     ]
 
     # Backfill for the shift rework. Safe to re-run: every statement is scoped to
@@ -140,6 +145,9 @@ def auto_sync_schema(app):
                 [fromUserId] INT NULL,
                 [toUserId] INT NOT NULL,
                 [note] NVARCHAR(500) NULL,
+                [countedCash] INT NULL,
+                [expectedCash] INT NULL,
+                [difference] INT NULL,
                 [createdAt] DATETIME NOT NULL DEFAULT GETDATE()
             )
         """),
