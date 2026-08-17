@@ -32,6 +32,9 @@
         <button class="btn btn-secondary btn-sm rep-tab-btn" id="btn-rep-attendance" onclick="switchReportSection('attendance')">
             <i class="fas fa-user-clock"></i> 8. Absensi Karyawan
         </button>
+        <button class="btn btn-secondary btn-sm rep-tab-btn" id="btn-rep-cashier" onclick="switchReportSection('cashier')">
+            <i class="fas fa-user-tag"></i> 9. Penjualan per Kasir
+        </button>
     </div>
 
     <div class="report-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -537,6 +540,57 @@
             </div>
         </div>
     </div>
+    <div id="rep-sec-cashier" class="rep-section-content" style="display: none;">
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h3 class="card-title"><i class="fas fa-user-tag text-primary"></i> Penjualan per Kasir</h3>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+                        Atribusi diambil dari siapa yang memproses transaksi, bukan siapa yang membuka
+                        sesi kas &mdash; satu laci dipakai bergantian beberapa orang.
+                    </p>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="custom-table" id="table-cashier-export">
+                    <thead>
+                        <tr>
+                            <th>Kasir</th>
+                            <th>Struk</th>
+                            <th>Cup</th>
+                            <th>Omzet</th>
+                            <th>Rata-rata / Struk</th>
+                            <th>Modal (HPP)</th>
+                            <th>Laba Kotor</th>
+                            <th>Diskon Diberikan</th>
+                            <th>Void</th>
+                            <th class="no-print" style="text-align: right;">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cashier-report-body">
+                        <tr><td colspan="10" class="text-center text-muted" style="padding: 30px;">Memuat...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card no-print" id="cashier-detail-card" style="margin-top: 20px; display: none;">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-receipt text-primary"></i>
+                    Transaksi <span id="cashier-detail-name"></span></h3>
+                <button class="btn btn-secondary btn-sm" onclick="tutupRincianKasir()">Tutup</button>
+            </div>
+            <div class="table-responsive">
+                <table class="custom-table">
+                    <thead>
+                        <tr><th>Kode</th><th>Waktu</th><th>Pelanggan</th><th>Menu</th>
+                            <th>Total</th><th>Metode</th><th>Status</th></tr>
+                    </thead>
+                    <tbody id="cashier-detail-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Modal Void Transaction -->
@@ -599,6 +653,9 @@
     let shiftsData = [];
     let currentPeriod = 'all';
     let activeSection = 'sales';
+    // Rentang tanggal yang sedang dipilih, dipakai bersama semua tab supaya
+    // angkanya bisa dibandingkan satu sama lain.
+    let currentRange = 'all';
 
     document.addEventListener('DOMContentLoaded', async () => {
         const storeSettings = await getStoreSettings();
@@ -702,6 +759,81 @@
         }
     }
 
+
+    /* ------------------------------------------------------------------
+       Penjualan per kasir. Rentang tanggalnya mengikuti filter laporan yang
+       sedang aktif, supaya angkanya bisa dibandingkan dengan tab lain.
+       ------------------------------------------------------------------ */
+    async function muatPenjualanPerKasir() {
+        const tbody = document.getElementById('cashier-report-body');
+        if (!tbody) return;
+        tbody.innerHTML = skeletonRows(10, 4);
+
+        try {
+            const q = currentRange || 'all';
+            const data = await apiFetch(`/analytics/by-cashier?days=${q}`);
+            if (!data.items.length) {
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted" style="padding: 30px;">Belum ada transaksi pada rentang ini.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.items.map(r => `
+                <tr>
+                    <td><strong>${escapeHtmlSafe(r.username)}</strong></td>
+                    <td>${r.orders}</td>
+                    <td>${r.items}</td>
+                    <td><strong>${formatRp(r.revenue)}</strong></td>
+                    <td>${formatRp(r.avgPerOrder)}</td>
+                    <td>${formatRp(r.hpp)}</td>
+                    <td class="${r.grossProfit >= 0 ? 'text-success' : 'text-danger'}">${formatRp(r.grossProfit)}</td>
+                    <td>${r.discountGiven ? formatRp(r.discountGiven) : '<span class="text-muted">-</span>'}</td>
+                    <td>${r.voidCount ? `${r.voidCount}x &middot; ${formatRp(r.voidAmount)}` : '<span class="text-muted">-</span>'}</td>
+                    <td class="no-print" style="text-align: right;">
+                        ${r.userId ? `<button class="btn btn-secondary btn-sm" onclick="lihatRincianKasir(${r.userId}, '${escapeHtmlSafe(r.username)}')">Rincian</button>` : ''}
+                    </td>
+                </tr>`).join('')
+                + `<tr style="background: #FAF8F5;">
+                     <td><strong>Total</strong></td>
+                     <td><strong>${data.totalOrders}</strong></td>
+                     <td></td>
+                     <td><strong>${formatRp(data.totalRevenue)}</strong></td>
+                     <td colspan="6"></td>
+                   </tr>`;
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="10" class="text-danger text-center" style="padding: 24px;">Gagal memuat: ${e.message}</td></tr>`;
+        }
+    }
+
+    async function lihatRincianKasir(userId, nama) {
+        const card = document.getElementById('cashier-detail-card');
+        const tbody = document.getElementById('cashier-detail-body');
+        document.getElementById('cashier-detail-name').textContent = nama;
+        card.style.display = 'block';
+        tbody.innerHTML = skeletonRows(7, 5);
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        try {
+            const q = currentRange || 'all';
+            const data = await apiFetch(`/analytics/cashier/${userId}?days=${q}`);
+            tbody.innerHTML = data.items.map(t => `
+                <tr>
+                    <td>${t.transactionCode || t.code || '-'}</td>
+                    <td>${new Date(t.createdAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                    <td>${t.customer ? escapeHtmlSafe(t.customer.nickname) : '-'}</td>
+                    <td>${(t.items || []).map(i => `${i.quantity}x ${i.menu ? escapeHtmlSafe(i.menu.name) : '-'}`).join(', ')}</td>
+                    <td>${formatRp(t.totalAmount)}</td>
+                    <td>${t.paymentMethod}</td>
+                    <td>${t.status === 'VOID' ? '<span class="text-danger">VOID</span>' : 'Sah'}</td>
+                </tr>`).join('')
+                || '<tr><td colspan="7" class="text-center text-muted" style="padding: 24px;">Tidak ada transaksi.</td></tr>';
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center">Gagal memuat: ${e.message}</td></tr>`;
+        }
+    }
+
+    function tutupRincianKasir() {
+        document.getElementById('cashier-detail-card').style.display = 'none';
+    }
+
     function switchReportSection(sec) {
         activeSection = sec;
         document.querySelectorAll('.rep-section-content').forEach(el => el.style.display = 'none');
@@ -718,10 +850,12 @@
             'variance': 'LAPORAN STATUS & TINGKAT STOK BAHAN',
             'pnl': 'LAPORAN LABA RUGI OPERASIONAL (P&L)',
             'shifts': 'LAPORAN SESI KAS & PENJUALAN PER KASIR',
-            'attendance': 'LAPORAN ABSENSI JAM KERJA KARYAWAN'
+            'attendance': 'LAPORAN ABSENSI JAM KERJA KARYAWAN',
+            'cashier': 'RIWAYAT PENJUALAN PER KASIR'
         };
         document.getElementById('rep-active-title').textContent = titles[sec] || 'LAPORAN KAFE';
 
+        if (sec === 'cashier') muatPenjualanPerKasir();
         if (sec === 'shifts' && shiftsData.length === 0) {
             loadShiftsData();
         }
@@ -731,6 +865,8 @@
     }
 
     async function loadReportData(period = 'all', btnEl = null) {
+        currentRange = period;
+        if (activeSection === 'cashier') muatPenjualanPerKasir();
         currentPeriod = period;
         if (btnEl) {
             document.querySelectorAll('.filter-period-btn').forEach(b => b.classList.remove('active'));

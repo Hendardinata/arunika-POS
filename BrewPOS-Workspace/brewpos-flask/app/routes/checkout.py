@@ -2,6 +2,7 @@ import random
 import math
 from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify
+from sqlalchemy.orm import joinedload, selectinload
 from app.extensions import db
 from app.models.customer import Customer, GUEST_NICKNAME
 from app.models.transaction import Transaction, TransactionItem
@@ -241,7 +242,12 @@ def _resolve_order_discount(reward, requested_discount, gross_total, supervisor)
 @checkout_bp.route('/history', methods=['GET'])
 def get_history():
     try:
-        transactions = Transaction.query.order_by(Transaction.createdAt.desc()).limit(50).all()
+        # Muat rincian, menu, dan member sekaligus: to_dict() menyusuri
+        # ketiganya, dan tanpa ini 50 struk terakhir jadi ratusan query kecil.
+        transactions = Transaction.query.options(
+            selectinload(Transaction.items).joinedload(TransactionItem.menu),
+            joinedload(Transaction.customer),
+        ).order_by(Transaction.createdAt.desc()).limit(50).all()
         return jsonify([t.to_dict(include_items=True, include_customer=True) for t in transactions])
     except PeriodLockedError:
         raise      # ditangani errorhandler -> 423

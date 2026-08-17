@@ -98,7 +98,7 @@ def create_app(config_class=Config):
         auth_bp, category_bp, menu_bp, checkout_bp, customer_bp,
         analytics_bp, gamification_bp, inventory_bp, expenses_bp,
         settings_bp, shift_bp, attendance_bp, role_access_bp, recipe_bp, logs_bp,
-        historical_bp,
+        historical_bp, notifications_bp,
         monitoring_bp, web_bp
     )
 
@@ -118,6 +118,7 @@ def create_app(config_class=Config):
     app.register_blueprint(recipe_bp)
     app.register_blueprint(logs_bp)
     app.register_blueprint(historical_bp)
+    app.register_blueprint(notifications_bp)
     app.register_blueprint(monitoring_bp)
     app.register_blueprint(web_bp)
 

@@ -14,6 +14,7 @@ from app.routes.role_access import role_access_bp
 from app.routes.recipe import recipe_bp
 from app.routes.logs import logs_bp
 from app.routes.historical_sales import historical_bp
+from app.routes.notifications import notifications_bp
 from app.routes.monitoring import monitoring_bp
 from app.routes.web import web_bp
 
@@ -34,6 +35,7 @@ __all__ = [
     'recipe_bp',
     'logs_bp',
     'historical_bp',
+    'notifications_bp',
     'monitoring_bp',
     'web_bp'
 ]

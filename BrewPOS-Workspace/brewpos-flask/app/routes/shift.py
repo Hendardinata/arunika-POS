@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify, g
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload, selectinload
 from app.extensions import db
 from app.models.expense import Expense
 from app.models.shift import Shift, CashMovement
@@ -413,7 +414,11 @@ def close_shift():
 def get_shift_reports():
     try:
         _sweep_stale_shifts()
-        shifts = Shift.query.order_by(Shift.createdAt.desc()).limit(50).all()
+        # to_dict(include_transactions=True) menyusuri transaksi tiap sesi.
+        shifts = Shift.query.options(
+            selectinload(Shift.transactions),
+            selectinload(Shift.handovers),
+        ).order_by(Shift.createdAt.desc()).limit(50).all()
         return jsonify([s.to_dict(include_transactions=True) for s in shifts])
     except Exception as e:
         print(f"Error fetching shift reports: {e}")

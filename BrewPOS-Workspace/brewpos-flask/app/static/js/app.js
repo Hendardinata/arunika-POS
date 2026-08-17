@@ -1022,3 +1022,75 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateShiftStatusWidget();
     hideBrowserPrintHintIfBridged();
 });
+
+/* ======================================================================
+   Pemberitahuan
+
+   Isinya dihitung server dari keadaan data sekarang, bukan riwayat kejadian.
+   Konsekuensinya menyenangkan: peringatan hilang sendiri begitu masalahnya
+   beres, dan tidak ada daftar "sudah dibaca" yang harus diurus.
+   ====================================================================== */
+let notifTimer = null;
+
+async function muatNotifikasi() {
+    const dot = document.getElementById('notif-dot');
+    const body = document.getElementById('notif-body');
+    if (!dot || !body) return;
+
+    try {
+        const data = await apiFetch('/notifications');
+        dot.style.display = data.count > 0 ? 'block' : 'none';
+        // Titik merah hanya untuk yang mendesak; kalau semua hal memerahkan
+        // lonceng, orang berhenti melihatnya.
+        dot.style.background = data.urgent > 0 ? 'var(--color-danger)' : 'var(--color-warning)';
+
+        body.innerHTML = data.items.length
+            ? data.items.map(n => `
+                <div class="notif-item ${n.level}">
+                    <i class="fas fa-${n.icon} notif-ico"></i>
+                    <div>
+                        <strong>${n.title}</strong>
+                        <span>${n.body}</span>
+                        ${n.link ? `<a href="${n.link}">Buka &rarr;</a>` : ''}
+                    </div>
+                </div>`).join('')
+            : '<div class="notif-empty">Tidak ada yang perlu ditindaklanjuti.</div>';
+    } catch (e) {
+        body.innerHTML = '<div class="notif-empty">Gagal memuat pemberitahuan.</div>';
+    }
+}
+
+function toggleNotifPanel() {
+    const p = document.getElementById('notif-panel');
+    if (!p) return;
+    const buka = p.style.display === 'none';
+    p.style.display = buka ? 'block' : 'none';
+    if (buka) muatNotifikasi();
+}
+
+// Klik di luar panel menutupnya; tanpa ini panel menggantung dan terasa macet.
+document.addEventListener('click', (e) => {
+    const wrap = document.querySelector('.notif-wrap');
+    const p = document.getElementById('notif-panel');
+    if (wrap && p && !wrap.contains(e.target)) p.style.display = 'none';
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (!document.getElementById('notif-bell')) return;
+    muatNotifikasi();
+    // 3 menit: cukup cepat untuk stok habis, cukup jarang untuk tidak
+    // membebani sambungan Tailscale yang dipakai kasir.
+    notifTimer = setInterval(() => {
+        if (document.visibilityState === 'visible') muatNotifikasi();
+    }, 180000);
+});
+
+/* Rangka pemuatan: menahan tinggi baris supaya isi tidak melompat saat data
+   datang. Lompatan itu yang paling terasa sebagai "tidak halus". */
+function skeletonRows(kolom, baris = 5) {
+    let html = '';
+    for (let i = 0; i < baris; i++) {
+        html += '<tr>' + `<td><div class="skeleton skeleton-row"></div></td>`.repeat(kolom) + '</tr>';
+    }
+    return html;
+}

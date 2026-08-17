@@ -125,6 +125,21 @@
                     <span class="badge-chip" id="topbar-paper-size" title="Ukuran kertas struk aktif">
                         <i class="fas fa-receipt"></i> 58mm
                     </span>
+                    <!-- Lonceng pemberitahuan. Isinya diturunkan dari keadaan data
+                         sekarang, bukan riwayat kejadian, jadi peringatan hilang
+                         sendiri begitu masalahnya beres. -->
+                    <div class="notif-wrap" style="position: relative;">
+                        <button class="notif-bell" id="notif-bell" onclick="toggleNotifPanel()"
+                                title="Pemberitahuan" aria-label="Pemberitahuan">
+                            <i class="fas fa-bell"></i>
+                            <span class="notif-dot" id="notif-dot" style="display: none;"></span>
+                        </button>
+                        <div class="notif-panel" id="notif-panel" style="display: none;">
+                            <div class="notif-head">Perlu Perhatian</div>
+                            <div id="notif-body"><div class="notif-empty">Memuat...</div></div>
+                        </div>
+                    </div>
+
                     <!-- id must stay in sync with updateShiftStatusWidget() in app.js -->
                     <div class="shift-status-pill closed" id="shift-status-widget">
                         <span class="status-dot"></span> Memuat shift...

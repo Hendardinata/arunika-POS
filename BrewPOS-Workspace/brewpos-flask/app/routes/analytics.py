@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload, selectinload
 from app.extensions import db
 from app.models.transaction import Transaction, TransactionItem
 from app.models.expense import Expense, ExpenseCategory
@@ -8,6 +9,22 @@ from app.models.customer import Customer
 from app.models.menu import Menu
 from app.models.inventory import InventoryItem, InventoryLog, DailyOpname
 from app.models.shift import Shift
+
+
+def _tx_dengan_rincian(query):
+    """
+    Muat rincian & menunya sekaligus, jangan satu per satu.
+
+    Perulangan di bawah menyentuh tx.items, item.menu, dan item.menu.category.
+    Dengan pemuatan malas bawaan, 1.400 transaksi berubah jadi ribuan query
+    kecil dan dashboard butuh lebih dari satu detik -- di MSSQL lewat jaringan
+    jauh lebih parah lagi.
+    """
+    return query.options(
+        selectinload(Transaction.items)
+        .joinedload(TransactionItem.menu)
+        .joinedload(Menu.category)
+    )
 
 analytics_bp = Blueprint('analytics', __name__, url_prefix='/api/analytics')
 
@@ -55,7 +72,7 @@ def get_analytics():
             tx_query = tx_query.filter(Transaction.createdAt <= end_date)
             exp_query = exp_query.filter(Expense.date <= end_date)
 
-        transactions_with_items = tx_query.all()
+        transactions_with_items = _tx_dengan_rincian(tx_query).all()
         total_transactions = len(transactions_with_items)
         total_revenue = sum(t.totalAmount for t in transactions_with_items)
 
@@ -168,7 +185,7 @@ def get_comprehensive_reports():
         tx_query = Transaction.query.order_by(Transaction.createdAt.desc())
         if start_date: tx_query = tx_query.filter(Transaction.createdAt >= start_date)
         if end_date: tx_query = tx_query.filter(Transaction.createdAt <= end_date)
-        all_tx = tx_query.all()
+        all_tx = _tx_dengan_rincian(tx_query).all()
 
         completed_tx = [t for t in all_tx if t.status == 'COMPLETED']
         void_tx = [t for t in all_tx if t.status == 'VOID']
@@ -364,8 +381,10 @@ def export_excel_report():
         tx_query = Transaction.query
         if start_date: tx_query = tx_query.filter(Transaction.createdAt >= start_date)
         if end_date: tx_query = tx_query.filter(Transaction.createdAt <= end_date)
-        completed_tx = tx_query.filter_by(status='COMPLETED').order_by(Transaction.createdAt.desc()).all()
-        void_tx = tx_query.filter_by(status='VOID').order_by(Transaction.createdAt.desc()).all()
+        completed_tx = _tx_dengan_rincian(
+            tx_query.filter_by(status='COMPLETED')).order_by(Transaction.createdAt.desc()).all()
+        void_tx = _tx_dengan_rincian(
+            tx_query.filter_by(status='VOID')).order_by(Transaction.createdAt.desc()).all()
 
         total_net_sales = sum(t.totalAmount for t in completed_tx)
         total_tax = sum(t.taxAmount or 0 for t in completed_tx)
@@ -632,3 +651,80 @@ def export_excel_report():
 @analytics_bp.route('/reports', methods=['GET'])
 def get_reports():
     return get_comprehensive_reports()
+
+
+@analytics_bp.route('/by-cashier', methods=['GET'])
+def get_sales_by_cashier():
+    """
+    Penjualan per kasir dalam satu rentang.
+
+    Atribusi diambil dari Transaction.userId -- siapa yang benar-benar
+    memproses, bukan siapa yang membuka sesi kas. Satu laci dipakai bergantian
+    beberapa orang, jadi menyimpulkannya dari sesi akan salah orang.
+    """
+    from app.models.user import User
+
+    start_date, end_date, _ = _parse_date_filter()
+    q = Transaction.query
+    if start_date:
+        q = q.filter(Transaction.createdAt >= start_date)
+    if end_date:
+        q = q.filter(Transaction.createdAt <= end_date)
+
+    baris = {}
+
+    def slot(uid, nama):
+        if uid not in baris:
+            baris[uid] = {'userId': uid, 'username': nama, 'orders': 0, 'revenue': 0,
+                          'hpp': 0, 'items': 0, 'voidCount': 0, 'voidAmount': 0,
+                          'discountGiven': 0, 'byPayment': {}}
+        return baris[uid]
+
+    for tx in _tx_dengan_rincian(q.options(joinedload(Transaction.cashier))).all():
+        nama = tx.cashier.username if tx.cashier else 'Tidak tercatat'
+        r = slot(tx.userId, nama)
+
+        if tx.status == 'VOID':
+            r['voidCount'] += 1
+            r['voidAmount'] += tx.totalAmount
+            continue
+
+        r['orders'] += 1
+        r['revenue'] += tx.totalAmount
+        r['discountGiven'] += (tx.discountAmount or 0)
+        r['items'] += sum(i.quantity for i in tx.items)
+        r['hpp'] += sum((i.hpp or 0) * i.quantity for i in tx.items)
+        metode = tx.paymentMethod or 'LAINNYA'
+        r['byPayment'][metode] = r['byPayment'].get(metode, 0) + tx.totalAmount
+
+    hasil = []
+    for r in baris.values():
+        r['grossProfit'] = r['revenue'] - r['hpp']
+        # Rata-rata per struk: ukuran yang paling cepat menunjukkan perbedaan
+        # cara kerja antar kasir (upsell, ukuran pesanan).
+        r['avgPerOrder'] = round(r['revenue'] / r['orders']) if r['orders'] else 0
+        hasil.append(r)
+    hasil.sort(key=lambda x: x['revenue'], reverse=True)
+
+    return jsonify({
+        'items': hasil,
+        'totalRevenue': sum(r['revenue'] for r in hasil),
+        'totalOrders': sum(r['orders'] for r in hasil),
+    })
+
+
+@analytics_bp.route('/cashier/<int:user_id>', methods=['GET'])
+def get_cashier_detail(user_id):
+    """Rincian transaksi satu kasir, untuk menelusuri angka di atas."""
+    start_date, end_date, _ = _parse_date_filter()
+    q = Transaction.query.filter(Transaction.userId == user_id)
+    if start_date:
+        q = q.filter(Transaction.createdAt >= start_date)
+    if end_date:
+        q = q.filter(Transaction.createdAt <= end_date)
+
+    tx = _tx_dengan_rincian(q).order_by(Transaction.createdAt.desc()).limit(200).all()
+    return jsonify({
+        'items': [t.to_dict(include_items=True, include_customer=True) for t in tx],
+        'count': len(tx),
+    })
