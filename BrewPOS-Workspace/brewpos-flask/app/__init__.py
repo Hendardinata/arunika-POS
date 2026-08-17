@@ -1,5 +1,5 @@
 import os
-from flask import Flask, send_from_directory
+from flask import Flask, request, send_from_directory
 from app.config import Config
 from app.extensions import db, jwt, cors, scheduler
 from app.cron.daily_reset import reset_daily_quests
@@ -81,6 +81,60 @@ def create_app(config_class=Config):
         except OSError:
             pass  # berkas hilang -- biarkan url_for jalan seperti biasa
 
+    # URL aset sudah berversi (?v=mtime di _bust_static_cache), jadi isinya
+    # tidak mungkin berubah tanpa URL-nya ikut berubah. Tanpa setelan ini Flask
+    # mengirim "no-cache" dan browser bertanya ulang ke server untuk SETIAP
+    # css/js pada SETIAP pindah halaman -- lewat Tailscale itu tiga sampai empat
+    # perjalanan bolak-balik hanya untuk dijawab "tidak berubah".
+    app.config.setdefault('SEND_FILE_MAX_AGE_DEFAULT', 31536000)  # 1 tahun
+
+    @app.after_request
+    def _pasang_cache_aset(response):
+        if request.path.startswith('/static/') and response.status_code == 200:
+            if request.args.get('v'):
+                response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+            else:
+                # Tanpa ?v tidak ada jaminan; jangan disimpan lama.
+                response.headers['Cache-Control'] = 'public, max-age=300'
+        return response
+
+    # Kompresi. Ditulis sendiri, bukan menambah dependensi: aset teks di sini
+    # menyusut 71-78% dengan gzip, dan itu langsung terasa di sambungan kasir.
+    @app.after_request
+    def _kompres(response):
+        if 'gzip' not in (request.headers.get('Accept-Encoding') or '').lower():
+            return response
+        if response.status_code < 200 or response.status_code >= 300:
+            return response
+        if response.headers.get('Content-Encoding'):
+            return response
+        jenis = (response.headers.get('Content-Type') or '').split(';')[0].strip()
+        if jenis not in ('text/html', 'text/css', 'application/javascript',
+                         'text/javascript', 'application/json', 'image/svg+xml',
+                         'text/plain'):
+            return response
+        # Respons berkas statis dikirim mode passthrough. Justru inilah yang
+        # paling perlu dikompresi (CSS/JS puluhan KB), jadi jangan dilewati --
+        # cukup batasi ukurannya supaya tidak ada berkas raksasa yang ditarik
+        # ke memori hanya untuk dikompres.
+        if response.direct_passthrough:
+            panjang = response.content_length or 0
+            if panjang > 2_000_000:
+                return response
+            response.direct_passthrough = False
+
+        isi = response.get_data()
+        # Di bawah ~1 KB, ongkos header gzip lebih besar dari hematnya.
+        if len(isi) < 1024:
+            return response
+
+        import gzip as _gzip
+        response.set_data(_gzip.compress(isi, 6))
+        response.headers['Content-Encoding'] = 'gzip'
+        response.headers['Content-Length'] = str(len(response.get_data()))
+        response.headers.add('Vary', 'Accept-Encoding')
+        return response
+
     # Static uploads handler for /uploads/<path:filename>
     @app.route('/uploads/<path:filename>')
     def uploaded_file(filename):
@@ -98,7 +152,7 @@ def create_app(config_class=Config):
         auth_bp, category_bp, menu_bp, checkout_bp, customer_bp,
         analytics_bp, gamification_bp, inventory_bp, expenses_bp,
         settings_bp, shift_bp, attendance_bp, role_access_bp, recipe_bp, logs_bp,
-        historical_bp, notifications_bp,
+        historical_bp, notifications_bp, bootstrap_bp,
         monitoring_bp, web_bp
     )
 
@@ -119,6 +173,7 @@ def create_app(config_class=Config):
     app.register_blueprint(logs_bp)
     app.register_blueprint(historical_bp)
     app.register_blueprint(notifications_bp)
+    app.register_blueprint(bootstrap_bp)
     app.register_blueprint(monitoring_bp)
     app.register_blueprint(web_bp)
 

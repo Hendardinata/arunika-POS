@@ -183,7 +183,7 @@ function closeModal(modalId) {
 }
 
 // Global Shift Management
-async function updateShiftStatusWidget() {
+function gambarPillSesi(shift, aktif) {
     const widget = document.getElementById('shift-status-widget');
     if (!widget) return;
 
@@ -191,36 +191,40 @@ async function updateShiftStatusWidget() {
     // ia menampilkan "Tutup" selamanya dan terbaca seperti ada yang salah.
     // Penjualan tetap jalan tanpa sesi -- siapa yang melayani tetap tercatat di
     // Transaction.userId, terpisah dari sesi kas.
-    const settings = await getStoreSettings();
-    if (settings && settings.CASH_SESSION_ENABLED === '0') {
+    if (!aktif) {
         widget.style.display = 'none';
         return;
     }
     widget.style.display = '';
 
-    try {
-        const data = await apiFetch('/shift/current');
-        if (data && data.currentShift) {
-            const s = data.currentShift;
-            const keeper = s.currentUser ? s.currentUser.username : 'Kasir';
-            const stale = s.status === 'NEEDS_REVIEW';
-            widget.className = 'shift-status-pill open';
-            // Nama penjaga dibungkus .shift-text: di layar sempit bagian itu
-            // disembunyikan CSS supaya pill tidak terpotong di tepi layar.
-            widget.innerHTML = stale
-                ? `<span class="status-dot"></span> ${s.label}<span class="shift-text"> &middot; perlu ditutup</span>`
-                : `<span class="status-dot"></span> ${s.label}<span class="shift-text"> &middot; ${keeper}</span>`;
-            widget.title = stale
-                ? `Sesi ini terbuka melewati batas jam. Modal Awal: ${formatRp(s.startingCash)}`
-                : `Modal Awal: ${formatRp(s.startingCash)}`;
-        } else {
-            widget.className = 'shift-status-pill closed';
-            widget.innerHTML = `<span class="status-dot"></span> Tutup<span class="shift-text"> &middot; Sesi Kas</span>`;
-            widget.title = `Belum ada sesi kas terbuka`;
-        }
-    } catch (e) {
+    if (shift) {
+        const keeper = shift.currentUser ? shift.currentUser.username : 'Kasir';
+        const stale = shift.status === 'NEEDS_REVIEW';
+        widget.className = 'shift-status-pill open';
+        // Nama penjaga dibungkus .shift-text: di layar sempit bagian itu
+        // disembunyikan CSS supaya pill tidak terpotong di tepi layar.
+        widget.innerHTML = stale
+            ? `<span class="status-dot"></span> ${shift.label}<span class="shift-text"> &middot; perlu ditutup</span>`
+            : `<span class="status-dot"></span> ${shift.label}<span class="shift-text"> &middot; ${keeper}</span>`;
+        widget.title = stale
+            ? `Sesi ini terbuka melewati batas jam. Modal Awal: ${formatRp(shift.startingCash)}`
+            : `Modal Awal: ${formatRp(shift.startingCash)}`;
+    } else {
         widget.className = 'shift-status-pill closed';
-        widget.innerHTML = `<span class="status-dot"></span> Shift Tutup`;
+        widget.innerHTML = `<span class="status-dot"></span> Tutup<span class="shift-text"> &middot; Sesi Kas</span>`;
+        widget.title = `Belum ada sesi kas terbuka`;
+    }
+}
+
+/* Ambil ulang status sesi dari server. Dipakai setelah buka/tutup/serah terima,
+   di mana data cache pasti sudah basi. */
+async function updateShiftStatusWidget() {
+    if (!document.getElementById('shift-status-widget')) return;
+    hapusBootCache();
+    try {
+        await muatBootstrap({ pakaiCache: false });
+    } catch (e) {
+        gambarPillSesi(null, true);
     }
 }
 
@@ -1009,17 +1013,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         initRbacNavigation();
     }
 
-    // Fetch store settings in background (needs a token: /api/settings is auth-guarded)
+    // Satu panggilan untuk setelan + sesi kas + pemberitahuan, bukan tiga
+    // terpisah. Isi cache dipakai lebih dulu supaya kerangka halaman langsung
+    // terisi; penyegaran jalan di belakang.
     if (token) {
-        const settings = await getStoreSettings();
-        const paperBadge = document.getElementById('topbar-paper-size');
-        if (paperBadge && settings) {
-            paperBadge.innerHTML = `<i class="fas fa-receipt"></i> ${settings.RECEIPT_PAPER_SIZE || '58mm'}`;
+        try {
+            const boot = await muatBootstrap();
+            const paperBadge = document.getElementById('topbar-paper-size');
+            if (paperBadge && boot.settings) {
+                paperBadge.innerHTML = `<i class="fas fa-receipt"></i> ${boot.settings.RECEIPT_PAPER_SIZE || '58mm'}`;
+            }
+        } catch (e) {
+            console.error('Bootstrap gagal:', e);
         }
     }
 
-    // Initialize shift status widget if present
-    updateShiftStatusWidget();
     hideBrowserPrintHintIfBridged();
 });
 
@@ -1032,29 +1040,34 @@ document.addEventListener('DOMContentLoaded', async () => {
    ====================================================================== */
 let notifTimer = null;
 
-async function muatNotifikasi() {
+function gambarNotifikasi(data) {
     const dot = document.getElementById('notif-dot');
     const body = document.getElementById('notif-body');
     if (!dot || !body) return;
 
-    try {
-        const data = await apiFetch('/notifications');
-        dot.style.display = data.count > 0 ? 'block' : 'none';
-        // Titik merah hanya untuk yang mendesak; kalau semua hal memerahkan
-        // lonceng, orang berhenti melihatnya.
-        dot.style.background = data.urgent > 0 ? 'var(--color-danger)' : 'var(--color-warning)';
+    dot.style.display = data.count > 0 ? 'block' : 'none';
+    // Titik merah hanya untuk yang mendesak; kalau semua hal memerahkan
+    // lonceng, orang berhenti melihatnya.
+    dot.style.background = data.urgent > 0 ? 'var(--color-danger)' : 'var(--color-warning)';
 
-        body.innerHTML = data.items.length
-            ? data.items.map(n => `
-                <div class="notif-item ${n.level}">
-                    <i class="fas fa-${n.icon} notif-ico"></i>
-                    <div>
-                        <strong>${n.title}</strong>
-                        <span>${n.body}</span>
-                        ${n.link ? `<a href="${n.link}">Buka &rarr;</a>` : ''}
-                    </div>
-                </div>`).join('')
-            : '<div class="notif-empty">Tidak ada yang perlu ditindaklanjuti.</div>';
+    body.innerHTML = data.items.length
+        ? data.items.map(n => `
+            <div class="notif-item ${n.level}">
+                <i class="fas fa-${n.icon} notif-ico"></i>
+                <div>
+                    <strong>${n.title}</strong>
+                    <span>${n.body}</span>
+                    ${n.link ? `<a href="${n.link}">Buka &rarr;</a>` : ''}
+                </div>
+            </div>`).join('')
+        : '<div class="notif-empty">Tidak ada yang perlu ditindaklanjuti.</div>';
+}
+
+async function muatNotifikasi() {
+    const body = document.getElementById('notif-body');
+    if (!body) return;
+    try {
+        gambarNotifikasi(await apiFetch('/notifications'));
     } catch (e) {
         body.innerHTML = '<div class="notif-empty">Gagal memuat pemberitahuan.</div>';
     }
@@ -1077,7 +1090,6 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('DOMContentLoaded', () => {
     if (!document.getElementById('notif-bell')) return;
-    muatNotifikasi();
     // 3 menit: cukup cepat untuk stok habis, cukup jarang untuk tidak
     // membebani sambungan Tailscale yang dipakai kasir.
     notifTimer = setInterval(() => {
@@ -1094,3 +1106,144 @@ function skeletonRows(kolom, baris = 5) {
     }
     return html;
 }
+
+/* ======================================================================
+   Navigasi terasa cepat
+
+   Aplikasi ini memuat halaman penuh setiap klik menu (Jinja, server-rendered).
+   Mengubahnya jadi SPA berisiko: tiap halaman punya <script> inline yang
+   mendeklarasikan let/const di lingkup global, jadi menukar isi halaman tanpa
+   reload akan menabrakkan deklarasi antar halaman.
+
+   Jadi yang dikerjakan di sini bukan menghapus reload-nya, tapi menghapus
+   ongkosnya: aset diunduh sekali (cache immutable + gzip di sisi server),
+   setelan disimpan di sessionStorage, tiga panggilan kerangka disatukan jadi
+   satu, halaman berikutnya diambil lebih dulu saat kursor menyentuh menunya,
+   dan ada bilah progres supaya jeda tidak terasa mati.
+   ====================================================================== */
+
+const BOOT_KEY = 'arunika_boot_v1';
+
+/* Setelan hampir tidak pernah berubah dalam satu sesi kerja. Menyimpannya di
+   sessionStorage menghapus satu perjalanan bolak-balik dari SETIAP halaman. */
+function bacaBootCache() {
+    try {
+        const j = sessionStorage.getItem(BOOT_KEY);
+        return j ? JSON.parse(j) : null;
+    } catch (e) { return null; }
+}
+
+function simpanBootCache(data) {
+    try { sessionStorage.setItem(BOOT_KEY, JSON.stringify(data)); } catch (e) { /* penuh/private mode */ }
+}
+
+function hapusBootCache() {
+    try { sessionStorage.removeItem(BOOT_KEY); } catch (e) {}
+    cachedStoreSettings = null;
+}
+
+/*
+ * Satu panggilan untuk setelan + sesi kas + pemberitahuan.
+ * Isi cache dipakai lebih dulu supaya kerangka halaman langsung terisi, lalu
+ * disegarkan di belakang -- pengguna tidak menunggu jaringan untuk melihat
+ * nama toko dan status sesi.
+ */
+async function muatBootstrap({ pakaiCache = true } = {}) {
+    if (pakaiCache) {
+        const c = bacaBootCache();
+        if (c) {
+            cachedStoreSettings = c.settings || null;
+            terapkanBootstrap(c, { dariCache: true });
+            // Segarkan di belakang, jangan ditunggu.
+            muatBootstrap({ pakaiCache: false }).catch(() => {});
+            return c;
+        }
+    }
+    const data = await apiFetch('/bootstrap');
+    if (data.settings) {
+        // Selaraskan alias pajak seperti getStoreSettings().
+        if (data.settings.TAX_PERCENT) data.settings.TAX_PERCENTAGE = data.settings.TAX_PERCENT;
+        else if (data.settings.TAX_PERCENTAGE) data.settings.TAX_PERCENT = data.settings.TAX_PERCENTAGE;
+        cachedStoreSettings = data.settings;
+    }
+    simpanBootCache(data);
+    terapkanBootstrap(data, { dariCache: false });
+    return data;
+}
+
+function terapkanBootstrap(data, { dariCache }) {
+    // Pemberitahuan dari cache bisa basi; tampilkan tapi jangan hitung sebagai
+    // kebenaran terkini -- penyegaran di belakang akan memperbaikinya.
+    if (data.notifications) gambarNotifikasi(data.notifications);
+    gambarPillSesi(data.currentShift, data.cashSessionEnabled !== false);
+    void dariCache;
+}
+
+/* Bilah progres tipis di puncak halaman. Reload halaman penuh tetap ada, tapi
+   jeda yang disertai indikator terasa jauh lebih pendek daripada jeda hening. */
+function mulaiProgres() {
+    let bar = document.getElementById('nav-progress');
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'nav-progress';
+        document.body.appendChild(bar);
+    }
+    bar.className = 'nav-progress running';
+}
+
+/*
+ * Ambil halaman tujuan begitu kursor menyentuh menunya. Saat pengguna benar-
+ * benar mengklik, HTML-nya sudah ada di cache browser.
+ *
+ * Hanya GET, hanya tautan internal, dan sekali per URL. rel=prefetch dipilih
+ * karena browser yang memberi prioritas rendah -- tidak mengganggu permintaan
+ * yang sedang berjalan.
+ */
+const sudahDiprefetch = new Set();
+
+function prefetchHalaman(url) {
+    if (!url || sudahDiprefetch.has(url)) return;
+    sudahDiprefetch.add(url);
+    const l = document.createElement('link');
+    l.rel = 'prefetch';
+    l.href = url;
+    document.head.appendChild(l);
+}
+
+function pasangNavigasiCepat() {
+    const internal = (a) => {
+        if (!a || a.target === '_blank' || a.hasAttribute('download')) return null;
+        const href = a.getAttribute('href');
+        if (!href || href.startsWith('#') || href.startsWith('javascript:')
+            || href.startsWith('mailto:') || href.startsWith('tel:')) return null;
+        try {
+            const u = new URL(a.href, location.href);
+            if (u.origin !== location.origin) return null;
+            if (u.pathname === location.pathname) return null;
+            return u.href;
+        } catch (e) { return null; }
+    };
+
+    // Prefetch saat kursor/sentuhan menyentuh tautan.
+    ['mouseover', 'touchstart'].forEach(ev => {
+        document.addEventListener(ev, (e) => {
+            const a = e.target.closest && e.target.closest('a');
+            const url = internal(a);
+            if (url) prefetchHalaman(url);
+        }, { passive: true, capture: true });
+    });
+
+    // Bilah progres saat benar-benar berpindah.
+    document.addEventListener('click', (e) => {
+        if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+        if (internal(e.target.closest && e.target.closest('a'))) mulaiProgres();
+    }, { capture: true });
+
+    // Kembali dari cache riwayat: sembunyikan bilahnya lagi.
+    window.addEventListener('pageshow', () => {
+        const bar = document.getElementById('nav-progress');
+        if (bar) bar.className = 'nav-progress';
+    });
+}
+
+document.addEventListener('DOMContentLoaded', pasangNavigasiCepat);

@@ -2601,3 +2601,28 @@ body.scroll-locked {
   .skeleton { animation: none; }
   * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }
+
+/* Bilah progres navigasi. Reload halaman penuh tetap terjadi, tapi jeda yang
+   disertai indikator terasa jauh lebih pendek daripada jeda hening. */
+.nav-progress {
+  position: fixed; top: 0; left: 0;
+  height: 2px; width: 0;
+  background: var(--color-primary);
+  z-index: 3000;
+  opacity: 0;
+  pointer-events: none;
+}
+.nav-progress.running {
+  opacity: 1;
+  /* Berhenti di 90%: sisanya tidak bisa diketahui, dan bilah yang penuh lalu
+     menggantung terasa seperti macet. */
+  animation: nav-progress-run 2.4s ease-out forwards;
+}
+@keyframes nav-progress-run {
+  0%   { width: 0; }
+  40%  { width: 55%; }
+  100% { width: 90%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-progress.running { animation: none; width: 90%; }
+}
