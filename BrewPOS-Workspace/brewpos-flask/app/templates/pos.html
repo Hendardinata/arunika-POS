@@ -244,6 +244,43 @@
                     <span class="pay-change-value" id="change-display">Rp 0</span>
                 </div>
             </div>
+
+            <!--
+                Input mundur: transaksi lama yang terlewat dicatat. Disembunyikan
+                dari kasir biasa (lihat siapkanInputMundur) dan diberi warna
+                mencolok saat aktif, supaya tidak terpakai tanpa sadar dan
+                membuat penjualan hari ini tercatat di tanggal lain.
+            -->
+            <div id="backdate-panel" style="display: none; margin-top: 14px; border-top: 1px solid var(--border-light); padding-top: 12px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="backdate-enable" onchange="onInputMundurToggled()" style="width: 16px; height: 16px;">
+                    <span style="font-size: 0.8125rem; font-weight: 700;">
+                        <i class="fas fa-clock-rotate-left"></i> Input transaksi lama (bertanggal mundur)
+                    </span>
+                </label>
+
+                <div id="backdate-fields" style="display: none; margin-top: 10px; background: #FFF4E5; border: 1px solid #E8B96A; border-radius: var(--radius-sm); padding: 12px;">
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label class="form-label">Tanggal &amp; Jam Transaksi</label>
+                        <input type="datetime-local" id="backdate-datetime" class="form-control">
+                    </div>
+                    <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; margin-bottom: 10px;">
+                        <input type="checkbox" id="backdate-deduct-stock" checked style="width: 16px; height: 16px; margin-top: 2px;">
+                        <span style="font-size: 0.75rem; line-height: 1.4;">
+                            <strong>Potong stok bahan</strong><br>
+                            <span style="color: var(--text-muted);">
+                                Biarkan aktif untuk transaksi yang lupa diinput. Matikan hanya kalau
+                                memindahkan riwayat lama &mdash; stok fisik sekarang sudah mencerminkan
+                                penjualan itu, dan memotongnya lagi membuat stok minus.
+                            </span>
+                        </span>
+                    </label>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label">Alasan</label>
+                        <input type="text" id="backdate-reason" class="form-control" placeholder="Contoh: struk kemarin terlewat diinput">
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="modal-footer">
@@ -369,6 +406,7 @@
             ? currentStoreSettings.TAX_PERCENT 
             : ((currentStoreSettings.TAX_PERCENTAGE !== undefined && currentStoreSettings.TAX_PERCENTAGE !== '') ? currentStoreSettings.TAX_PERCENTAGE : '11');
         document.getElementById('label-tax-pct').textContent = rawTax + '%';
+        siapkanInputMundur();
 
         // The server refuses a manual order discount below HEADBAR, so don't offer the
         // field to cashiers and let them hit a 403 at checkout.
@@ -1136,13 +1174,36 @@
                 }))
             };
 
+            // Input mundur: transaksi lama yang terlewat. Hanya dikirim kalau
+            // panelnya benar-benar diaktifkan supervisor.
+            const mundur = document.getElementById('backdate-enable');
+            if (mundur && mundur.checked) {
+                const waktu = document.getElementById('backdate-datetime').value;
+                if (!waktu) {
+                    showToast('Tanggal & jam transaksi belum diisi', 'error');
+                    return;   // blok finally di bawah yang memulihkan tombolnya
+                }
+                payload.createdAt = new Date(waktu).toISOString();
+                payload.deductStock = document.getElementById('backdate-deduct-stock').checked;
+                payload.backdateReason = document.getElementById('backdate-reason').value;
+            }
+
             const res = await apiFetch('/checkout', {
                 method: 'POST',
                 body: JSON.stringify(payload)
             });
 
             closeModal('modal-payment');
-            showToast('Transaksi berhasil!', 'success');
+            if (res.backdated) {
+                showToast(`Transaksi mundur tersimpan (${new Date(res.transaction.createdAt).toLocaleString('id-ID')})`, 'success');
+                if (!res.stockDeducted) showToast('Stok tidak dipotong sesuai pilihan', 'warning');
+                // Sesi kas kosong itu wajar untuk input mundur, tapi kasir perlu
+                // tahu: transaksinya tidak akan muncul di rekonsiliasi laci mana pun.
+                if (!res.shiftId) showToast('Tidak ada sesi kas pada tanggal itu, transaksi tidak ikut rekonsiliasi laci', 'warning');
+                matikanInputMundur();
+            } else {
+                showToast('Transaksi berhasil!', 'success');
+            }
 
             // Render Thermal Receipt with live store settings
             const settings = await getStoreSettings();
@@ -1168,6 +1229,54 @@
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-check-circle"></i> Selesaikan Transaksi';
         }
+    }
+
+    /* ------------------------------------------------------------------
+       Input mundur. Gerbang peran sesungguhnya ada di server; yang di sini
+       hanya menyembunyikan panel dari kasir biasa supaya tidak membingungkan.
+       ------------------------------------------------------------------ */
+    const PERAN_BOLEH_MUNDUR = ['HEADBAR', 'ADMIN', 'OWNER', 'SUPERADMIN'];
+
+    function siapkanInputMundur() {
+        const panel = document.getElementById('backdate-panel');
+        if (!panel) return;
+        const user = getUser();
+        const boleh = user && PERAN_BOLEH_MUNDUR.includes((user.role || '').toUpperCase());
+        panel.style.display = boleh ? 'block' : 'none';
+    }
+
+    function onInputMundurToggled() {
+        const aktif = document.getElementById('backdate-enable').checked;
+        document.getElementById('backdate-fields').style.display = aktif ? 'block' : 'none';
+
+        const tombol = document.getElementById('btn-checkout');
+        if (aktif) {
+            const isi = document.getElementById('backdate-datetime');
+            if (!isi.value) {
+                // Bawaannya kemarin jam yang sama: kasus terbanyak adalah struk
+                // kemarin yang terlewat.
+                const d = new Date(Date.now() - 86400000);
+                d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+                isi.value = d.toISOString().slice(0, 16);
+            }
+            isi.max = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+                .toISOString().slice(0, 16);
+            tombol.innerHTML = '<i class="fas fa-clock-rotate-left"></i> Simpan Transaksi Mundur';
+        } else {
+            tombol.innerHTML = '<i class="fas fa-check-circle"></i> Selesaikan Transaksi';
+        }
+    }
+
+    /* Dimatikan setelah tersimpan supaya transaksi berikutnya tidak ikut
+       bertanggal mundur karena panelnya lupa dimatikan. */
+    function matikanInputMundur() {
+        const c = document.getElementById('backdate-enable');
+        if (!c || !c.checked) return;
+        c.checked = false;
+        document.getElementById('backdate-datetime').value = '';
+        document.getElementById('backdate-reason').value = '';
+        document.getElementById('backdate-deduct-stock').checked = true;
+        onInputMundurToggled();
     }
 
     // Lucky Spin Functions

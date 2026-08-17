@@ -35,6 +35,25 @@ def _get_open_shift():
                       .order_by(Shift.startTime.desc()).first()
 
 
+def find_shift_at(waktu):
+    """
+    Sesi kas yang sedang berjalan pada suatu waktu, untuk transaksi yang diinput
+    mundur.
+
+    Tanpa ini transaksi bertanggal kemarin akan menempel ke sesi yang terbuka
+    SEKARANG (lihat _get_open_shift), sehingga uang kemarin ikut dihitung sebagai
+    isi laci hari ini dan memunculkan selisih kas palsu.
+
+    Boleh mengembalikan None: sesi bisa berlubang (toko tutup, atau kasir lupa
+    membuka sesi). Itu bukan galat -- transaksinya tetap tercatat, hanya tidak
+    ikut rekonsiliasi laci mana pun.
+    """
+    return Shift.query.filter(
+        Shift.startTime <= waktu,
+        db.or_(Shift.endTime.is_(None), Shift.endTime >= waktu)
+    ).order_by(Shift.startTime.desc()).first()
+
+
 def _next_session_no():
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     return Shift.query.filter(Shift.startTime >= today).count() + 1

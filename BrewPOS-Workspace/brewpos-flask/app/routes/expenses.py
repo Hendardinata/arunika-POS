@@ -6,6 +6,7 @@ from werkzeug.utils import secure_filename
 from sqlalchemy import func
 from app.extensions import db
 from app.models.expense import Expense, ExpenseCategory
+from app.services.period_lock import assert_period_open, PeriodLockedError
 from app.middleware.auth import get_current_user_id, is_supervisor
 from app.services.system_logger import log_activity
 
@@ -42,6 +43,8 @@ def get_expense_categories():
             db.session.commit()
             categories = ExpenseCategory.query.all()
         return jsonify([c.to_dict() for c in categories])
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         return jsonify({'error': 'Failed to fetch expense categories'}), 500
 
@@ -58,6 +61,8 @@ def create_expense_category():
         db.session.add(category)
         db.session.commit()
         return jsonify(category.to_dict()), 201
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Failed to create expense category'}), 500
@@ -87,6 +92,8 @@ def update_expense_category(id):
             category.description = data.get('description')
         db.session.commit()
         return jsonify(category.to_dict())
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         db.session.rollback()
         print(f"Error updating expense category: {e}")
@@ -111,6 +118,8 @@ def delete_expense_category(id):
         db.session.delete(category)
         db.session.commit()
         return '', 204
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         db.session.rollback()
         print(f"Error deleting expense category: {e}")
@@ -144,6 +153,8 @@ def get_expenses():
 
         expenses = query.all()
         return jsonify([e.to_dict() for e in expenses])
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         return jsonify({'error': 'Failed to fetch expenses'}), 500
 
@@ -165,6 +176,8 @@ def get_expenses_summary():
             'totalExpenses': int(total),
             'categoryGroup': category_group
         })
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         return jsonify({'error': 'Failed to fetch expense summary'}), 500
 
@@ -248,6 +261,7 @@ def create_expense():
             return jsonify({'error': err[0]}), err[1]
 
         expense = Expense(userId=int(user_id), **cleaned)
+        assert_period_open(expense.date)
 
         # Pengeluaran tunai diikat ke sesi kas yang sedang terbuka supaya
         # rekonsiliasi laci ikut memperhitungkan uang yang keluar.
@@ -265,6 +279,8 @@ def create_expense():
                      'Expense', expense.id)
 
         return jsonify(expense.to_dict()), 201
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         db.session.rollback()
         print(f"Error creating expense: {e}")
@@ -287,6 +303,12 @@ def update_expense(id):
         if err:
             return jsonify({'error': err[0]}), err[1]
 
+        # Dua-duanya dikunci: memindahkan pengeluaran KELUAR dari periode
+        # tertutup mengubah laporan periode itu, sama saja dengan mengeditnya.
+        assert_period_open(expense.date)
+        if 'date' in cleaned:
+            assert_period_open(cleaned['date'])
+
         for field, value in cleaned.items():
             setattr(expense, field, value)
 
@@ -294,6 +316,8 @@ def update_expense(id):
         log_activity('UPDATE_EXPENSE', int(user_id),
                      f"Mengubah pengeluaran #{expense.id}", 'Expense', expense.id)
         return jsonify(expense.to_dict())
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         db.session.rollback()
         print(f"Error updating expense: {e}")
@@ -311,6 +335,8 @@ def delete_expense(id):
         if not is_supervisor():
             return jsonify({'error': 'Hanya Head Barista ke atas yang boleh menghapus pengeluaran'}), 403
 
+        assert_period_open(expense.date)
+
         user_id = get_current_user_id()
         amount = expense.amount
         db.session.delete(expense)
@@ -319,6 +345,8 @@ def delete_expense(id):
         log_activity('DELETE_EXPENSE', int(user_id) if user_id else None,
                      f"Menghapus pengeluaran Rp {amount:,}".replace(',', '.'), 'Expense', id)
         return '', 204
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         db.session.rollback()
         print(f"Error deleting expense: {e}")
@@ -338,6 +366,8 @@ def seed_categories():
                 created.append(cat)
         db.session.commit()
         return jsonify({'message': 'Seeded default categories', 'created': [c.to_dict() for c in created]})
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Failed to seed categories'}), 500

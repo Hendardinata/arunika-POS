@@ -18,3 +18,34 @@ class SystemSettings(db.Model):
             'description': self.description,
             'updatedAt': self.updatedAt.isoformat() if self.updatedAt else None
         }
+
+
+def get_setting(key, default=None, fallback_key=None):
+    """
+    Baca satu setelan. Pembacaannya sempat disalin inline di lima tempat,
+    termasuk blok fallback TAX_PERCENT -> TAX_PERCENTAGE yang identik di dua
+    jalur checkout -- dan yang satu sempat berbeda dari yang lain.
+
+    fallback_key untuk kunci yang pernah berganti nama: dipakai kalau kunci
+    utama belum ada, bukan kalau nilainya kosong.
+    """
+    row = SystemSettings.query.filter_by(key=key).first()
+    if row is None and fallback_key:
+        row = SystemSettings.query.filter_by(key=fallback_key).first()
+    if row is None or row.value is None or str(row.value).strip() == '':
+        return default
+    return row.value
+
+
+def get_setting_float(key, default=0.0, fallback_key=None):
+    try:
+        return float(get_setting(key, None, fallback_key) or default)
+    except (TypeError, ValueError):
+        return default
+
+
+def get_setting_int(key, default=0, fallback_key=None):
+    try:
+        return int(float(get_setting(key, None, fallback_key) or default))
+    except (TypeError, ValueError):
+        return default

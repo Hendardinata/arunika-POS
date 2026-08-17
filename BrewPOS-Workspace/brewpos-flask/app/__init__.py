@@ -27,6 +27,21 @@ def create_app(config_class=Config):
     from app.middleware.auth import setup_auth_middleware
     setup_auth_middleware(app)
 
+    # Tutup buku ditegakkan di banyak jalur tulis. Diterjemahkan sekali di sini
+    # supaya tiap endpoint cukup memanggil assert_period_open() tanpa try/except
+    # sendiri-sendiri -- yang mudah terlupa di endpoint berikutnya.
+    from app.services.period_lock import PeriodLockedError
+
+    @app.errorhandler(PeriodLockedError)
+    def _handle_period_locked(e):
+        from flask import jsonify
+        db.session.rollback()
+        return jsonify({
+            'error': str(e),
+            'lockDate': e.lock_date.isoformat(),
+            'businessDate': e.business_date.isoformat(),
+        }), 423   # Locked
+
     @app.context_processor
     def inject_store_profile():
         """

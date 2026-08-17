@@ -104,3 +104,18 @@ def get_current_role_level():
 def is_supervisor():
     """True when the acting user is HEADBAR or above."""
     return get_current_role_level() >= SUPERVISOR_LEVEL
+
+
+def has_role_level(minimum):
+    """
+    Gerbang peran untuk ambang selain supervisor -- mis. tutup buku yang hanya
+    boleh diubah ADMIN ke atas. Dipakai supaya ROLE_LEVELS tidak tersalin lagi;
+    sudah ada tiga salinan di repo ini (auth.py, routes/auth.py,
+    routes/role_access.py) dan ketiganya harus ikut berubah setiap ada peran baru.
+    """
+    return get_current_role_level() >= minimum
+
+
+def is_admin():
+    """True when the acting user is ADMIN/OWNER or above."""
+    return has_role_level(ROLE_LEVELS['ADMIN'])

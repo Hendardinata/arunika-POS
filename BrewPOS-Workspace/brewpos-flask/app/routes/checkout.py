@@ -7,11 +7,14 @@ from app.models.customer import Customer, GUEST_NICKNAME
 from app.models.transaction import Transaction, TransactionItem
 from app.models.menu import Menu
 from app.models.reward import Reward
-from app.models.system_settings import SystemSettings
+from app.models.system_settings import SystemSettings, get_setting_float, get_setting_int
 from app.models.shift import Shift
+from app.models.historical_sales import HistoricalSales
 from app.services.system_logger import log_activity
 from app.services.gamification_service import process_gamification_async
 from app.services.inventory_service import deduct_ingredients_for_order, restore_ingredients_for_void
+from app.services.period_lock import assert_period_open, PeriodLockedError
+from app.routes.shift import find_shift_at
 from app.middleware.auth import get_current_user_id, is_supervisor
 
 checkout_bp = Blueprint('checkout', __name__, url_prefix='/api/checkout')
@@ -26,6 +29,79 @@ def _get_open_shift():
     """Sesi kas milik toko; dipakai bersama semua kasir yang sedang login."""
     return Shift.query.filter(Shift.status.in_(['OPEN', 'NEEDS_REVIEW'])) \
                       .order_by(Shift.startTime.desc()).first()
+
+
+def parse_waktu(teks):
+    """
+    String ISO -> datetime naif.
+
+    Naif, bukan tz-aware: seluruh aplikasi menyimpan waktu naif UTC, dan
+    mencampur keduanya membuat pembandingan tanggal melempar TypeError di
+    tempat-tempat yang jauh dari sini.
+    """
+    if not teks:
+        return None
+    try:
+        hasil = datetime.fromisoformat(str(teks).replace('Z', '+00:00'))
+    except ValueError:
+        return None
+    return hasil.replace(tzinfo=None) if hasil.tzinfo else hasil
+
+
+def next_transaction_code(waktu):
+    """
+    Nomor struk: TR + yyyymmdd + urutan 6 digit dalam hari itu.
+
+    Memakai urutan tertinggi + 1, bukan count(). Dengan count(), menyisipkan
+    transaksi ke hari lampau menghasilkan nomor yang sudah terpakai -- dan tidak
+    ada unique constraint di transactionCode yang akan menangkapnya.
+    """
+    awalan = f"TR{waktu.strftime('%Y%m%d')}"
+    terpakai = [
+        row[0] for row in db.session.query(Transaction.transactionCode)
+        .filter(Transaction.transactionCode.like(f"{awalan}%")).all()
+        if row[0]
+    ]
+    tertinggi = 0
+    for kode in terpakai:
+        ekor = kode[len(awalan):]
+        if ekor.isdigit():
+            tertinggi = max(tertinggi, int(ekor))
+    return f"{awalan}{tertinggi + 1:06d}"
+
+
+def _resolve_transaction_time(data, supervisor):
+    """
+    Tanggal transaksi kalau diinput mundur. -> (waktu | None, error | None)
+
+    None berarti transaksi biasa (waktu sekarang). Semua penolakan di sini
+    sengaja terjadi sebelum apa pun ditulis.
+    """
+    waktu = parse_waktu(data.get('createdAt'))
+    if waktu is None:
+        if data.get('createdAt'):
+            return None, ('Tanggal transaksi tidak terbaca', 400)
+        return None, None
+
+    sekarang = datetime.utcnow()
+    # Selisih semenit dianggap "sekarang": jam klien bisa meleset sedikit, dan
+    # itu tidak perlu diperlakukan sebagai input mundur.
+    if abs((sekarang - waktu).total_seconds()) < 60:
+        return None, None
+
+    if waktu > sekarang:
+        return None, ('Tanggal transaksi belum terjadi', 400)
+    if not supervisor:
+        return None, ('Input transaksi bertanggal mundur memerlukan Head Barista atau di atasnya', 403)
+
+    # Hari itu sudah punya baris omzet lama; menambah transaksi berrincian di
+    # tanggal yang sama berarti omzetnya terhitung dua kali di laporan.
+    if HistoricalSales.query.filter_by(date=waktu.date()).first():
+        return None, (
+            f'Tanggal {waktu.date().isoformat()} sudah punya catatan omzet lama. '
+            'Hapus dulu baris omzet harian itu kalau mau dirinci per transaksi.', 409)
+
+    return waktu, None
 
 
 def _get_or_create_guest():
@@ -167,6 +243,8 @@ def get_history():
     try:
         transactions = Transaction.query.order_by(Transaction.createdAt.desc()).limit(50).all()
         return jsonify([t.to_dict(include_items=True, include_customer=True) for t in transactions])
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         print(f"Error fetching history: {e}")
         return jsonify({'error': 'Failed to fetch history'}), 500
@@ -186,10 +264,37 @@ def checkout():
         return jsonify({'error': 'Order items cannot be empty'}), 400
 
     try:
-        # Sesi kas ditentukan server dari sesi toko yang terbuka; kiriman klien
-        # tidak dipercaya karena satu laci bisa dipakai beberapa kasir.
-        open_shift = _get_open_shift()
-        shift_id = open_shift.id if open_shift else None
+        supervisor = is_supervisor()
+
+        # --- Input mundur -------------------------------------------------
+        # Transaksi lama yang terlewat diinput. Dipisahkan sejak awal karena
+        # hampir setiap keputusan di bawah berubah: sesi kas, kuota, stok, dan
+        # undian poin.
+        waktu, backdate_err = _resolve_transaction_time(data, supervisor)
+        if backdate_err:
+            return jsonify({'error': backdate_err[0]}), backdate_err[1]
+        is_backdated = waktu is not None
+        now = waktu or datetime.utcnow()
+        assert_period_open(now)
+
+        if is_backdated:
+            # Sesi kas hari ini tidak boleh kecipratan uang kemarin: kalau ikut,
+            # expectedEndingCash laci hari ini menggelembung dan memunculkan
+            # selisih kas palsu.
+            shift = find_shift_at(now)
+            shift_id = shift.id if shift else None
+            if shift and shift.status == 'CLOSED':
+                # Lacinya sudah dihitung dan ditutup. Menulis ulang angkanya
+                # diam-diam justru menyembunyikan ketidakcocokan dari manusia;
+                # lebih baik ditandai supaya ada yang memeriksa.
+                shift.status = 'NEEDS_REVIEW'
+                catatan = f"Transaksi mundur ditambahkan {datetime.utcnow():%Y-%m-%d %H:%M}, kas perlu dicek ulang"
+                shift.closingNote = f"{shift.closingNote}\n{catatan}" if shift.closingNote else catatan
+        else:
+            # Sesi kas ditentukan server dari sesi toko yang terbuka; kiriman klien
+            # tidak dipercaya karena satu laci bisa dipakai beberapa kasir.
+            open_shift = _get_open_shift()
+            shift_id = open_shift.id if open_shift else None
         cashier_id = _current_cashier_id()
 
         # The customer must be resolved first: their remaining employee quota is what
@@ -198,9 +303,10 @@ def checkout():
         if err:
             return jsonify({'error': err[0]}), err[1]
         nickname = customer.nickname
-        customer.check_and_reset_quota()
-
-        supervisor = is_supervisor()
+        # Kuota karyawan adalah jatah "hari ini". Pada input mundur, menyentuhnya
+        # berarti memakan jatah hari ini untuk minuman kemarin.
+        if not is_backdated:
+            customer.check_and_reset_quota()
 
         # Validate the redeemed reward before pricing, since it sets the order discount
         reward = None
@@ -236,7 +342,10 @@ def checkout():
         is_guest = _is_guest(customer)
 
         # 20% Chance for Lucky Drop
-        if random.random() < 0.20 and not is_guest:
+        # Tidak berlaku untuk input mundur: hadiah acak pada entri ulang tidak
+        # bisa diaudit, dan siapa pun yang boleh input mundur jadi bisa
+        # mengulang input sampai undiannya keluar.
+        if random.random() < 0.20 and not is_guest and not is_backdated:
             is_lucky_drop = True
             bonus_points = 50
             points_earned += bonus_points
@@ -251,9 +360,7 @@ def checkout():
         new_level = math.floor(new_xp / 100) + 1
 
         # Point Expiration Settings
-        exp_setting = SystemSettings.query.filter_by(key='POINT_EXPIRATION_DAYS').first()
-        exp_days = int(exp_setting.value) if exp_setting and exp_setting.value.isdigit() else 90
-        now = datetime.utcnow()
+        exp_days = get_setting_int('POINT_EXPIRATION_DAYS', 90)
         expiry_date = now + timedelta(days=exp_days)
 
         # Streak calculation
@@ -319,16 +426,7 @@ def checkout():
         db.session.add(transaction)
         db.session.flush()
 
-        # Single Unified Transaction Prefix 'TR' + yyyyMMdd + 6-digit daily sequence (Total: 16 characters, e.g. TR20260814000001)
-        today_start = datetime(now.year, now.month, now.day, 0, 0, 0)
-        today_end = datetime(now.year, now.month, now.day, 23, 59, 59)
-        daily_count = Transaction.query.filter(
-            Transaction.createdAt >= today_start,
-            Transaction.createdAt <= today_end
-        ).count()
-
-        date_str = now.strftime('%Y%m%d')
-        transaction.transactionCode = f"TR{date_str}{daily_count:06d}"
+        transaction.transactionCode = next_transaction_code(now)
 
         # Create Items & Deduct Ingredients
         tx_items = []
@@ -347,7 +445,17 @@ def checkout():
         db.session.flush()
 
         # [REAL CAFE LOGIC]: Auto-deduct raw materials/inventory from stock based on recipe
-        deduct_ingredients_for_order(transaction.id, tx_items)
+        #
+        # Pada input mundur ini bisa dimatikan: kalau riwayat lama dipindahkan,
+        # stok fisik hari ini SUDAH mencerminkan penjualan itu, dan memotongnya
+        # lagi membuat stok terjun minus. Untuk transaksi kemarin yang sekadar
+        # lupa diinput, potongannya tetap harus jalan -- karena itu bawaannya
+        # aktif dan hanya boleh dimatikan pada input mundur.
+        potong_stok = True
+        if is_backdated:
+            potong_stok = data.get('deductStock', True) is not False
+        if potong_stok:
+            deduct_ingredients_for_order(transaction.id, tx_items, log_date=now)
 
         db.session.commit()
 
@@ -355,16 +463,32 @@ def checkout():
         if not is_guest:
             process_gamification_async(customer.id, transaction.id)
 
-        log_activity('TRANSACTION', cashier_id,
-                     f"Total: Rp {total_amount:,} via {payment_method}".replace(',', '.'),
-                     'Transaction', transaction.id)
+        if is_backdated:
+            alasan = (data.get('backdateReason') or '').strip() or 'tanpa alasan'
+            log_activity('TRANSACTION_BACKDATED', cashier_id,
+                         f"Input mundur ke {now:%Y-%m-%d %H:%M} - Rp {total_amount:,}".replace(',', '.')
+                         + f" via {payment_method}; stok {'dipotong' if potong_stok else 'tidak dipotong'}"
+                         + f"; alasan: {alasan}",
+                         'Transaction', transaction.id)
+        else:
+            log_activity('TRANSACTION', cashier_id,
+                         f"Total: Rp {total_amount:,} via {payment_method}".replace(',', '.'),
+                         'Transaction', transaction.id)
 
         return jsonify({
             'message': 'Checkout successful',
             'customer': customer.to_dict(),
             'transaction': transaction.to_dict(include_items=True, include_customer=False),
-            'luckyDrop': {'bonusPoints': bonus_points} if is_lucky_drop else None
+            'luckyDrop': {'bonusPoints': bonus_points} if is_lucky_drop else None,
+            'backdated': is_backdated,
+            'stockDeducted': potong_stok,
+            # Sesi kas kosong pada input mundur itu wajar (toko tutup, atau sesi
+            # memang tidak dibuka saat itu) -- tapi kasir perlu tahu, karena
+            # transaksinya tidak akan muncul di rekonsiliasi laci mana pun.
+            'shiftId': shift_id
         }), 201
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         db.session.rollback()
         print(f"Error during checkout: {e}")
@@ -535,6 +659,8 @@ def sync_checkout():
             'rejectedCount': len(rejected),
             'rejected': rejected
         }), 201
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         db.session.rollback()
         print(f"Error during checkout sync: {e}")
@@ -560,6 +686,10 @@ def void_transaction(id):
             if transaction.status == 'VOID':
                 return jsonify({'error': 'Transaction already voided'}), 400
 
+            # Membatalkan transaksi di periode yang sudah ditutup akan mengubah
+            # omzet yang laporannya sudah dicetak dan mungkin sudah disetor.
+            assert_period_open(transaction.createdAt)
+
             transaction.status = 'VOID'
             transaction.voidReason = void_reason
             transaction.voidedAt = datetime.utcnow()
@@ -581,6 +711,8 @@ def void_transaction(id):
                          void_reason, 'Transaction', transaction.id)
 
             return jsonify(transaction.to_dict(include_items=True, include_customer=True))
+        except PeriodLockedError:
+            raise      # ditangani errorhandler -> 423
         except Exception as e:
             db.session.rollback()
             if attempt < 2 and '1205' in str(e):

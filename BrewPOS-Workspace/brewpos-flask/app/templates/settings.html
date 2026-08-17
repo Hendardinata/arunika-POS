@@ -93,6 +93,35 @@
                 </div>
             </div>
 
+            <!--
+                Tutup buku. Bukan pengganti sesi kas: sesi kas menjawab "uang di
+                laci cocok tidak", tutup buku menjawab "laporan periode ini boleh
+                berubah tidak". Keduanya berjalan bersama.
+            -->
+            <div style="background: #FAF8F5; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 12px;">
+                <div style="font-size: 0.8125rem; font-weight: 700; margin-bottom: 4px;">
+                    <i class="fas fa-lock text-primary"></i> Tutup Buku
+                </div>
+                <p style="font-size: 0.6875rem; color: var(--text-muted); margin-bottom: 10px;">
+                    Transaksi, pengeluaran, dan pembelian pada atau sebelum tanggal kunci
+                    tidak bisa diubah, dibatalkan, atau ditambah lagi.
+                </p>
+                <div id="period-lock-status" style="font-size: 0.75rem; margin-bottom: 10px;">Memuat...</div>
+                <div style="display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label">Tutup sampai tanggal</label>
+                        <input type="date" id="period-lock-date" class="form-control">
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="tutupBuku()">
+                        <i class="fas fa-lock"></i> Tutup Buku
+                    </button>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" style="width: 100%; margin-top: 8px;"
+                        onclick="bukaKembaliPeriode()">
+                    <i class="fas fa-lock-open"></i> Buka Kembali Periode
+                </button>
+            </div>
+
             <div style="background: #FAF8F5; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 12px;">
                 <div style="font-size: 0.8125rem; font-weight: 700; margin-bottom: 4px;">
                     <i class="fas fa-print text-primary"></i> Tes Cetak Printer Thermal
@@ -315,6 +344,7 @@
         // saat pemuatan pengaturan gagal, justru hilang tepat ketika paling
         // dibutuhkan -- dan bagiannya terlihat kosong tanpa penjelasan.
         renderPrinterBridgeStatus();
+        muatStatusTutupBuku();
     }
 
     /* Jembatan printer hanya ada di dalam aplikasi Android; di browser biasa
@@ -358,6 +388,58 @@
      * kenal hitam-atau-kosong mengubah abu-abu itu jadi bintik -- teks kecil
      * keluar buram. Lewat WebUSB printer memakai font bawaannya, hasilnya tajam.
      */
+    /* ------------------------------------------------------------------
+       Tutup buku
+       ------------------------------------------------------------------ */
+    async function muatStatusTutupBuku() {
+        const el = document.getElementById('period-lock-status');
+        if (!el) return;
+        try {
+            const s = await apiFetch('/settings/period-lock');
+            el.innerHTML = s.lockDate
+                ? `<span class="badge-chip success"><i class="fas fa-lock"></i> Terkunci sampai `
+                  + `${new Date(s.lockDate + 'T00:00:00').toLocaleDateString('id-ID', { dateStyle: 'long' })}</span>`
+                  + ` <span class="text-muted">&mdash; ${s.openTransactions} transaksi setelahnya masih terbuka</span>`
+                : '<span class="badge-chip warning"><i class="fas fa-lock-open"></i> Belum pernah tutup buku</span>'
+                  + ` <span class="text-muted">&mdash; ${s.openTransactions} transaksi masih bisa diubah</span>`;
+        } catch (e) {
+            el.innerHTML = `<span class="text-danger">Gagal memuat status: ${e.message}</span>`;
+        }
+    }
+
+    async function tutupBuku() {
+        const tgl = document.getElementById('period-lock-date').value;
+        if (!tgl) return showToast('Pilih tanggal tutup buku dulu', 'warning');
+        if (!confirm(`Tutup buku sampai ${tgl}?\n\nSetelah ini transaksi, pengeluaran, dan pembelian `
+                   + `pada atau sebelum tanggal itu tidak bisa diubah lagi.`)) return;
+        try {
+            await apiFetch('/settings/period-lock', { method: 'POST', body: JSON.stringify({ lockDate: tgl }) });
+            showToast('Buku ditutup sampai ' + tgl, 'success');
+            muatStatusTutupBuku();
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+    }
+
+    async function bukaKembaliPeriode() {
+        // Alasan diminta di sini juga, bukan cuma divalidasi server: ini membuat
+        // angka yang laporannya sudah dicetak bisa berubah lagi.
+        const alasan = prompt('Membuka kembali periode membuat angka yang sudah dilaporkan bisa berubah.\n\n'
+                            + 'Alasannya apa?');
+        if (alasan === null) return;
+        const tgl = prompt('Buka sampai tanggal berapa? (kosongkan untuk membuka semuanya)\n'
+                         + 'Format: YYYY-MM-DD') || null;
+        try {
+            const r = await apiFetch('/settings/period-lock/reopen', {
+                method: 'POST', body: JSON.stringify({ reason: alasan, lockDate: tgl })
+            });
+            showToast(r.lockDate ? 'Kunci dimundurkan ke ' + r.lockDate : 'Semua periode dibuka kembali', 'success');
+            muatStatusTutupBuku();
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+    }
+
     /* Jembatan printer lokal: satu-satunya jalur yang tetap memakai driver
        resmi printer, jadi ini yang pertama diperiksa dan ditonjolkan. */
     async function renderJembatanPrinterStatus(el) {

@@ -2,9 +2,14 @@ from app.extensions import db
 from app.models.menu import Menu, RecipeIngredient
 from app.models.inventory import InventoryItem, InventoryLog
 
-def deduct_ingredients_for_order(transaction_id, items):
+def deduct_ingredients_for_order(transaction_id, items, log_date=None):
     """
     Deduct inventory stock automatically based on recipe ingredients of each ordered menu.
+
+    log_date mencap mutasi stok dengan waktu transaksinya, bukan waktu barisnya
+    dibuat. Penting untuk transaksi yang diinput mundur: tanpa ini seluruh
+    potongan stok menumpuk di tanggal input, riwayat inventori tidak bisa
+    dicocokkan dengan penjualannya, dan hitungan pemakaian per hari jadi salah.
     """
     try:
         for item in items:
@@ -25,6 +30,8 @@ def deduct_ingredients_for_order(transaction_id, items):
                         type='OUT',
                         notes=f"Auto Deduct: Order #{transaction_id} ({quantity}x {menu_name})"
                     )
+                    if log_date:
+                        log.createdAt = log_date
                     db.session.add(log)
         db.session.flush()
     except Exception as e:

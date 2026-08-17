@@ -8,6 +8,7 @@ from sqlalchemy import func
 from app.extensions import db
 from app.models.inventory import InventoryItem, InventoryLog, DailyOpname, DailyOpnameItem
 from app.services.system_logger import log_activity
+from app.services.period_lock import assert_period_open, PeriodLockedError
 
 inventory_bp = Blueprint('inventory', __name__, url_prefix='/api/inventory')
 
@@ -53,6 +54,8 @@ def get_inventory():
             d['minStock'] = getattr(i, 'minStock', 10.0) or 10.0
             res.append(d)
         return jsonify(res)
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         return jsonify({'error': 'Failed to fetch inventory', 'details': str(e)}), 500
 
@@ -114,6 +117,8 @@ def create_inventory_item():
         d = item.to_dict()
         d['minStock'] = min_stock
         return jsonify(d), 201
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Failed to create inventory item', 'details': str(e)}), 500
@@ -160,6 +165,8 @@ def update_inventory_item(id):
         d = item.to_dict()
         d['minStock'] = getattr(item, 'minStock', 10.0)
         return jsonify(d)
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Failed to update inventory item'}), 500
@@ -202,6 +209,8 @@ def delete_inventory_item(id):
         log_activity('DELETE_INVENTORY', int(user_id) if user_id else None,
                      f"Menghapus bahan: {name}", 'InventoryItem', id)
         return '', 204
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         db.session.rollback()
         print(f"Error deleting inventory item: {e}")
@@ -254,6 +263,8 @@ def adjust_inventory_stock(id):
         d = item.to_dict()
         d['minStock'] = getattr(item, 'minStock', 10.0)
         return jsonify(d)
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Failed to adjust inventory stock', 'details': str(e)}), 500
@@ -309,6 +320,7 @@ def purchase_material():
                 purchase_date = datetime.fromisoformat(purchase_date_str)
             except ValueError:
                 pass    # tanggal tidak terbaca: pakai hari ini, jangan gagalkan pembelian
+        assert_period_open(purchase_date)
 
         # Update item stock & cost
         item.stock = (item.stock or 0.0) + quantity
@@ -366,6 +378,8 @@ def purchase_material():
             'unitCost': unit_cost,
             'totalCost': total_cost
         }), 201
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Gagal mencatat pembelian', 'details': str(e)}), 500
@@ -471,6 +485,8 @@ def produce_material():
             'averageCostPerUnit': output.costPerUnit,
             'warnings': warnings
         }), 201
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Gagal mencatat produksi', 'details': str(e)}), 500
@@ -490,6 +506,8 @@ def get_inventory_transactions():
             d['unit'] = item_unit
             res.append(d)
         return jsonify(res)
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         return jsonify({'error': 'Failed to fetch inventory transactions', 'details': str(e)}), 500
 
@@ -521,6 +539,8 @@ def get_opname_today():
             'status': 'NOT_OPEN',
             'inventory': [i.to_dict() for i in inventory]
         })
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         return jsonify({'error': 'Failed to fetch opname status', 'details': str(e)}), 500
 
@@ -562,6 +582,8 @@ def open_opname():
 
         db.session.commit()
         return jsonify(opname.to_dict()), 201
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Failed to open opname', 'details': str(e)}), 500
@@ -577,6 +599,8 @@ def confirm_stock():
         opname.isStockConfirmed = True
         db.session.commit()
         return jsonify(opname.to_dict())
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Failed to confirm stock'}), 500
@@ -592,6 +616,8 @@ def cancel_confirm_stock():
         opname.isStockConfirmed = False
         db.session.commit()
         return jsonify(opname.to_dict())
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Failed to cancel confirm stock'}), 500
@@ -634,6 +660,8 @@ def close_opname():
         opname.status = 'CLOSED'
         db.session.commit()
         return jsonify(opname.to_dict())
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Failed to close opname', 'details': str(e)}), 500
@@ -644,5 +672,7 @@ def get_opname_history():
     try:
         history = DailyOpname.query.filter_by(status='CLOSED').order_by(DailyOpname.createdAt.desc()).all()
         return jsonify([h.to_dict() for h in history])
+    except PeriodLockedError:
+        raise      # ditangani errorhandler -> 423
     except Exception as e:
         return jsonify({'error': 'Failed to fetch opname history'}), 500
