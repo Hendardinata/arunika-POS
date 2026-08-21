@@ -979,27 +979,31 @@ body {
   flex-shrink: 0;
 }
 
+/* Grid, bukan multi-kolom. Dengan column-width browser harus menata ulang
+   SELURUH kartu setiap kali daftarnya berubah atau area ini di-scroll -- itu
+   sumber tersendat paling terasa di HP saat mengetik di pencarian menu. */
 .menu-grid {
-  column-width: 165px;
-  column-gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
+  gap: 12px;
+  align-content: start;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding-right: 6px;
   padding-bottom: 18px;
   flex: 1;
 }
 
 .menu-card {
-  display: inline-block;
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  break-inside: avoid;
-  margin-bottom: 12px;
-  vertical-align: top;
   background-color: #FFF;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: 10px 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   position: relative;
   box-shadow: var(--shadow-xs);
 }
@@ -1023,6 +1027,8 @@ body {
   object-fit: cover;
   overflow: hidden;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  /* Kartu kini sebaris tingginya (grid); gambar tidak boleh ikut memipih. */
+  flex: 0 0 80px;
 }
 
 .menu-card-title {
@@ -1055,7 +1061,9 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 4px;
-  margin-top: 6px;
+  /* Harga menempel di dasar kartu, sejajar antar kartu satu baris. */
+  margin-top: auto;
+  padding-top: 6px;
 }
 
 .menu-card-price {
@@ -1065,6 +1073,33 @@ body {
   color: var(--color-primary);
   /* "Rp 28.000" tidak boleh pecah jadi dua baris saat kartunya menyempit */
   white-space: nowrap;
+}
+
+/* Keranjang kosong. Di desktop boleh lapang; di HP tidak.
+   Sebagai bottom sheet, blok ini ada DI ATAS panel member, jadi saat keyboard
+   naik dan area terlihat tinggal ~400px, isinya cuma bidang putih ini -- kotak
+   pencarian membernya terdorong ke bawah layar. */
+.cart-empty {
+  text-align: center;
+  color: var(--text-muted);
+  margin-top: 40px;
+}
+
+.cart-empty i {
+  font-size: 2.375rem;
+  margin-bottom: 12px;
+  opacity: 0.35;
+  color: var(--color-primary);
+}
+
+.cart-empty-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.cart-empty-hint {
+  font-size: 0.7188rem;
+  margin-top: 4px;
 }
 
 /* POS Cart Sidebar Panel */
@@ -1800,8 +1835,8 @@ body {
   }
 
   .menu-grid {
-    column-width: 140px !important;
-    column-gap: 10px !important;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
   }
 
   /* Table horizontal touch scroll */
@@ -1838,8 +1873,8 @@ body {
     width: 100%;
   }
   .menu-grid {
-    column-width: 130px !important;
-    column-gap: 8px !important;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 8px;
   }
 }
 
@@ -1997,7 +2032,11 @@ body.scroll-locked {
 
   .pos-cart-panel {
     position: fixed;
-    bottom: -120%;
+    bottom: 0;
+    /* Digeser dengan transform, bukan `bottom`. Menganimasikan `bottom` memaksa
+       tata letak dihitung ulang tiap frame untuk seluruh isi panel; transform
+       hanya menggeser lapisan yang sudah jadi. */
+    transform: translateY(100%);
     left: 0;
     right: 0;
     /* Setinggi isinya, bukan selalu 85% layar: pesanan satu item tidak lagi
@@ -2009,7 +2048,8 @@ body.scroll-locked {
     border-top-left-radius: var(--radius-lg);
     border-top-right-radius: var(--radius-lg);
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.25);
-    transition: bottom 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
     display: flex;
     flex-direction: column;
     border-left: none;
@@ -2023,7 +2063,7 @@ body.scroll-locked {
   }
 
   .pos-cart-panel.open {
-    bottom: 0;
+    transform: translateY(0);
   }
 
   /* Pegangan visual bahwa panel ini bisa ditutup */
@@ -2076,6 +2116,26 @@ body.scroll-locked {
   .cart-items-list {
     overflow: visible;
     min-height: 0;
+  }
+
+  /* ~180px -> ~60px: satu baris ikon + judul, petunjuknya sudah jelas dari
+     katalog yang terlihat di belakang sheet. */
+  .cart-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin: 0;
+    padding: 14px 0;
+  }
+
+  .cart-empty i {
+    font-size: 1.25rem;
+    margin-bottom: 0;
+  }
+
+  .cart-empty-hint {
+    display: none;
   }
 
   .mobile-cart-close {
@@ -2150,9 +2210,12 @@ body.scroll-locked {
      dan terpotong tepi panel sehingga hasil terakhir tidak bisa diketuk. */
   .member-search-dropdown {
     position: static;
-    max-height: 260px;
+    /* Relatif tinggi layar yang tersisa: dengan keyboard terbuka, 260px tetap
+       mendorong tombol Bayar keluar dari area yang terlihat. */
+    max-height: 38dvh;
     box-shadow: none;
     margin-top: 6px;
+    -webkit-overflow-scrolling: touch;
   }
 
   .menu-card-footer {
