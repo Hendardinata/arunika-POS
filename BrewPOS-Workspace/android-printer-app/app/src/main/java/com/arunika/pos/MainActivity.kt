@@ -182,8 +182,7 @@ class MainActivity : AppCompatActivity() {
                     try {
                         prefs().edit().putString(
                             KEY_PAGE_ERROR,
-                            stamp() + "
-" + pesan.message() +
+                            stamp() + "\n" + pesan.message() +
                                 " (" + pesan.sourceId() + ":" + pesan.lineNumber() + ")"
                         ).apply()
                     } catch (_: Throwable) {
