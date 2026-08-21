@@ -13,6 +13,7 @@ import android.util.Base64
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -84,6 +85,13 @@ class MainActivity : AppCompatActivity() {
             databaseEnabled = true
             useWideViewPort = true
             loadWithOverviewMode = true
+            // Matikan pembesaran huruf otomatis. Bawaan WebView adalah
+            // TEXT_AUTOSIZING: kalau meta viewport gagal dikenali karena alasan
+            // apa pun, halaman dianggap situs desktop lalu setiap huruf
+            // dibesarkan supaya "terbaca" -- satu kotak isian bisa memenuhi
+            // layar dan POS jadi tidak bisa dipakai sama sekali. POS ini sudah
+            // dirancang untuk layar HP, jadi tebakan itu tidak pernah membantu.
+            layoutAlgorithm = WebSettings.LayoutAlgorithm.NORMAL
         }
         webView.webViewClient = WebViewClient()
         webView.webChromeClient = WebChromeClient()

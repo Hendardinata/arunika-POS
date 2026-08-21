@@ -10,7 +10,7 @@
         <div>
             <h3 class="card-title"><i class="fas fa-clipboard-check text-primary"></i> Alur Stock Opname Harian (SOP Kafe)</h3>
             <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
-                Audit fisik pagi sebelum buka &rarr; Kunci baseline &rarr; Hitung sisa malam saat tutup untuk cek selisih bahan.
+                Audit fisik pagi sebelum buka <i class="fas fa-arrow-right"></i> Kunci baseline <i class="fas fa-arrow-right"></i> Hitung sisa malam saat tutup untuk cek selisih bahan.
             </p>
         </div>
         <div style="display: flex; gap: 8px;" id="opname-action-buttons">
@@ -106,7 +106,7 @@
                     Sistem otomatis menghitung harga satuan & memperbarui HPP menu.
                 </p>
             </div>
-            <button class="modal-close" onclick="closeModal('modal-purchase')">&times;</button>
+            <button class="modal-close" onclick="closeModal('modal-purchase')" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
         </div>
         <form id="purchase-form" onsubmit="submitPurchase(event)">
             <div class="modal-body">
@@ -197,7 +197,7 @@
                     Contoh: 60 gram bubuk kopi diseduh mokapot jadi 300 ml Base Espresso.
                 </p>
             </div>
-            <button class="modal-close" onclick="closeModal('modal-production')">&times;</button>
+            <button class="modal-close" onclick="closeModal('modal-production')" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
         </div>
         <form id="production-form" onsubmit="submitProduction(event)">
             <div class="modal-body">
@@ -255,7 +255,7 @@
     <div class="modal-dialog">
         <div class="modal-header">
             <h3 class="modal-title" id="material-modal-title">Tambah Bahan Baku Baru</h3>
-            <button class="modal-close" onclick="closeModal('modal-material')">&times;</button>
+            <button class="modal-close" onclick="closeModal('modal-material')" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
         </div>
         <form id="material-form" onsubmit="saveMaterial(event)">
             <div class="modal-body">
@@ -317,7 +317,7 @@
     <div class="modal-dialog" style="max-width: 440px;">
         <div class="modal-header">
             <h3 class="modal-title"><i class="fas fa-sliders text-primary"></i> Penyesuaian Stok Cepat</h3>
-            <button class="modal-close" onclick="closeModal('modal-adjust')">&times;</button>
+            <button class="modal-close" onclick="closeModal('modal-adjust')" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
         </div>
         <form id="adjust-form" onsubmit="submitStockAdjust(event)">
             <div class="modal-body">
@@ -363,7 +363,7 @@
     <div class="modal-dialog" style="max-width: 620px;">
         <div class="modal-header">
             <h3 class="modal-title" id="opname-session-title">Audit Stock Opname</h3>
-            <button class="modal-close" onclick="closeModal('modal-opname-session')">&times;</button>
+            <button class="modal-close" onclick="closeModal('modal-opname-session')" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
         </div>
         <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
             <p id="opname-session-desc" style="font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 16px;">

@@ -113,7 +113,7 @@
     <div class="modal-dialog" style="max-width: 480px;">
         <div class="modal-header">
             <h3 class="modal-title" id="member-modal-title"><i class="fas fa-user-plus text-primary"></i> Tambah Member Baru</h3>
-            <button class="modal-close" onclick="closeModal('modal-member')">&times;</button>
+            <button class="modal-close" onclick="closeModal('modal-member')" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
         </div>
         <form id="member-form" onsubmit="saveMember(event)">
             <div class="modal-body">
@@ -174,7 +174,7 @@
     <div class="modal-dialog" style="max-width: 500px;">
         <div class="modal-header">
             <h3 class="modal-title" id="member-detail-title">Profil Member</h3>
-            <button class="modal-close" onclick="closeModal('modal-member-detail')">&times;</button>
+            <button class="modal-close" onclick="closeModal('modal-member-detail')" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
         </div>
         <div class="modal-body" id="member-modal-body">
             <!-- Rendered dynamically -->
@@ -187,7 +187,7 @@
     <div class="modal-dialog">
         <div class="modal-header">
             <h3 class="modal-title">Tambah Misi (Quest) Baru</h3>
-            <button class="modal-close" onclick="closeModal('modal-quest')">&times;</button>
+            <button class="modal-close" onclick="closeModal('modal-quest')" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
         </div>
         <form id="quest-form" onsubmit="saveQuest(event)">
             <div class="modal-body">
@@ -244,7 +244,7 @@
     <div class="modal-dialog" style="max-width: 440px;">
         <div class="modal-header">
             <h3 class="modal-title">Tambah Badge Pencapaian</h3>
-            <button class="modal-close" onclick="closeModal('modal-badge')">&times;</button>
+            <button class="modal-close" onclick="closeModal('modal-badge')" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
         </div>
         <form id="badge-form" onsubmit="saveBadge(event)">
             <div class="modal-body">
@@ -274,7 +274,7 @@
     <div class="modal-dialog" style="max-width: 440px;">
         <div class="modal-header">
             <h3 class="modal-title">Tambah Loyalty Reward</h3>
-            <button class="modal-close" onclick="closeModal('modal-reward')">&times;</button>
+            <button class="modal-close" onclick="closeModal('modal-reward')" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
         </div>
         <form id="reward-form" onsubmit="saveReward(event)">
             <div class="modal-body">

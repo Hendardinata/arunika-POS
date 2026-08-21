@@ -53,7 +53,7 @@
     <div class="modal-dialog">
         <div class="modal-header">
             <h3 class="modal-title" id="menu-modal-title">Tambah Menu Baru</h3>
-            <button class="modal-close" onclick="closeModal('modal-menu')">&times;</button>
+            <button class="modal-close" onclick="closeModal('modal-menu')" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
         </div>
         <form id="menu-form" onsubmit="saveMenu(event)">
             <div class="modal-body">
@@ -117,7 +117,7 @@
                     Menu: <strong id="recipe-target-menu-name" style="color: var(--color-primary);">-</strong> (Harga Jual: <span id="recipe-target-price">Rp 0</span>)
                 </p>
             </div>
-            <button class="modal-close" onclick="closeModal('modal-recipe-builder')">&times;</button>
+            <button class="modal-close" onclick="closeModal('modal-recipe-builder')" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
         </div>
         <div class="modal-body" style="max-height: 65vh; overflow-y: auto;">
             <!-- Live Calculated HPP Summary Card -->
@@ -179,7 +179,7 @@
     <div class="modal-dialog" style="max-width: 440px;">
         <div class="modal-header">
             <h3 class="modal-title">Kelola Kategori Menu</h3>
-            <button class="modal-close" onclick="closeModal('modal-category')">&times;</button>
+            <button class="modal-close" onclick="closeModal('modal-category')" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
         </div>
         <div class="modal-body">
             <form id="category-form" onsubmit="saveCategory(event)" style="display: flex; gap: 8px; margin-bottom: 16px;">

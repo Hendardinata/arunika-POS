@@ -840,7 +840,9 @@ body {
 .modal-close {
   background: transparent;
   border: none;
-  font-size: 1.5rem;
+  /* Dulu 1.5rem untuk glif "x" yang tipis. Ikon fa-xmark digambar jauh lebih
+     tebal, jadi pada ukuran yang sama ia mendominasi judul dialog. */
+  font-size: 1.125rem;
   color: var(--text-muted);
   cursor: pointer;
   line-height: 1;

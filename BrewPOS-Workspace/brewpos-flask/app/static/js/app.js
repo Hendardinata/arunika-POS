@@ -278,14 +278,14 @@ async function openShiftModal() {
                                 // menghitung laci saat berganti penjaga.
                                 if (h.countedCash === null || h.countedCash === undefined) {
                                     return `<p style="margin-left: 10px; font-size: 12px;">${jam} &middot;
-                                        ${h.fromUsername || '-'} &rarr; ${h.toUsername}
+                                        ${h.fromUsername || '-'} <i class="fas fa-arrow-right"></i> ${h.toUsername}
                                         <span class="text-muted">(kas tidak dihitung)</span></p>`;
                                 }
                                 const d = h.difference;
                                 const label = d === 0 ? 'pas'
                                     : `${d > 0 ? 'lebih' : 'kurang'} ${formatRp(Math.abs(d))}`;
                                 return `<p style="margin-left: 10px; font-size: 12px;">${jam} &middot;
-                                    ${h.fromUsername || '-'} &rarr; ${h.toUsername} &middot;
+                                    ${h.fromUsername || '-'} <i class="fas fa-arrow-right"></i> ${h.toUsername} &middot;
                                     <strong class="${d === 0 ? 'text-success' : 'text-danger'}">${label}</strong></p>`;
                             }).join('')}
                         ` : ''}
@@ -387,7 +387,7 @@ async function muatGerakanKas() {
                 <span>${m.type === 'DROP' ? '&minus;' : '+'} ${formatRp(m.amount)}
                     <span class="text-muted">&middot; ${m.reason}</span></span>
                 <button class="btn btn-secondary btn-sm" style="padding: 0 6px;"
-                        onclick="hapusGerakanKas(${m.id})" title="Hapus">&times;</button>
+                        onclick="hapusGerakanKas(${m.id})" title="Hapus" aria-label="Hapus"><i class="fas fa-xmark"></i></button>
             </div>`).join('')
             + `<div style="border-top: 1px solid var(--border-light); margin-top: 6px; padding-top: 6px;">
                  <strong>Bersih: ${data.net < 0 ? '&minus;' : '+'} ${formatRp(Math.abs(data.net))}</strong>
@@ -748,7 +748,7 @@ async function alasanPrinterUsbTidakDipakai() {
         return 'Browser ini tidak mendukung WebUSB. Pakai Chrome atau Edge versi baru.';
     }
     if (!(await EscPos.getUsbPrinter())) {
-        return 'Printer USB belum dipilih. Buka Pengaturan → Hubungkan Printer USB (cukup sekali).';
+        return 'Printer USB belum dipilih. Buka Pengaturan <i class="fas fa-arrow-right"></i> Hubungkan Printer USB (cukup sekali).';
     }
     return null;
 }
@@ -1057,7 +1057,7 @@ function gambarNotifikasi(data) {
                 <div>
                     <strong>${n.title}</strong>
                     <span>${n.body}</span>
-                    ${n.link ? `<a href="${n.link}">Buka &rarr;</a>` : ''}
+                    ${n.link ? `<a href="${n.link}">Buka <i class="fas fa-arrow-right"></i></a>` : ''}
                 </div>
             </div>`).join('')
         : '<div class="notif-empty">Tidak ada yang perlu ditindaklanjuti.</div>';

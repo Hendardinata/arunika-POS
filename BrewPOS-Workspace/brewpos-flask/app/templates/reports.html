@@ -195,7 +195,7 @@
                         akan diperbarui, bukan ditambah lagi.
                     </p>
                 </div>
-                <button class="modal-close" onclick="closeModal('modal-omzet-lama')">&times;</button>
+                <button class="modal-close" onclick="closeModal('modal-omzet-lama')" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
             </div>
             <form onsubmit="simpanOmzetLama(event)">
                 <div class="modal-body">
@@ -598,7 +598,7 @@
     <div class="modal-dialog" style="max-width: 440px;">
         <div class="modal-header">
             <h3 class="modal-title text-danger"><i class="fas fa-ban"></i> Batalkan Transaksi (Void)</h3>
-            <button class="modal-close" onclick="closeModal('modal-void')">&times;</button>
+            <button class="modal-close" onclick="closeModal('modal-void')" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
         </div>
         <form id="void-form" onsubmit="submitVoidTransaction(event)">
             <div class="modal-body">
@@ -624,13 +624,13 @@
     <div class="modal-dialog" style="max-width: 380px;">
         <div class="modal-header no-print">
             <h3 class="modal-title">Struk Transaksi</h3>
-            <button class="modal-close" onclick="closeModal('modal-report-receipt')">&times;</button>
+            <button class="modal-close" onclick="closeModal('modal-report-receipt')" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
         </div>
         <div class="modal-body" id="report-receipt-body" style="padding: 16px;">
             <!-- Rendered dynamically -->
         </div>
         <div class="modal-footer no-print" style="justify-content: space-between; flex-wrap: wrap; gap: 8px;">
-<div class="browser-print-hint" style="font-size: 0.6875rem; color: var(--text-muted); line-height: 1.5; text-align: left; flex: 1 1 100%; margin-bottom: 8px;"><i class="fas fa-circle-info"></i> Di dialog cetak pilih <strong>Margins: None</strong>, <strong>Scale: 100</strong>, dan paper size printer thermal Anda. Kalau masih meleset, kalibrasi di Pengaturan &rarr; Kalibrasi Ukuran Cetak Struk.</div>
+<div class="browser-print-hint" style="font-size: 0.6875rem; color: var(--text-muted); line-height: 1.5; text-align: left; flex: 1 1 100%; margin-bottom: 8px;"><i class="fas fa-circle-info"></i> Di dialog cetak pilih <strong>Margins: None</strong>, <strong>Scale: 100</strong>, dan paper size printer thermal Anda. Kalau masih meleset, kalibrasi di Pengaturan <i class="fas fa-arrow-right"></i> Kalibrasi Ukuran Cetak Struk.</div>
                         <button class="btn btn-secondary" onclick="closeModal('modal-report-receipt')">
                 <i class="fas fa-arrow-left"></i> Tutup
             </button>
@@ -1083,7 +1083,7 @@
         const rows = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
         const html = rows.map(([name, amount]) => `
             <tr class="pnl-opex-detail-row" style="color: var(--text-muted); font-size: 0.7812rem;">
-                <td style="padding: 6px 12px 6px 44px;">&bull; ${name}</td>
+                <td style="padding: 6px 12px 6px 44px;"><i class="fas fa-circle" style="font-size: 0.3125rem; vertical-align: middle; opacity: 0.5;"></i> ${name}</td>
                 <td style="padding: 6px 12px; text-align: right;">-${formatRp(amount)}</td>
             </tr>
         `).join('');

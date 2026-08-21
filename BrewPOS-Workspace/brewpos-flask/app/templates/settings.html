@@ -255,7 +255,7 @@
     <div class="modal-dialog" style="max-width: 440px;">
         <div class="modal-header">
             <h3 class="modal-title" id="user-modal-title">Tambah Akun Pengguna</h3>
-            <button class="modal-close" onclick="closeModal('modal-user')">&times;</button>
+            <button class="modal-close" onclick="closeModal('modal-user')" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
         </div>
         <form id="user-form" onsubmit="saveUser(event)">
             <div class="modal-body">
@@ -295,7 +295,7 @@
     <div class="modal-dialog" style="max-width: 520px;">
         <div class="modal-header">
             <h3 class="modal-title" id="user-access-modal-title"><i class="fas fa-shield-halved text-primary"></i> Kelola Hak Akses Halaman User</h3>
-            <button class="modal-close" onclick="closeModal('modal-user-access')">&times;</button>
+            <button class="modal-close" onclick="closeModal('modal-user-access')" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
         </div>
         <form id="user-access-form" onsubmit="saveUserAccess(event)">
             <div class="modal-body">
