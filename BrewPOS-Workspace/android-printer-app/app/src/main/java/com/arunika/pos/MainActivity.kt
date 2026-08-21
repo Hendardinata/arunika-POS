@@ -92,6 +92,20 @@ class MainActivity : AppCompatActivity() {
             // layar dan POS jadi tidak bisa dipakai sama sekali. POS ini sudah
             // dirancang untuk layar HP, jadi tebakan itu tidak pernah membantu.
             layoutAlgorithm = WebSettings.LayoutAlgorithm.NORMAL
+
+            // Ukuran huruf mengikuti halaman, bukan setelan "Ukuran font"
+            // Android. Inilah beda paling terasa antara Chrome dan WebView:
+            // Chrome punya penskalaan teksnya sendiri (bawaannya 100%),
+            // sedangkan WebView mengalikan seluruh teks dengan skala font
+            // sistem. Di HP Samsung yang fontnya disetel besar, halaman yang
+            // rapi di Chrome bisa meluber di aplikasi -- padahal mesinnya sama.
+            //
+            // Tata letak POS ini dirancang per ukuran layar (lihat @media di
+            // style.css), jadi pilihan font sistem tidak lagi dihormati di
+            // sini. Kalau kasir butuh huruf lebih besar, itu harus dilakukan
+            // lewat penyesuaian tata letak, bukan lewat pengali yang membuat
+            // tombol Bayar terdorong keluar layar.
+            textZoom = 100
         }
         webView.webViewClient = WebViewClient()
         webView.webChromeClient = WebChromeClient()
@@ -109,6 +123,14 @@ class MainActivity : AppCompatActivity() {
     // ------------------------------------------------------------------
     // Utilitas galat
     // ------------------------------------------------------------------
+
+    /** Paket dan versi Chromium yang menggambar halaman. */
+    private fun webViewInfo(): String = try {
+        val pkg = WebView.getCurrentWebViewPackage()
+        if (pkg == null) "tidak diketahui" else "${pkg.packageName} ${pkg.versionName}"
+    } catch (e: Throwable) {
+        "gagal dibaca"
+    }
 
     private fun stamp(): String =
         SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(Date())
@@ -206,6 +228,12 @@ class MainActivity : AppCompatActivity() {
                     appendLine("Alamat server : $POS_URL")
                     appendLine("Android SDK   : ${Build.VERSION.SDK_INT}")
                     appendLine("Perangkat     : ${Build.MANUFACTURER} ${Build.MODEL}")
+                    // Mesin render halaman. WebView memakai Chromium yang sama
+                    // dengan Chrome, tapi paketnya diperbarui terpisah: kalau
+                    // versinya jauh tertinggal dari Chrome di HP yang sama,
+                    // tampilan yang berbeda memang wajar.
+                    appendLine("Mesin WebView : ${webViewInfo()}")
+                    appendLine("Skala font    : ${resources.configuration.fontScale}")
                     appendLine("Izin Bluetooth: ${if (hasBtPermission()) "diberikan" else "BELUM"}")
                     appendLine("Bluetooth     : ${if (adapter == null) "tidak ada" else if (adapter.isEnabled) "aktif" else "mati"}")
                     appendLine("Perangkat pair: $bonded")
