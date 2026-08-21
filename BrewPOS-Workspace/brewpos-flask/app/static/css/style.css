@@ -2056,9 +2056,16 @@ body.scroll-locked {
     background: #FFF;
     border-top-left-radius: var(--radius-lg);
     border-top-right-radius: var(--radius-lg);
-    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 -6px 16px rgba(0, 0, 0, 0.22);
     transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-    will-change: transform;
+    /* TANPA will-change di sini, dan itu disengaja. will-change: transform
+       memaksa panel ini jadi satu lapisan komposit PERMANEN. Panelnya tinggi,
+       bisa digulung, dan berbayang besar -- tiap kali isinya berubah (satu
+       huruf diketik) atau jendela diubah ukurannya oleh keyboard, seluruh
+       lapisan harus diraster ulang. Petak yang belum selesai diraster
+       digambar putih, dan itulah kedipan putih yang menghalangi layar saat
+       kasir mengetik nama member. Animasinya sendiri tetap mulus: Chromium
+       otomatis mempromosikan lapisan selama transisi transform berjalan. */
     display: flex;
     flex-direction: column;
     border-left: none;
