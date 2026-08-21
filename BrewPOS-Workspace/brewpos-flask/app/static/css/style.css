@@ -1939,6 +1939,12 @@ body.scroll-locked {
   /* Tinggi viewport dinamis: bar alamat browser mobile yang muncul-hilang
      membuat 100vh memotong isi modal dan bottom sheet. */
   .modal-dialog {
+    /* vh dulu, dvh menimpanya. Mesin yang belum mengenal dvh (Chromium di
+       bawah 108 -- dan paket WebView di HP diperbarui terpisah dari Chrome,
+       jadi bisa jauh tertinggal) MEMBUANG deklarasi dvh diam-diam. Tanpa
+       cadangan ini panel kehilangan batas tingginya sama sekali, memanjang
+       melampaui layar, dan yang terlihat tinggal bidang kosong. */
+    max-height: 90vh;
     max-height: 90dvh;
   }
 
@@ -2044,6 +2050,7 @@ body.scroll-locked {
     /* Setinggi isinya, bukan selalu 85% layar: pesanan satu item tidak lagi
        menyisakan area kosong besar di bawah tombol Bayar. */
     height: auto;
+    max-height: 88vh;
     max-height: 88dvh;
     z-index: 1000;
     background: #FFF;
@@ -2214,6 +2221,7 @@ body.scroll-locked {
     position: static;
     /* Relatif tinggi layar yang tersisa: dengan keyboard terbuka, 260px tetap
        mendorong tombol Bayar keluar dari area yang terlihat. */
+    max-height: 38vh;
     max-height: 38dvh;
     box-shadow: none;
     margin-top: 6px;

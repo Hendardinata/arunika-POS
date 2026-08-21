@@ -1247,3 +1247,71 @@ function pasangNavigasiCepat() {
 }
 
 document.addEventListener('DOMContentLoaded', pasangNavigasiCepat);
+
+
+/* ==========================================================================
+   Diagnostik tampilan (?diag=1)
+
+   Empat kali berturut-turut masalah tampilan di HP kasir salah didiagnosis
+   dari tangkapan layar. Aplikasi kasir tidak punya bilah alamat maupun konsol
+   pengembang, jadi satu-satunya cara mengetahui apa yang SEBENARNYA dilihat
+   mesin di sana adalah membuat halamannya melaporkan diri.
+
+   Sengaja ditulis dengan CSS paling tua yang ada: kalau yang rusak justru
+   dukungan CSS modern, panel ini harus tetap terbaca.
+   ========================================================================== */
+function tampilkanDiagnostikTampilan() {
+    const dukung = (uji) => {
+        try { return window.CSS && CSS.supports(uji) ? 'YA' : 'TIDAK'; }
+        catch (e) { return 'TIDAK'; }
+    };
+    const ukur = (sel) => {
+        const el = document.querySelector(sel);
+        if (!el) return 'tidak ada';
+        const r = el.getBoundingClientRect();
+        return `${Math.round(r.width)}x${Math.round(r.height)} @top ${Math.round(r.top)}`;
+    };
+
+    const baris = [
+        `layar    : ${screen.width}x${screen.height} dpr ${window.devicePixelRatio}`,
+        `viewport : ${window.innerWidth}x${window.innerHeight}`,
+        `layout   : ${document.documentElement.clientWidth}x${document.documentElement.clientHeight}`,
+        `dvh      : ${dukung('height: 100dvh')}`,
+        `:has()   : ${dukung('selector(:has(*))')}`,
+        `gap flex : ${dukung('display: flex') && dukung('gap: 1px')}`,
+        `sheet    : ${ukur('.pos-cart-panel')}`,
+        `keranjang: ${ukur('#cart-items-container')}`,
+        `kotak mbr: ${ukur('#customer-nickname')}`,
+        `UA       : ${navigator.userAgent}`
+    ].join('\n');
+
+    const lama = document.getElementById('diag-tampilan');
+    if (lama) lama.parentNode.removeChild(lama);
+
+    const kotak = document.createElement('div');
+    kotak.id = 'diag-tampilan';
+    kotak.setAttribute('style',
+        'position:fixed;left:0;right:0;top:0;z-index:99999;background:#FFF;' +
+        'border-bottom:3px solid #6F4E37;padding:10px;font-family:monospace;' +
+        'font-size:11px;line-height:1.45;color:#000;white-space:pre-wrap;' +
+        'word-break:break-all;max-height:70%;overflow:auto');
+    const teks = document.createElement('div');
+    teks.textContent = baris;
+    const tutup = document.createElement('button');
+    tutup.textContent = 'Tutup';
+    tutup.setAttribute('style',
+        'margin-top:8px;padding:8px 16px;font-size:13px;background:#6F4E37;' +
+        'color:#FFF;border:0;border-radius:6px');
+    tutup.onclick = () => kotak.parentNode.removeChild(kotak);
+    kotak.appendChild(teks);
+    kotak.appendChild(tutup);
+    document.body.appendChild(kotak);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (location.search.indexOf('diag=1') !== -1) {
+        // Ditunda: tata letak POS baru selesai setelah menu dan keranjang dimuat,
+        // dan angka yang diukur sebelum itu tidak menggambarkan apa pun.
+        setTimeout(tampilkanDiagnostikTampilan, 1200);
+    }
+});

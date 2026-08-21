@@ -182,6 +182,22 @@
                 </div>
             </div>
 
+            <!-- Aplikasi kasir tidak punya bilah alamat; tanpa tautan ini
+                 halaman diagnostik tidak bisa dijangkau dari HP sama sekali. -->
+            <div style="background: #FAF8F5; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 12px;">
+                <div style="font-size: 0.8125rem; font-weight: 700; margin-bottom: 4px;">
+                    <i class="fas fa-mobile-screen text-primary"></i> Diagnostik Tampilan
+                </div>
+                <p style="font-size: 0.6875rem; color: var(--text-muted); margin-bottom: 10px;">
+                    Membuka POS dan menampilkan ukuran layar, dukungan CSS, serta mesin
+                    yang dipakai perangkat ini. Dipakai saat menelusuri tampilan yang
+                    berbeda antara aplikasi dan browser.
+                </p>
+                <a href="/pos?diag=1" class="btn btn-secondary btn-sm" style="width: 100%;">
+                    <i class="fas fa-magnifying-glass-chart"></i> Buka POS + Diagnostik
+                </a>
+            </div>
+
             <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px;" id="btn-save-settings">
                 <i class="fas fa-save"></i> Simpan Informasi & Pengaturan
             </button>
