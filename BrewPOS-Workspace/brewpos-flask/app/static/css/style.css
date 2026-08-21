@@ -2706,3 +2706,79 @@ body.scroll-locked {
 @media (prefers-reduced-motion: reduce) {
   .nav-progress.running { animation: none; width: 90%; }
 }
+
+/* ==========================================================================
+   Layar cari member (HP)
+
+   Ditulis dengan properti paling jinak yang ada. Tidak ada transform,
+   transisi, bayangan, backdrop-filter, maupun sudut membulat pada elemen
+   sebesar layar -- semuanya pemicu lapisan komposit, dan lapisan komposit
+   besar yang diraster ulang tiap keyboard bergerak persis yang melahirkan
+   kedipan putih di cangkang WebView.
+   ========================================================================== */
+.member-screen {
+  display: none;
+}
+
+@media (max-width: 768px),
+       (max-width: 1024px) and (orientation: portrait) {
+  .member-screen.open {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1100;
+    background: #FFF;
+  }
+
+  /* Sheet keranjang dikeluarkan dari pohon render selama layar ini terbuka.
+     display:none, bukan sekadar digeser: yang tidak dirender tidak bisa
+     meninggalkan petak putih. */
+  body.member-screen-open .pos-cart-panel,
+  body.member-screen-open .pos-sheet-backdrop,
+  body.member-screen-open .mobile-cart-bar {
+    display: none !important;
+  }
+
+  .member-screen-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-color);
+    background: #FAF8F5;
+  }
+
+  .member-screen-head .form-control {
+    flex: 1;
+    min-width: 0;
+    height: 40px;
+    font-size: 0.8125rem;
+  }
+
+  .member-screen-back {
+    background: transparent;
+    border: none;
+    font-size: 1rem;
+    color: var(--color-primary);
+    padding: 8px 10px;
+    cursor: pointer;
+  }
+
+  .member-screen-body {
+    position: absolute;
+    top: 61px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow-y: auto;
+    padding: 4px 0 24px;
+  }
+
+  /* Baris hasil memakai gaya dropdown yang sudah ada, tanpa kotak mengambang. */
+  .member-screen-body .member-search-item {
+    border-bottom: 1px solid var(--border-light);
+  }
+}

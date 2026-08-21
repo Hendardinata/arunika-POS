@@ -84,9 +84,9 @@
                 <div style="display: flex; gap: 6px;">
                     <div style="position: relative; flex: 1;">
                         <i class="fas fa-search" style="position: absolute; left: 10px; top: 9px; font-size: 0.75rem; color: var(--text-muted);"></i>
-                        <input type="text" id="customer-nickname" class="form-control" style="padding-left: 28px; font-size: 0.7812rem; height: 34px;" placeholder="Cari nama, no. HP, atau email member..." autocomplete="off" enterkeyhint="search" onkeydown="if (event.key === 'Enter') { event.preventDefault(); cariMember(); }" onfocus="bawaKotakMemberKeLayar()">
+                        <input type="text" id="customer-nickname" class="form-control" style="padding-left: 28px; font-size: 0.7812rem; height: 34px;" placeholder="Cari nama, no. HP, atau email member..." autocomplete="off" enterkeyhint="search" onkeydown="if (event.key === 'Enter') { event.preventDefault(); cariMember(); }" onfocus="bukaLayarCariMemberKalauHp(event)">
                     </div>
-                    <button type="button" class="btn btn-secondary btn-sm" onclick="cariMember()" title="Cari member (atau tekan Enter)">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="cariMemberDariSheet()" title="Cari member (atau tekan Enter)">
                         <i class="fas fa-arrow-right"></i>
                     </button>
                 </div>
@@ -170,6 +170,34 @@
 
 <!-- Backdrop bottom sheet keranjang (mobile) -->
 <div class="pos-sheet-backdrop no-print" id="pos-sheet-backdrop" onclick="toggleMobileCart()"></div>
+
+<!--
+  Layar cari member (khusus HP).
+
+  Di HP kotak pencarian dulu tinggal di dalam bottom sheet: panel position:fixed
+  yang tinggi, bisa digulung, beranimasi, dan berebut ruang dengan keyboard.
+  Kombinasi itu melahirkan kedipan putih yang tidak habis-habis, dan mengejar
+  pemicunya satu per satu (will-change, bayangan, dvh, autosizing) tidak pernah
+  menuntaskannya.
+
+  Layar ini sengaja sepolos mungkin: tanpa transform, tanpa transisi, tanpa
+  bayangan, tanpa sudut membulat pada elemen sebesar layar. Selama ia terbuka,
+  sheet keranjang di-display:none -- bukan sekadar tertutup, tapi keluar dari
+  pohon render, sehingga tidak ada lagi lapisan besar yang bisa diraster ulang
+  di belakang keyboard.
+-->
+<div id="member-search-screen" class="member-screen no-print">
+    <div class="member-screen-head">
+        <button type="button" class="member-screen-back" onclick="tutupLayarCariMember()" aria-label="Kembali">
+            <i class="fas fa-arrow-left"></i>
+        </button>
+        <input type="text" id="member-screen-input" class="form-control" placeholder="Nama, no. HP, atau email"
+               autocomplete="off" enterkeyhint="search"
+               onkeydown="if (event.key === 'Enter') { event.preventDefault(); cariDariLayarMember(); }">
+        <button type="button" class="btn btn-primary btn-sm" onclick="cariDariLayarMember()">Cari</button>
+    </div>
+    <div id="member-screen-results" class="member-screen-body"></div>
+</div>
 
 <!-- Floating Mobile Cart Bar Trigger (Visible on mobile screens) -->
 <div class="mobile-cart-bar no-print" onclick="toggleMobileCart()">
@@ -827,16 +855,113 @@
     // -------------------------------------------------------------
     // Customer Member Live Autocomplete & CRM Engine
     // -------------------------------------------------------------
-    /* Di HP kotak pencarian member ada di paruh bawah bottom sheet, di bawah
-       daftar pesanan. Begitu keyboard naik, yang tersisa terlihat sering hanya
-       bagian atas sheet -- kasir melihat bidang kosong dan mengira aplikasinya
-       hang. Jeda 300ms menunggu keyboard selesai naik dulu, kalau tidak posisi
-       yang dihitung browser masih posisi sebelum layar menyusut. */
-    function bawaKotakMemberKeLayar() {
-        setTimeout(() => {
-            const kotak = document.getElementById('customer-nickname');
-            if (kotak) kotak.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        }, 300);
+    /* Satu perender baris untuk dua tempat: dropdown di PC dan daftar layar
+       penuh di HP. Sebelumnya markupnya hanya ada di dropdown. */
+    function barisMember(c) {
+        const isEmp = (c.customerType === 'EMPLOYEE');
+        const initial = (c.nickname || 'U').charAt(0).toUpperCase();
+        return `
+            <div class="member-search-item" onclick="pilihDariLayarMember(${c.id})">
+                <div class="member-search-avatar">${initial}</div>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong style="font-size: 0.7812rem; color: var(--text-main);">${c.nickname}</strong>
+                        <span class="badge-chip ${isEmp ? 'warning' : 'success'}" style="font-size: 0.5938rem; padding: 1px 6px;">
+                            ${isEmp ? '<i class="fas fa-mug-hot"></i> Karyawan' : '<i class="fas fa-user"></i> Pelanggan'}
+                        </span>
+                    </div>
+                    <div style="font-size: 0.6875rem; color: var(--text-muted); display: flex; gap: 8px; margin-top: 2px; flex-wrap: wrap;">
+                        <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            ${c.phone && c.phone !== '-'
+                                ? `<i class="fas fa-phone" style="font-size: 0.625rem;"></i> ${c.phone}`
+                                : (c.email && c.email !== '-'
+                                    ? `<i class="fas fa-envelope" style="font-size: 0.625rem;"></i> ${c.email}`
+                                    : '<i class="fas fa-user-slash" style="font-size: 0.625rem;"></i> Tanpa kontak')}
+                        </span>
+                        <span><i class="fas fa-star"></i> <strong>${c.points || 0} Pts</strong></span>
+                        <span style="color: ${c.status === 'AKTIF' ? 'var(--color-success)' : 'var(--color-danger)'}; font-weight: 700;"><i class="fas fa-circle" style="font-size: 0.375rem; vertical-align: middle;"></i> ${c.status || 'AKTIF'}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    const layarHp = () => window.matchMedia('(max-width: 768px)').matches
+        || window.matchMedia('(max-width: 1024px) and (orientation: portrait)').matches;
+
+    /* Mengetuk kotak member di HP membuka layar penuh, bukan menaikkan keyboard
+       di dalam bottom sheet. Fokusnya dilepas dulu supaya keyboard tidak sempat
+       naik untuk kotak yang sebentar lagi tidak terlihat. */
+    function bukaLayarCariMemberKalauHp(event) {
+        if (!layarHp()) return;
+        if (event && event.target) event.target.blur();
+        bukaLayarCariMember();
+    }
+
+    function cariMemberDariSheet() {
+        if (layarHp()) { bukaLayarCariMember(); return; }
+        cariMember();
+    }
+
+    function bukaLayarCariMember() {
+        const layar = document.getElementById('member-search-screen');
+        const isian = document.getElementById('member-screen-input');
+        const nilai = (document.getElementById('customer-nickname').value || '').trim();
+
+        isian.value = (nilai.toLowerCase() === 'guest') ? '' : nilai;
+        document.getElementById('member-screen-results').innerHTML = '';
+        layar.classList.add('open');
+        document.body.classList.add('member-screen-open');
+        isian.focus();
+    }
+
+    function tutupLayarCariMember() {
+        document.getElementById('member-search-screen').classList.remove('open');
+        document.body.classList.remove('member-screen-open');
+    }
+
+    async function cariDariLayarMember() {
+        const isian = document.getElementById('member-screen-input');
+        const wadah = document.getElementById('member-screen-results');
+        const q = (isian.value || '').trim();
+
+        if (!q) { wadah.innerHTML = ''; return; }
+
+        try {
+            const hasil = await apiFetch(`/customers/autocomplete?q=${encodeURIComponent(q)}`);
+            if (!hasil || hasil.length === 0) {
+                wadah.innerHTML = `
+                    <div style="padding: 28px 20px; text-align: center; color: var(--text-muted); font-size: 0.8125rem;">
+                        <i class="fas fa-user-slash" style="font-size: 1.5rem; opacity: 0.4;"></i>
+                        <p style="margin-top: 10px;"><strong>"${q}"</strong> belum terdaftar sebagai member.</p>
+                        <button type="button" class="btn btn-primary btn-sm" style="margin-top: 10px;"
+                                onclick="daftarDariLayarMember()">
+                            <i class="fas fa-user-plus"></i> Daftar Member Baru
+                        </button>
+                    </div>`;
+                return;
+            }
+            wadah.innerHTML = hasil.map(barisMember).join('');
+        } catch (e) {
+            wadah.innerHTML = '';
+            showToast('Gagal mencari member: ' + e.message, 'error');
+        }
+    }
+
+    /* Dipakai dropdown PC maupun layar penuh HP: layarnya ditutup (tidak apa-apa
+       kalau memang belum terbuka) lalu alur pemilihan yang lama mengambil alih,
+       sehingga poin, reward, dan jatah karyawan tetap lewat jalur yang sama.
+       Nama tidak perlu dioper -- applySelectedCustomer() yang mengisi kotaknya. */
+    async function pilihDariLayarMember(id) {
+        tutupLayarCariMember();
+        await selectMemberById(id);
+    }
+
+    function daftarDariLayarMember() {
+        document.getElementById('customer-nickname').value =
+            document.getElementById('member-screen-input').value.trim();
+        tutupLayarCariMember();
+        openQuickRegisterModal();
     }
 
     /*
@@ -868,34 +993,7 @@
                 return;
             }
 
-            dropdown.innerHTML = results.map(c => {
-                const isEmp = (c.customerType === 'EMPLOYEE');
-                const initial = (c.nickname || 'U').charAt(0).toUpperCase();
-                return `
-                    <div class="member-search-item" onclick="selectMemberById(${c.id})">
-                        <div class="member-search-avatar">${initial}</div>
-                        <div style="flex: 1; min-width: 0;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <strong style="font-size: 0.7812rem; color: var(--text-main);">${c.nickname}</strong>
-                                <span class="badge-chip ${isEmp ? 'warning' : 'success'}" style="font-size: 0.5938rem; padding: 1px 6px;">
-                                    ${isEmp ? '<i class="fas fa-mug-hot"></i> Karyawan' : '<i class="fas fa-user"></i> Pelanggan'}
-                                </span>
-                            </div>
-                            <div style="font-size: 0.6875rem; color: var(--text-muted); display: flex; gap: 8px; margin-top: 2px; flex-wrap: wrap;">
-                                <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                    ${c.phone && c.phone !== '-'
-                                        ? `<i class="fas fa-phone" style="font-size: 0.625rem;"></i> ${c.phone}`
-                                        : (c.email && c.email !== '-'
-                                            ? `<i class="fas fa-envelope" style="font-size: 0.625rem;"></i> ${c.email}`
-                                            : '<i class="fas fa-user-slash" style="font-size: 0.625rem;"></i> Tanpa kontak')}
-                                </span>
-                                <span><i class="fas fa-star"></i> <strong>${c.points || 0} Pts</strong></span>
-                                <span style="color: ${c.status === 'AKTIF' ? 'var(--color-success)' : 'var(--color-danger)'}; font-weight: 700;"><i class="fas fa-circle" style="font-size: 0.375rem; vertical-align: middle;"></i> ${c.status || 'AKTIF'}</span>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
+            dropdown.innerHTML = results.map(barisMember).join('');
             dropdown.style.display = 'block';
             // Di HP keyboard menutupi daftar yang baru muncul. Setelah hasilnya
             // tampil kotak isian tidak diketik lagi, jadi fokusnya dilepas.
