@@ -82,6 +82,15 @@ def test_aset_tanpa_versi_tidak_disimpan_lama(client):
     assert 'max-age=300' in cc
 
 
+def test_halaman_html_wajib_divalidasi_ulang(client):
+    """
+    Tanpa header apa pun, WebView Android boleh memakai salinan halaman lama
+    tanpa bertanya. Karena URL css/js berversi dan asetnya immutable setahun,
+    halaman basi berarti markup, CSS, dan JS ikut basi semua.
+    """
+    assert client.get('/login').headers.get('Cache-Control') == 'no-cache'
+
+
 def test_url_aset_membawa_penanda_versi(app):
     """Cache immutable hanya aman kalau URL-nya benar-benar berversi."""
     from flask import url_for

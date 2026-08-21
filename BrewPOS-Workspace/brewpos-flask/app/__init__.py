@@ -96,6 +96,21 @@ def create_app(config_class=Config):
             else:
                 # Tanpa ?v tidak ada jaminan; jangan disimpan lama.
                 response.headers['Cache-Control'] = 'public, max-age=300'
+        elif (response.headers.get('Content-Type') or '').startswith('text/html'):
+            # Halaman HTML WAJIB divalidasi ulang tiap dibuka.
+            #
+            # Tanpa header ini responsnya tidak punya Cache-Control maupun ETag
+            # sama sekali, dan WebView Android memakai "heuristic caching": ia
+            # boleh memakai salinan lama tanpa bertanya ke server. Karena URL
+            # css/js dibubuhi ?v=mtime dan aset itu disimpan setahun sebagai
+            # immutable, halaman basi berarti SELURUHNYA basi: markup lama,
+            # CSS lama, JS lama. Aplikasi kasir bisa berhari-hari menampilkan
+            # versi sebelum pembaruan sementara servernya sudah benar.
+            #
+            # no-cache bukan berarti tidak disimpan, hanya wajib divalidasi
+            # dulu. Kerangka halaman kecil, jadi ini tidak membatalkan
+            # penghematan yang datang dari aset berversi.
+            response.headers['Cache-Control'] = 'no-cache'
         return response
 
     # Kompresi. Ditulis sendiri, bukan menambah dependensi: aset teks di sini
