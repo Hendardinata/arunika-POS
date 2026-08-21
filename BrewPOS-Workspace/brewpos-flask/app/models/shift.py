@@ -1,5 +1,6 @@
 from datetime import datetime
 from app.extensions import db
+from app.waktu import iso_utc
 
 
 class CashMovement(db.Model):
@@ -42,7 +43,7 @@ class CashMovement(db.Model):
             'reason': self.reason,
             'userId': self.userId,
             'userName': self.user.username if self.user else None,
-            'createdAt': self.createdAt.isoformat() if self.createdAt else None,
+            'createdAt': iso_utc(self.createdAt),
         }
 
 
@@ -104,15 +105,15 @@ class Shift(db.Model):
             'closedByUser': self._user_brief(self.closedByUser),
             'currentUser': self._user_brief(self.currentUser or self.user),
             'handovers': [h.to_dict() for h in self.handovers],
-            'startTime': self.startTime.isoformat() if self.startTime else None,
-            'endTime': self.endTime.isoformat() if self.endTime else None,
+            'startTime': iso_utc(self.startTime),
+            'endTime': iso_utc(self.endTime),
             'status': self.status,
             'startingCash': self.startingCash,
             'endingCash': self.endingCash,
             'expectedEndingCash': self.expectedEndingCash,
             'userId': self.userId,
-            'createdAt': self.createdAt.isoformat() if self.createdAt else None,
-            'updatedAt': self.updatedAt.isoformat() if self.updatedAt else None,
+            'createdAt': iso_utc(self.createdAt),
+            'updatedAt': iso_utc(self.updatedAt),
             'user': {
                 'id': self.user.id,
                 'username': self.user.username,

@@ -8,6 +8,7 @@ from app.models.shift import Shift
 from app.models.system_log import SystemLog
 from app.services.system_logger import log_activity
 from app.middleware.auth import get_current_user_id
+from app.waktu import iso_utc
 
 monitoring_bp = Blueprint('monitoring', __name__, url_prefix='/api/monitoring')
 
@@ -56,7 +57,7 @@ def get_kds_orders():
             kds_orders.append({
                 'id': tx.id,
                 'customerName': tx.customer.nickname if tx.customer else 'Guest',
-                'createdAt': tx.createdAt.isoformat() if tx.createdAt else None,
+                'createdAt': iso_utc(tx.createdAt),
                 'elapsedMinutes': elapsed_minutes,
                 'prepStatus': prep_status,
                 'paymentMethod': tx.paymentMethod,
@@ -146,7 +147,7 @@ def get_live_telemetry():
                 'id': active_shift.id,
                 'type': active_shift.type,
                 'cashier': active_shift.user.username if active_shift.user else 'Kasir',
-                'startTime': active_shift.startTime.isoformat(),
+                'startTime': iso_utc(active_shift.startTime),
                 'startingCash': active_shift.startingCash,
                 'cashSales': cash_sales,
                 'currentCashInDrawer': current_cash_in_drawer
@@ -172,7 +173,7 @@ def get_live_telemetry():
             'totalRevenueToday': total_revenue_today,
             'totalCupsToday': total_cups_today,
             'pendingOrdersCount': pending_count,
-            'serverTime': now.isoformat()
+            'serverTime': iso_utc(now)
         })
     except Exception as e:
         print(f"Error fetching live telemetry: {e}")

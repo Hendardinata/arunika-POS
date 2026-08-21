@@ -1,5 +1,6 @@
 from datetime import datetime
 from app.extensions import db
+from app.waktu import iso_utc
 
 class SystemSettings(db.Model):
     __tablename__ = 'SystemSettings'
@@ -16,7 +17,7 @@ class SystemSettings(db.Model):
             'key': self.key,
             'value': self.value,
             'description': self.description,
-            'updatedAt': self.updatedAt.isoformat() if self.updatedAt else None
+            'updatedAt': iso_utc(self.updatedAt)
         }
 
 

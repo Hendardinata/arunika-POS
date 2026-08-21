@@ -1,5 +1,6 @@
 from datetime import datetime
 from app.extensions import db
+from app.waktu import iso_utc
 
 class InventoryItem(db.Model):
     __tablename__ = 'InventoryItem'
@@ -60,7 +61,7 @@ class InventoryLog(db.Model):
             'supplier': self.supplier,
             'notes': self.notes,
             'receiptUrl': self.receiptUrl,
-            'createdAt': self.createdAt.isoformat() if self.createdAt else None
+            'createdAt': iso_utc(self.createdAt)
         }
 
 
@@ -79,12 +80,12 @@ class DailyOpname(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
-            'date': self.date.isoformat() if self.date else None,
+            'date': iso_utc(self.date),
             'status': self.status,
             'isStockConfirmed': self.isStockConfirmed,
             'items': [item.to_dict() for item in self.items],
-            'createdAt': self.createdAt.isoformat() if self.createdAt else None,
-            'updatedAt': self.updatedAt.isoformat() if self.updatedAt else None
+            'createdAt': iso_utc(self.createdAt),
+            'updatedAt': iso_utc(self.updatedAt)
         }
 
 

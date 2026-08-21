@@ -1,5 +1,6 @@
 from datetime import datetime
 from app.extensions import db
+from app.waktu import iso_utc
 
 class SystemLog(db.Model):
     __tablename__ = 'SystemLog'
@@ -20,7 +21,7 @@ class SystemLog(db.Model):
             'entityId': self.entityId,
             'details': self.details,
             'userId': self.userId,
-            'createdAt': self.createdAt.isoformat() if self.createdAt else None,
+            'createdAt': iso_utc(self.createdAt),
             'user': {
                 'username': self.user.username,
                 'role': self.user.role

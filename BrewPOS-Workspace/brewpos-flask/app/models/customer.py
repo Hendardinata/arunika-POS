@@ -1,5 +1,6 @@
 from datetime import datetime
 from app.extensions import db
+from app.waktu import iso_utc
 
 GUEST_NICKNAME = 'Guest'
 
@@ -124,12 +125,12 @@ class Customer(db.Model):
             'usedQuotaToday': used_today,
             'remainingQuota': remaining_q,
             'points': self.points,
-            'pointsExpiryDate': self.pointsExpiryDate.isoformat() if self.pointsExpiryDate else None,
+            'pointsExpiryDate': iso_utc(self.pointsExpiryDate),
             'xp': self.xp,
             'level': self.level,
-            'lastVisitDate': self.lastVisitDate.isoformat() if self.lastVisitDate else None,
+            'lastVisitDate': iso_utc(self.lastVisitDate),
             'streakCount': self.streakCount,
-            'createdAt': self.createdAt.isoformat() if self.createdAt else None,
+            'createdAt': iso_utc(self.createdAt),
         }
         if include_relations:
             data['_count'] = {
@@ -163,7 +164,7 @@ class CustomerQuest(db.Model):
             'questId': self.questId,
             'progress': self.progress,
             'isCompleted': self.isCompleted,
-            'updatedAt': self.updatedAt.isoformat() if self.updatedAt else None,
+            'updatedAt': iso_utc(self.updatedAt),
             'quest': self.quest.to_dict() if self.quest else None
         }
 
@@ -187,6 +188,6 @@ class CustomerBadge(db.Model):
             'id': self.id,
             'customerId': self.customerId,
             'badgeId': self.badgeId,
-            'unlockedAt': self.unlockedAt.isoformat() if self.unlockedAt else None,
+            'unlockedAt': iso_utc(self.unlockedAt),
             'badge': self.badge.to_dict() if self.badge else None
         }

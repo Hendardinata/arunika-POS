@@ -1,5 +1,6 @@
 from datetime import datetime
 from app.extensions import db
+from app.waktu import iso_utc
 
 class Transaction(db.Model):
     __tablename__ = 'Transaction'
@@ -48,13 +49,13 @@ class Transaction(db.Model):
             'paymentMethod': self.paymentMethod,
             'status': self.status,
             'voidReason': self.voidReason,
-            'voidedAt': self.voidedAt.isoformat() if self.voidedAt else None,
+            'voidedAt': iso_utc(self.voidedAt),
             'voidedBy': self.voidedBy,
             'customerId': self.customerId,
             'shiftId': self.shiftId,
             'userId': self.userId,
             'cashierName': self.cashier.username if self.cashier else None,
-            'createdAt': self.createdAt.isoformat() if self.createdAt else None
+            'createdAt': iso_utc(self.createdAt)
         }
         if include_customer and self.customer:
             data['customer'] = self.customer.to_dict()

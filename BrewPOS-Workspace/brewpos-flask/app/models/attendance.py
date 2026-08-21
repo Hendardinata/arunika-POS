@@ -1,5 +1,6 @@
 from datetime import datetime
 from app.extensions import db
+from app.waktu import iso_utc
 
 
 class ShiftHandover(db.Model):
@@ -35,7 +36,7 @@ class ShiftHandover(db.Model):
             'countedCash': self.countedCash,
             'expectedCash': self.expectedCash,
             'difference': self.difference,
-            'createdAt': self.createdAt.isoformat() if self.createdAt else None
+            'createdAt': iso_utc(self.createdAt)
         }
 
 
@@ -64,8 +65,8 @@ class Attendance(db.Model):
             'userId': self.userId,
             'username': self.user.username if self.user else None,
             'role': self.user.role if self.user else None,
-            'clockIn': self.clockIn.isoformat() if self.clockIn else None,
-            'clockOut': self.clockOut.isoformat() if self.clockOut else None,
+            'clockIn': iso_utc(self.clockIn),
+            'clockOut': iso_utc(self.clockOut),
             'durationMinutes': self.duration_minutes(),
             'note': self.note
         }

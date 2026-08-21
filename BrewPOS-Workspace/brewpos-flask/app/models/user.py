@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
 from app.extensions import db
+from app.waktu import iso_utc
 
 class User(db.Model):
     __tablename__ = 'User'
@@ -37,5 +38,5 @@ class User(db.Model):
             'assignedShift': self.assignedShift,
             'allowedPages': custom_pages,
             'hasCustomAccess': custom_pages is not None,
-            'createdAt': self.createdAt.isoformat() if self.createdAt else None
+            'createdAt': iso_utc(self.createdAt)
         }

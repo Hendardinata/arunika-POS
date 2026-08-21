@@ -11,6 +11,7 @@ from app.models.transaction import Transaction
 from app.middleware.auth import token_required, is_supervisor
 from app.models.system_settings import get_setting_int
 from app.services.system_logger import log_activity
+from app.waktu import iso_utc
 
 shift_bp = Blueprint('shift', __name__, url_prefix='/api/shift')
 
@@ -275,7 +276,7 @@ def hitung_kas_seharusnya(shift, saldo_awal=None, sejak=None):
         'cashDrops': drops,
         'cashPaidIns': paid_ins,
         'expectedEndingCash': expected,
-        'since': sejak.isoformat() if sejak else None,
+        'since': iso_utc(sejak),
     }
 
 

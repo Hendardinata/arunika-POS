@@ -1,5 +1,6 @@
 from datetime import datetime
 from app.extensions import db
+from app.waktu import iso_utc
 
 class ExpenseCategory(db.Model):
     __tablename__ = 'ExpenseCategory'
@@ -39,7 +40,7 @@ class Expense(db.Model):
         return {
             'id': self.id,
             'amount': self.amount,
-            'date': self.date.isoformat() if self.date else None,
+            'date': iso_utc(self.date),
             'notes': self.notes,
             'categoryId': self.categoryId,
             'userId': self.userId,
@@ -47,8 +48,8 @@ class Expense(db.Model):
             'paymentSource': self.paymentSource or 'CASH_DRAWER',
             'paymentSourceLabel': 'Kas Laci' if (self.paymentSource or 'CASH_DRAWER') == 'CASH_DRAWER' else 'Non-Tunai / Luar Kas',
             'shiftId': self.shiftId,
-            'createdAt': self.createdAt.isoformat() if self.createdAt else None,
-            'updatedAt': self.updatedAt.isoformat() if self.updatedAt else None,
+            'createdAt': iso_utc(self.createdAt),
+            'updatedAt': iso_utc(self.updatedAt),
             'category': self.category.to_dict() if self.category else None,
             'recordedBy': {
                 'id': self.recordedBy.id,
