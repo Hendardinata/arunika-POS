@@ -18,8 +18,8 @@ android {
         // sekali. Samsung S10 (Android 9+) jauh di atas batas ini.
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 5
+        versionName = "1.4"
         buildConfigField("String", "POS_URL", "\"$posUrl\"")
     }
 

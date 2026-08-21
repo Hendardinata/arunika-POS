@@ -7,16 +7,23 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Base64
 import android.util.Log
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -55,10 +62,18 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_MAC = "printer_mac"
         private const val KEY_LAST_ERROR = "last_error"
         private const val KEY_CRASH = "last_crash"
+        private const val KEY_PAGE_ERROR = "last_page_error"
         private const val REQ_BT = 1001
     }
 
     private lateinit var webView: WebView
+
+    /* Kotak <input type="file"> di halaman web. WebView tidak punya pemilih
+       berkas bawaan: tanpa onShowFileChooser di bawah, mengetuk "Pilih File"
+       untuk foto nota TIDAK melakukan apa pun -- diam, tanpa galat. Di browser
+       mana pun kotak itu bekerja, jadi di aplikasi pun harus. */
+    private var callbackBerkas: ValueCallback<Array<Uri>>? = null
+    private lateinit var pilihBerkas: ActivityResultLauncher<String>
 
     private fun prefs() = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -76,8 +91,21 @@ class MainActivity : AppCompatActivity() {
             previous?.uncaughtException(t, e)
         }
 
+        // Harus terdaftar sebelum activity mencapai STARTED.
+        pilihBerkas = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            // Wajib dijawab walau dibatalkan. Kalau callback-nya dibiarkan
+            // menggantung, kotak berkas BERIKUTNYA tidak akan pernah terbuka.
+            callbackBerkas?.onReceiveValue(if (uri == null) null else arrayOf(uri))
+            callbackBerkas = null
+        }
+
         webView = WebView(this)
         setContentView(webView)
+
+        // Halaman bisa diperiksa dari chrome://inspect lewat kabel USB. Ini APK
+        // debug yang dipakai internal, dan tanpa ini satu-satunya cara menelusuri
+        // masalah tampilan adalah menebak dari tangkapan layar.
+        if (BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true)
 
         webView.settings.apply {
             javaScriptEnabled = true
@@ -107,8 +135,63 @@ class MainActivity : AppCompatActivity() {
             // tombol Bayar terdorong keluar layar.
             textZoom = 100
         }
-        webView.webViewClient = WebViewClient()
-        webView.webChromeClient = WebChromeClient()
+        webView.webViewClient = object : WebViewClient() {
+            /*
+             * Tanpa ini, server yang tidak terjangkau (Tailscale putus, WiFi
+             * pindah) menampilkan halaman galat bawaan WebView: teks
+             * "net::ERR_..." tanpa tombol apa pun. Kasir hanya bisa menutup
+             * paksa aplikasi. Browser selalu memberi tombol muat ulang.
+             */
+            override fun onReceivedError(
+                view: WebView,
+                request: WebResourceRequest,
+                error: WebResourceError
+            ) {
+                // Gambar atau ikon yang gagal bukan alasan mengganti halaman.
+                if (!request.isForMainFrame) return
+                val sebab = try { error.description?.toString() } catch (_: Throwable) { null }
+                tampilkanHalamanGagal(view, sebab ?: "tidak diketahui")
+            }
+        }
+
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onShowFileChooser(
+                view: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                params: FileChooserParams?
+            ): Boolean {
+                callbackBerkas?.onReceiveValue(null)
+                callbackBerkas = filePathCallback
+                val jenis = params?.acceptTypes
+                    ?.firstOrNull { !it.isNullOrBlank() }
+                    ?: "*/*"
+                return try {
+                    pilihBerkas.launch(jenis)
+                    true
+                } catch (e: Throwable) {
+                    callbackBerkas = null
+                    recordError("Gagal membuka pemilih berkas", e)
+                    false
+                }
+            }
+
+            /* Galat JavaScript disimpan supaya bisa dibaca lewat Diagnostik.
+               Di HP kasir tidak ada konsol pengembang untuk dibuka. */
+            override fun onConsoleMessage(pesan: ConsoleMessage?): Boolean {
+                if (pesan != null && pesan.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
+                    try {
+                        prefs().edit().putString(
+                            KEY_PAGE_ERROR,
+                            stamp() + "
+" + pesan.message() +
+                                " (" + pesan.sourceId() + ":" + pesan.lineNumber() + ")"
+                        ).apply()
+                    } catch (_: Throwable) {
+                    }
+                }
+                return super.onConsoleMessage(pesan)
+            }
+        }
         webView.addJavascriptInterface(PrinterBridge(), "AndroidPrinter")
         webView.loadUrl(POS_URL)
 
@@ -123,6 +206,43 @@ class MainActivity : AppCompatActivity() {
     // ------------------------------------------------------------------
     // Utilitas galat
     // ------------------------------------------------------------------
+
+    /**
+     * Halaman galat sendiri, menggantikan "net::ERR_..." bawaan WebView.
+     *
+     * Base URL-nya sengaja POS_URL supaya tombolnya cukup menavigasi ke "/"
+     * dan halaman aslinya dimuat ulang -- tanpa perlu jembatan JavaScript,
+     * yang membuat halaman ini tetap bekerja walau apa pun gagal.
+     */
+    private fun tampilkanHalamanGagal(view: WebView, sebab: String) {
+        // "&" lebih dulu: kalau "<" diganti duluan, "&lt;" hasilnya ikut
+        // terkena putaran kedua dan berubah jadi "&amp;lt;".
+        val aman = sebab.replace("&", "&amp;").replace("<", "&lt;")
+        val html = """
+            <!doctype html><meta name="viewport" content="width=device-width, initial-scale=1">
+            <div style="font-family:system-ui,-apple-system,sans-serif;padding:32px 24px;
+                        text-align:center;color:#3D2617;">
+              <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#C0894A"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                   style="margin-bottom:14px;">
+                <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>
+                <path d="M12 9v4"/><path d="M12 17h.01"/>
+              </svg>
+              <h2 style="margin:0 0 8px;font-size:19px;">Server POS tidak terjangkau</h2>
+              <p style="margin:0 0 4px;font-size:14px;color:#7A6A5D;">
+                Periksa WiFi atau sambungan Tailscale ke server kasir.</p>
+              <p style="margin:0 0 22px;font-size:12px;color:#A0928A;">$aman</p>
+              <a href="$POS_URL" style="display:inline-block;background:#6F4E37;color:#FFF;
+                 text-decoration:none;padding:13px 30px;border-radius:10px;font-size:15px;
+                 font-weight:600;">Coba Lagi</a>
+            </div>
+        """.trimIndent()
+        try {
+            view.loadDataWithBaseURL(POS_URL, html, "text/html", "utf-8", null)
+        } catch (e: Throwable) {
+            recordError("Gagal menampilkan halaman galat", e)
+        }
+    }
 
     /** Paket dan versi Chromium yang menggambar halaman. */
     private fun webViewInfo(): String = try {
@@ -240,7 +360,10 @@ class MainActivity : AppCompatActivity() {
                     appendLine("Printer dipilih: ${mac ?: "belum ada"}")
                     appendLine()
                     appendLine("Galat terakhir:")
-                    append(prefs().getString(KEY_LAST_ERROR, "(belum ada)"))
+                    appendLine(prefs().getString(KEY_LAST_ERROR, "(belum ada)"))
+                    appendLine()
+                    appendLine("Galat halaman terakhir:")
+                    append(prefs().getString(KEY_PAGE_ERROR, "(belum ada)"))
                 }
                 safeDialog("Diagnostik Printer", info)
             } catch (e: Throwable) {
