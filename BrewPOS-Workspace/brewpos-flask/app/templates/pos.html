@@ -84,9 +84,9 @@
                 <div style="display: flex; gap: 6px;">
                     <div style="position: relative; flex: 1;">
                         <i class="fas fa-search" style="position: absolute; left: 10px; top: 9px; font-size: 0.75rem; color: var(--text-muted);"></i>
-                        <input type="text" id="customer-nickname" class="form-control" style="padding-left: 28px; font-size: 0.7812rem; height: 34px;" placeholder="Cari nama, no. HP, atau email member..." autocomplete="off" oninput="handleMemberLiveSearch(this.value)" onfocus="handleMemberLiveSearch(this.value); bawaKotakMemberKeLayar()">
+                        <input type="text" id="customer-nickname" class="form-control" style="padding-left: 28px; font-size: 0.7812rem; height: 34px;" placeholder="Cari nama, no. HP, atau email member..." autocomplete="off" enterkeyhint="search" onkeydown="if (event.key === 'Enter') { event.preventDefault(); cariMember(); }" onfocus="bawaKotakMemberKeLayar()">
                     </div>
-                    <button type="button" class="btn btn-secondary btn-sm" onclick="lookupCustomer(true)" title="Cari / Pilih Member">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="cariMember()" title="Cari member (atau tekan Enter)">
                         <i class="fas fa-arrow-right"></i>
                     </button>
                 </div>
@@ -827,8 +827,6 @@
     // -------------------------------------------------------------
     // Customer Member Live Autocomplete & CRM Engine
     // -------------------------------------------------------------
-    let liveSearchTimeout = null;
-
     /* Di HP kotak pencarian member ada di paruh bawah bottom sheet, di bawah
        daftar pesanan. Begitu keyboard naik, yang tersisa terlihat sering hanya
        bagian atas sheet -- kasir melihat bidang kosong dan mengira aplikasinya
@@ -841,62 +839,71 @@
         }, 300);
     }
 
-    async function handleMemberLiveSearch(query) {
-        clearTimeout(liveSearchTimeout);
+    /*
+     * Daftar member muncul saat kasir menekan Enter (atau tombol cari), bukan
+     * tiap ketukan huruf. Di HP daftar yang tumbuh-menyusut sendiri sambil
+     * mengetik menggeser isi panel terus-menerus, dan nama yang mau diketuk
+     * berpindah tepat sebelum jari mendarat.
+     *
+     * Tanpa hasil: dropdown ditutup dan lookupCustomer() yang mengambil alih,
+     * karena panel "belum terdaftar" miliknya sudah membawa tombol daftar dan
+     * lanjut sebagai Guest.
+     */
+    async function cariMember() {
+        const input = document.getElementById('customer-nickname');
         const dropdown = document.getElementById('member-search-results');
-        const trimmed = (query || '').trim();
+        const trimmed = (input.value || '').trim();
 
         if (!trimmed || trimmed.toLowerCase() === 'guest') {
             dropdown.style.display = 'none';
+            resetToGuest();
             return;
         }
 
-        liveSearchTimeout = setTimeout(async () => {
-            try {
-                const results = await apiFetch(`/customers/autocomplete?q=${encodeURIComponent(trimmed)}`);
-                if (!results || results.length === 0) {
-                    dropdown.innerHTML = `
-                        <div style="padding: 10px; text-align: center; color: var(--text-muted); font-size: 0.7188rem;">
-                            Member tidak ditemukan. Tekan <i class="fas fa-arrow-right"></i> untuk daftarkan "${trimmed}".
-                        </div>
-                    `;
-                    dropdown.style.display = 'block';
-                    return;
-                }
+        try {
+            const results = await apiFetch(`/customers/autocomplete?q=${encodeURIComponent(trimmed)}`);
+            if (!results || results.length === 0) {
+                dropdown.style.display = 'none';
+                lookupCustomer();
+                return;
+            }
 
-                dropdown.innerHTML = results.map(c => {
-                    const isEmp = (c.customerType === 'EMPLOYEE');
-                    const initial = (c.nickname || 'U').charAt(0).toUpperCase();
-                    return `
-                        <div class="member-search-item" onclick="selectMemberById(${c.id})">
-                            <div class="member-search-avatar">${initial}</div>
-                            <div style="flex: 1; min-width: 0;">
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <strong style="font-size: 0.7812rem; color: var(--text-main);">${c.nickname}</strong>
-                                    <span class="badge-chip ${isEmp ? 'warning' : 'success'}" style="font-size: 0.5938rem; padding: 1px 6px;">
-                                        ${isEmp ? '<i class="fas fa-mug-hot"></i> Karyawan' : '<i class="fas fa-user"></i> Pelanggan'}
-                                    </span>
-                                </div>
-                                <div style="font-size: 0.6875rem; color: var(--text-muted); display: flex; gap: 8px; margin-top: 2px; flex-wrap: wrap;">
-                                    <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                        ${c.phone && c.phone !== '-'
-                                            ? `<i class="fas fa-phone" style="font-size: 0.625rem;"></i> ${c.phone}`
-                                            : (c.email && c.email !== '-'
-                                                ? `<i class="fas fa-envelope" style="font-size: 0.625rem;"></i> ${c.email}`
-                                                : '<i class="fas fa-user-slash" style="font-size: 0.625rem;"></i> Tanpa kontak')}
-                                    </span>
-                                    <span><i class="fas fa-star"></i> <strong>${c.points || 0} Pts</strong></span>
-                                    <span style="color: ${c.status === 'AKTIF' ? 'var(--color-success)' : 'var(--color-danger)'}; font-weight: 700;"><i class="fas fa-circle" style="font-size: 0.375rem; vertical-align: middle;"></i> ${c.status || 'AKTIF'}</span>
-                                </div>
+            dropdown.innerHTML = results.map(c => {
+                const isEmp = (c.customerType === 'EMPLOYEE');
+                const initial = (c.nickname || 'U').charAt(0).toUpperCase();
+                return `
+                    <div class="member-search-item" onclick="selectMemberById(${c.id})">
+                        <div class="member-search-avatar">${initial}</div>
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <strong style="font-size: 0.7812rem; color: var(--text-main);">${c.nickname}</strong>
+                                <span class="badge-chip ${isEmp ? 'warning' : 'success'}" style="font-size: 0.5938rem; padding: 1px 6px;">
+                                    ${isEmp ? '<i class="fas fa-mug-hot"></i> Karyawan' : '<i class="fas fa-user"></i> Pelanggan'}
+                                </span>
+                            </div>
+                            <div style="font-size: 0.6875rem; color: var(--text-muted); display: flex; gap: 8px; margin-top: 2px; flex-wrap: wrap;">
+                                <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    ${c.phone && c.phone !== '-'
+                                        ? `<i class="fas fa-phone" style="font-size: 0.625rem;"></i> ${c.phone}`
+                                        : (c.email && c.email !== '-'
+                                            ? `<i class="fas fa-envelope" style="font-size: 0.625rem;"></i> ${c.email}`
+                                            : '<i class="fas fa-user-slash" style="font-size: 0.625rem;"></i> Tanpa kontak')}
+                                </span>
+                                <span><i class="fas fa-star"></i> <strong>${c.points || 0} Pts</strong></span>
+                                <span style="color: ${c.status === 'AKTIF' ? 'var(--color-success)' : 'var(--color-danger)'}; font-weight: 700;"><i class="fas fa-circle" style="font-size: 0.375rem; vertical-align: middle;"></i> ${c.status || 'AKTIF'}</span>
                             </div>
                         </div>
-                    `;
-                }).join('');
-                dropdown.style.display = 'block';
-            } catch (e) {
-                dropdown.style.display = 'none';
-            }
-        }, 180);
+                    </div>
+                `;
+            }).join('');
+            dropdown.style.display = 'block';
+            // Di HP keyboard menutupi daftar yang baru muncul. Setelah hasilnya
+            // tampil kotak isian tidak diketik lagi, jadi fokusnya dilepas.
+            if (window.matchMedia('(pointer: coarse)').matches) input.blur();
+        } catch (e) {
+            dropdown.style.display = 'none';
+            showToast('Gagal mencari member: ' + e.message, 'error');
+        }
     }
 
     // Close dropdown on outside click
@@ -920,7 +927,7 @@
         }
     }
 
-    async function lookupCustomer(fromButton = false) {
+    async function lookupCustomer() {
         const input = document.getElementById('customer-nickname');
         const nickname = input.value.trim();
         const dropdown = document.getElementById('member-search-results');
