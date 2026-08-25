@@ -17,11 +17,14 @@ def create_app(config_class=Config):
     jwt.init_app(app)
     cors.init_app(app, resources={r"/*": {"origins": "*"}})
 
-    # Auto sync schema changes and seed default accounts
+    # Auto sync schema changes. Seeder TIDAK ikut jalan di sini: dia menimpa
+    # RoleAccess tiap restart, jadi hak akses yang diubah lewat /settings balik
+    # ke default. Jalankan manual saat butuh: SEED_ON_START=1 python run.py
     from app.services.db_migrator import auto_sync_schema
-    from app.services.db_seeder import seed_default_users
     auto_sync_schema(app)
-    seed_default_users(app)
+    if os.getenv('SEED_ON_START') == '1':
+        from app.services.db_seeder import seed_default_users
+        seed_default_users(app)
 
     # Setup global API Auth middleware
     from app.middleware.auth import setup_auth_middleware
