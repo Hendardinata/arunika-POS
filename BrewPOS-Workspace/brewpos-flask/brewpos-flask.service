@@ -1,0 +1,15 @@
+[Unit]
+Description=Arunika-POS Flask Backend Server
+After=network.target
+
+[Service]
+Type=simple
+User=cerydra
+WorkingDirectory=/run/media/cerydra/3782A0DC6069E6F1/Project/ARUNIKA-POSCaffee/BrewPOS-Workspace/brewpos-flask
+EnvironmentFile=/run/media/cerydra/3782A0DC6069E6F1/Project/ARUNIKA-POSCaffee/BrewPOS-Workspace/brewpos-flask/.env
+ExecStart=/run/media/cerydra/3782A0DC6069E6F1/Project/ARUNIKA-POSCaffee/BrewPOS-Workspace/brewpos-flask/venv_linux/bin/gunicorn -w 4 -b 0.0.0.0:3001 --timeout 120 run:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
