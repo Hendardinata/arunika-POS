@@ -84,9 +84,11 @@ pip install -r requirements.txt
 Pastikan connection string MSSQL di file `.env` sudah sesuai:
 ```env
 PORT=3001
-SECRET_KEY=arunika_pos_secret_key_super_secure_2026
-JWT_SECRET_KEY=fallback_secret_for_development_only
-DATABASE_URL=mssql+pyodbc://sa:12qwaszx#DB@localhost/arunika_caffee?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes
+# Isi acak, jangan pakai nilai contoh:
+#   python -c "import secrets; print(secrets.token_urlsafe(48))"
+SECRET_KEY=
+JWT_SECRET_KEY=
+DATABASE_URL=mssql+pyodbc://USER:PASSWORD@localhost/NAMA_DB?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes
 UPLOAD_FOLDER=app/static/uploads
 FLASK_ENV=development
 ```
@@ -134,7 +136,9 @@ password lewat UI tidak akan tertimpa saat server restart.
 | `headbar` | `12qwaszx` | HEADBAR |
 | `kasir` | `12qwaszx` | CASHIER |
 
-> Ganti password ini sebelum dipakai di lingkungan produksi.
+> **Ganti keempat password ini sebelum server dipakai toko.** Nilai default ada di
+> `db_seeder.py` dan repo ini publik, jadi selama belum diganti siapa pun yang bisa
+> menjangkau alamat server bisa masuk sebagai `superadmin`.
 
 ---
 
