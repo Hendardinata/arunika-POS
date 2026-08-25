@@ -1,0 +1,463 @@
+{% extends 'base.html' %}
+
+{% block title %}Perhitungan HPP | {{ store_name }}{% endblock %}
+{% block page_title %}Perhitungan & Sinkron HPP Menu{% endblock %}
+
+{% block content %}
+<!-- Ringkasan keadaan HPP -->
+<div class="stats-grid">
+    <div class="stat-card" style="border-left-color: var(--color-danger);">
+        <div class="stat-icon" style="background: var(--color-danger-bg); color: var(--color-danger);">
+            <i class="fas fa-flask"></i>
+        </div>
+        <div class="stat-info">
+            <div class="stat-label">Belum Ada Resep</div>
+            <div class="stat-value" id="kpi-tanpa-resep" style="color: var(--color-danger);">0</div>
+        </div>
+    </div>
+
+    <div class="stat-card" style="border-left-color: var(--color-warning);">
+        <div class="stat-icon" style="background: var(--color-warning-bg); color: var(--color-warning);">
+            <i class="fas fa-rotate"></i>
+        </div>
+        <div class="stat-info">
+            <div class="stat-label">HPP Perlu Disamakan</div>
+            <div class="stat-value" id="kpi-selisih" style="color: var(--color-warning);">0</div>
+        </div>
+    </div>
+
+    <div class="stat-card" style="border-left-color: var(--color-primary);">
+        <div class="stat-icon" style="background: var(--color-primary-light); color: var(--color-primary);">
+            <i class="fas fa-percent"></i>
+        </div>
+        <div class="stat-info">
+            <div class="stat-label">Rata-rata Food Cost</div>
+            <div class="stat-value" id="kpi-food-cost">0%</div>
+        </div>
+    </div>
+
+    <div class="stat-card" style="border-left-color: var(--color-secondary);">
+        <div class="stat-icon" style="background: var(--color-secondary-light); color: var(--color-secondary);">
+            <i class="fas fa-scale-unbalanced"></i>
+        </div>
+        <div class="stat-info">
+            <div class="stat-label">Di Atas Target Food Cost</div>
+            <div class="stat-value" id="kpi-di-atas-target">0</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div>
+            <h3 class="card-title"><i class="fas fa-calculator" style="color: var(--color-primary);"></i> HPP Tersimpan vs HPP Resep Terkini</h3>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+                Kolom "HPP Resep" dihitung ulang dari racikan resep dikali harga bahan yang berlaku sekarang.
+                Kalau berbeda dengan HPP tersimpan, artinya harga bahan sudah bergerak sejak resep terakhir disimpan.
+            </p>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="muatData()"><i class="fas fa-rotate-right"></i> Muat Ulang</button>
+            <button class="btn btn-primary btn-sm" id="btn-sinkron-semua" onclick="terapkanSemua()">
+                <i class="fas fa-wand-magic-sparkles"></i> Samakan Semua HPP
+            </button>
+        </div>
+    </div>
+
+    <!-- Dua angka penentu keputusan harga. Keduanya hanya memengaruhi kolom
+         food cost, margin, dan saran harga -- bukan HPP yang tersimpan di menu. -->
+    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px; margin-bottom: 16px;
+                background: var(--color-primary-light); border-radius: var(--radius-sm);">
+        <i class="fas fa-bullseye" style="color: var(--color-primary);"></i>
+        <label for="input-target" style="font-size: 0.7812rem; font-weight: 700; color: var(--text-secondary);">
+            Target Food Cost
+        </label>
+        <input type="number" id="input-target" class="form-control" min="1" max="99" step="1" value="30"
+               style="width: 80px;" oninput="renderSemua()">
+
+        <span style="width: 1px; height: 24px; background: var(--border-color);"></span>
+
+        <i class="fas fa-droplet-slash" style="color: var(--color-warning);"></i>
+        <label for="input-susut" style="font-size: 0.7812rem; font-weight: 700; color: var(--text-secondary);">
+            Buffer Susut
+        </label>
+        <input type="number" id="input-susut" class="form-control" min="0" max="50" step="0.5" value="5"
+               style="width: 80px;" oninput="renderSemua()">
+
+        <span style="font-size: 0.75rem; color: var(--text-muted); flex: 1 1 240px;">
+            Susut menutup base yang tersisa, susu tumpah, dan cup gagal. Dipakai untuk food cost,
+            margin, dan saran harga &mdash; HPP tersimpan tetap murni biaya bahan.
+        </span>
+        <button class="btn btn-secondary btn-sm" onclick="simpanSetelan()" style="margin-left: auto;">
+            <i class="fas fa-floppy-disk"></i> Simpan Setelan
+        </button>
+    </div>
+
+    <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
+        <input type="text" id="filter-cari" class="form-control" style="flex: 1 1 220px; min-width: 180px;"
+               placeholder="Cari nama menu..." oninput="renderSemua()">
+        <select id="filter-kategori" class="form-control" style="flex: 0 1 190px; min-width: 150px;" onchange="renderSemua()">
+            <option value="all">Semua Kategori</option>
+        </select>
+        <select id="filter-status" class="form-control" style="flex: 0 1 230px; min-width: 180px;" onchange="renderSemua()">
+            <option value="all">Semua Status</option>
+            <option value="drift">HPP beda dari resep</option>
+            <option value="norecipe">Belum ada resep</option>
+            <option value="nocost">Bahan belum ada harga</option>
+            <option value="over">Food cost di atas target</option>
+        </select>
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">
+            <input type="checkbox" id="filter-nonaktif" style="width: 16px; height: 16px;" onchange="renderSemua()">
+            Tampilkan menu nonaktif
+        </label>
+    </div>
+
+    <div class="table-responsive">
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th>Menu</th>
+                    <th>Kategori</th>
+                    <th>Harga Jual</th>
+                    <th>HPP Tersimpan</th>
+                    <th>HPP Resep (Terkini)</th>
+                    <th>Selisih</th>
+                    <th title="Sudah termasuk buffer susut">Margin / Cup</th>
+                    <th title="Sudah termasuk buffer susut">Food Cost</th>
+                    <th title="Dari HPP + susut, dibulatkan ke atas per Rp 500">Saran Harga</th>
+                    <th style="text-align: right;">Aksi</th>
+                </tr>
+            </thead>
+            <tbody id="tabel-hpp">
+                <tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 30px;">Memuat data HPP...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Rincian bahan satu menu -->
+<div id="modal-hpp-detail" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 620px;">
+        <div class="modal-header">
+            <div>
+                <h3 class="modal-title"><i class="fas fa-flask" style="color: var(--color-primary);"></i> Rincian HPP per Bahan</h3>
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+                    Menu: <strong id="detail-nama-menu" style="color: var(--color-primary);">-</strong>
+                </p>
+            </div>
+            <button class="modal-close" onclick="closeModal('modal-hpp-detail')" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+            <div class="table-responsive">
+                <table class="custom-table">
+                    <thead>
+                        <tr>
+                            <th>Bahan</th>
+                            <th>Takaran / Porsi</th>
+                            <th>Harga Satuan</th>
+                            <th style="text-align: right;">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody id="detail-bahan">
+                        <tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 20px;">Memuat...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;
+                        padding: 12px 14px; background: var(--color-primary-light); border-radius: var(--radius-sm);">
+                <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted);">Total HPP Resep</span>
+                <strong id="detail-total" style="font-family: var(--font-heading); font-size: 1.25rem; color: var(--color-primary);">Rp 0</strong>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <a href="/menus" class="btn btn-secondary"><i class="fas fa-pen-to-square"></i> Ubah Resep di Halaman Menu</a>
+            <button class="btn btn-primary" id="btn-terapkan-detail" onclick="terapkanDariDetail()">
+                <i class="fas fa-check-circle"></i> Terapkan HPP Ini
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let dataHpp = [];
+    let menuDetailAktif = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        muatData();
+    });
+
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+
+    // Menu tanpa resep tetap dinilai memakai HPP tersimpan: angka itu yang
+    // dipakai laporan margin, jadi tetap perlu terlihat kalau kemahalan.
+    const hppEfektif = (m) => (m.ingredientCount > 0 && m.recipeHpp > 0) ? m.recipeHpp : m.storedHpp;
+    const targetPersen = () => Math.min(99, Math.max(1, parseFloat(document.getElementById('input-target').value) || 30));
+    const susutPersen = () => Math.min(50, Math.max(0, parseFloat(document.getElementById('input-susut').value) || 0));
+
+    // Biaya sebenarnya per cup untuk keputusan harga: bahan + susut. Sengaja
+    // TIDAK ditulis ke menu.hpp -- susut nyata sudah terekam di opname harian,
+    // memasukkan taksirannya ke HPP membuat laporan menghitungnya dua kali.
+    const hppDenganSusut = (m) => Math.round(hppEfektif(m) * (1 + susutPersen() / 100));
+
+    function tandaMenu(m, target) {
+        const tanda = [];
+        if (m.ingredientCount === 0) tanda.push('norecipe');
+        if ((m.missingCostItems || []).length > 0) tanda.push('nocost');
+        if (m.ingredientCount > 0 && m.recipeHpp > 0 && m.recipeHpp !== m.storedHpp) tanda.push('drift');
+        const eff = hppDenganSusut(m);
+        if (m.price > 0 && eff > 0 && (eff / m.price) * 100 > target) tanda.push('over');
+        return tanda;
+    }
+
+    async function muatData() {
+        try {
+            const [ringkasan, setelan] = await Promise.all([
+                apiFetch('/recipes/hpp-overview'),
+                apiFetch('/settings').catch(() => [])
+            ]);
+
+            dataHpp = ringkasan || [];
+
+            const ambil = (kunci) => {
+                const row = (setelan || []).find(s => s.key === kunci);
+                return row && !isNaN(parseFloat(row.value)) ? parseFloat(row.value) : null;
+            };
+
+            const target = ambil('TARGET_FOOD_COST_PCT');
+            if (target !== null) document.getElementById('input-target').value = target;
+
+            const susut = ambil('HPP_WASTE_PCT');
+            if (susut !== null) document.getElementById('input-susut').value = susut;
+
+            isiPilihanKategori();
+            renderSemua();
+        } catch (e) {
+            showToast('Gagal memuat data HPP: ' + e.message, 'error');
+            document.getElementById('tabel-hpp').innerHTML =
+                `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 30px;">Gagal memuat data.</td></tr>`;
+        }
+    }
+
+    function isiPilihanKategori() {
+        const sel = document.getElementById('filter-kategori');
+        const kategori = [...new Set(dataHpp.map(m => m.category).filter(Boolean))].sort();
+        const terpilih = sel.value;
+        sel.innerHTML = `<option value="all">Semua Kategori</option>` +
+            kategori.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+        if (kategori.includes(terpilih)) sel.value = terpilih;
+    }
+
+    function dataTersaring() {
+        const cari = document.getElementById('filter-cari').value.toLowerCase().trim();
+        const kategori = document.getElementById('filter-kategori').value;
+        const status = document.getElementById('filter-status').value;
+        const ikutNonaktif = document.getElementById('filter-nonaktif').checked;
+        const target = targetPersen();
+
+        return dataHpp.filter(m => {
+            if (!ikutNonaktif && m.isActive === false) return false;
+            if (cari && !m.name.toLowerCase().includes(cari)) return false;
+            if (kategori !== 'all' && m.category !== kategori) return false;
+            if (status !== 'all' && !tandaMenu(m, target).includes(status)) return false;
+            return true;
+        });
+    }
+
+    function renderSemua() {
+        const target = targetPersen();
+        renderKpi(target);
+        renderTabel(dataTersaring(), target);
+    }
+
+    function renderKpi(target) {
+        // KPI dihitung dari menu aktif saja; menu nonaktif tidak dijual lagi.
+        const aktif = dataHpp.filter(m => m.isActive !== false);
+
+        const tanpaResep = aktif.filter(m => m.ingredientCount === 0).length;
+        const selisih = aktif.filter(m => tandaMenu(m, target).includes('drift')).length;
+        const diAtasTarget = aktif.filter(m => tandaMenu(m, target).includes('over')).length;
+
+        const berharga = aktif.filter(m => m.price > 0 && hppEfektif(m) > 0);
+        const rata = berharga.length
+            ? berharga.reduce((t, m) => t + (hppDenganSusut(m) / m.price) * 100, 0) / berharga.length
+            : 0;
+
+        document.getElementById('kpi-tanpa-resep').textContent = tanpaResep;
+        document.getElementById('kpi-selisih').textContent = selisih;
+        document.getElementById('kpi-food-cost').textContent = rata.toFixed(1) + '%';
+        document.getElementById('kpi-di-atas-target').textContent = diAtasTarget;
+
+        document.getElementById('btn-sinkron-semua').disabled = selisih === 0;
+    }
+
+    function renderTabel(daftar, target) {
+        const tbody = document.getElementById('tabel-hpp');
+
+        if (!daftar.length) {
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 30px;">Tidak ada menu yang cocok dengan filter.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = daftar.map(m => {
+            const tanda = tandaMenu(m, target);
+            const eff = hppDenganSusut(m);
+            const margin = (m.price || 0) - eff;
+            const foodCost = m.price > 0 && eff > 0 ? (eff / m.price) * 100 : 0;
+            const beda = m.ingredientCount > 0 ? m.recipeHpp - m.storedHpp : 0;
+
+            // Dibulatkan ke atas per Rp 500 supaya langsung enak dipasang di daftar harga.
+            const saran = eff > 0 ? Math.ceil((eff / (target / 100)) / 500) * 500 : 0;
+
+            const chip = [];
+            if (m.isActive === false) chip.push('<span class="badge-chip danger" style="font-size: 0.5938rem;">NONAKTIF</span>');
+            if (tanda.includes('norecipe')) chip.push('<span class="badge-chip warning" style="font-size: 0.5938rem;">BELUM ADA RESEP</span>');
+            if (tanda.includes('nocost')) chip.push(`<span class="badge-chip danger" style="font-size: 0.5938rem;" title="${esc((m.missingCostItems || []).join(', '))}">BAHAN TANPA HARGA</span>`);
+
+            const susut = susutPersen();
+            const kolomResep = m.ingredientCount === 0
+                ? `<span style="color: var(--text-muted);">-</span>`
+                : `<strong style="color: var(--color-primary);">${formatRp(m.recipeHpp)}</strong>
+                   <div style="font-size: 0.6562rem; color: var(--text-muted);">${m.ingredientCount} bahan</div>
+                   ${susut > 0 ? `<div style="font-size: 0.6562rem; color: var(--color-warning); font-weight: 700;">+susut ${susut}% &rarr; ${formatRp(eff)}</div>` : ''}`;
+
+            let kolomSelisih = `<span style="color: var(--text-muted);">-</span>`;
+            if (m.ingredientCount > 0 && m.recipeHpp > 0) {
+                if (beda === 0) {
+                    kolomSelisih = `<span class="badge-chip success" style="font-size: 0.625rem;">Sama</span>`;
+                } else {
+                    const naik = beda > 0;
+                    kolomSelisih = `<strong style="color: var(--color-${naik ? 'danger' : 'success'}); font-size: 0.8125rem;">${naik ? '+' : '-'}${formatRp(Math.abs(beda))}</strong>`;
+                }
+            }
+
+            const warnaFoodCost = foodCost === 0
+                ? 'var(--text-muted)'
+                : (foodCost > target ? 'var(--color-danger)' : 'var(--color-success)');
+
+            return `
+                <tr${m.isActive === false ? ' style="opacity: 0.55;"' : ''}>
+                    <td>
+                        <strong style="color: var(--text-main);">${esc(m.name)}</strong>
+                        <div style="font-size: 0.6562rem; color: var(--text-muted);">${esc(m.code)}</div>
+                        ${chip.length ? `<div style="margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap;">${chip.join('')}</div>` : ''}
+                    </td>
+                    <td><span class="badge-chip primary">${esc(m.category || '-')}</span></td>
+                    <td><strong style="color: var(--color-primary);">${formatRp(m.price)}</strong></td>
+                    <td><strong style="color: var(--text-secondary);">${formatRp(m.storedHpp)}</strong></td>
+                    <td>${kolomResep}</td>
+                    <td>${kolomSelisih}</td>
+                    <td><strong style="color: var(--color-${margin >= 0 ? 'success' : 'danger'}); font-size: 0.8125rem;">${formatRp(margin)}</strong></td>
+                    <td><strong style="color: ${warnaFoodCost};">${foodCost ? foodCost.toFixed(1) + '%' : '-'}</strong></td>
+                    <td>${saran ? `<span style="color: var(--text-secondary);">${formatRp(saran)}</span>` : '<span style="color: var(--text-muted);">-</span>'}</td>
+                    <td style="text-align: right; white-space: nowrap;">
+                        ${tanda.includes('drift')
+                            ? `<button class="btn btn-primary btn-sm" onclick="terapkanSatu(${m.id})" title="Terapkan HPP resep ke menu ini"><i class="fas fa-check"></i> Terapkan</button>`
+                            : ''}
+                        <button class="btn btn-secondary btn-sm" onclick="lihatRincian(${m.id})" title="Lihat rincian bahan"><i class="fas fa-list-ul"></i></button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    async function terapkanSatu(menuId) {
+        try {
+            const res = await apiFetch('/recipes/hpp-sync', {
+                method: 'POST',
+                body: JSON.stringify({ menuIds: [menuId] })
+            });
+            showToast(res.message, res.updated.length ? 'success' : 'warning');
+            await muatData();
+        } catch (e) {
+            showToast('Gagal menerapkan HPP: ' + e.message, 'error');
+        }
+    }
+
+    async function terapkanSemua() {
+        if (!confirm('Samakan HPP semua menu dengan hasil resep dan harga bahan terkini?\n\nMenu yang belum punya resep atau bahannya belum berharga akan dilewati.')) return;
+
+        const btn = document.getElementById('btn-sinkron-semua');
+        btn.disabled = true;
+        try {
+            const res = await apiFetch('/recipes/hpp-sync', { method: 'POST', body: JSON.stringify({}) });
+            showToast(res.message, 'success');
+            await muatData();
+        } catch (e) {
+            showToast('Gagal menyamakan HPP: ' + e.message, 'error');
+            btn.disabled = false;
+        }
+    }
+
+    async function lihatRincian(menuId) {
+        menuDetailAktif = menuId;
+        const m = dataHpp.find(x => x.id === menuId);
+
+        document.getElementById('detail-nama-menu').textContent = m ? m.name : '-';
+        document.getElementById('detail-bahan').innerHTML = skeletonRows(4, 3);
+        document.getElementById('detail-total').textContent = 'Rp 0';
+        document.getElementById('btn-terapkan-detail').style.display = 'none';
+        openModal('modal-hpp-detail');
+
+        try {
+            const detail = await apiFetch(`/recipes/menu/${menuId}`);
+            const bahan = detail.ingredients || [];
+
+            document.getElementById('detail-bahan').innerHTML = bahan.length
+                ? bahan.map(b => `
+                    <tr>
+                        <td><strong>${esc(b.name)}</strong></td>
+                        <td>${b.quantityNeeded} ${esc(b.unit)}</td>
+                        <td>${b.costPerUnit > 0
+                            ? formatRp(b.costPerUnit) + ' / ' + esc(b.unit)
+                            : '<span class="badge-chip danger" style="font-size: 0.5938rem;">BELUM ADA HARGA</span>'}</td>
+                        <td style="text-align: right;"><strong>${formatRp(b.subCost)}</strong></td>
+                    </tr>`).join('')
+                : `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 20px;">Menu ini belum punya resep bahan.</td></tr>`;
+
+            document.getElementById('detail-total').textContent = formatRp(detail.calculatedHpp || 0);
+
+            const perluTerapkan = (detail.calculatedHpp || 0) > 0 && detail.calculatedHpp !== detail.currentHpp;
+            document.getElementById('btn-terapkan-detail').style.display = perluTerapkan ? 'inline-flex' : 'none';
+        } catch (e) {
+            document.getElementById('detail-bahan').innerHTML =
+                `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 20px;">Gagal memuat rincian.</td></tr>`;
+        }
+    }
+
+    async function terapkanDariDetail() {
+        if (!menuDetailAktif) return;
+        await terapkanSatu(menuDetailAktif);
+        closeModal('modal-hpp-detail');
+    }
+
+    async function simpanSetelan() {
+        const target = targetPersen();
+        const susut = susutPersen();
+        try {
+            // Berurutan, bukan Promise.all: endpoint setelan menulis ke satu sesi
+            // DB yang sama, dua commit bersamaan bisa saling menimpa.
+            await apiFetch('/settings', {
+                method: 'POST',
+                body: JSON.stringify({
+                    key: 'TARGET_FOOD_COST_PCT',
+                    value: String(target),
+                    description: 'Target food cost (% HPP terhadap harga jual) untuk saran harga di halaman HPP'
+                })
+            });
+            await apiFetch('/settings', {
+                method: 'POST',
+                body: JSON.stringify({
+                    key: 'HPP_WASTE_PCT',
+                    value: String(susut),
+                    description: 'Buffer susut/waste (%) di atas HPP bahan untuk keputusan harga di halaman HPP'
+                })
+            });
+            showToast(`Tersimpan: target ${target}%, susut ${susut}%`, 'success');
+        } catch (e) {
+            showToast('Gagal menyimpan setelan: ' + e.message, 'error');
+        }
+    }
+</script>
+{% endblock %}

@@ -40,6 +40,7 @@ APP_PAGES = [
     {'name': 'POS Kasir', 'path': '/pos', 'icon': 'cash-register'},
     {'name': 'Live Monitoring / KDS', 'path': '/monitoring', 'icon': 'tv'},
     {'name': 'Menu & Resep Bahan', 'path': '/menus', 'icon': 'mug-hot'},
+    {'name': 'Perhitungan HPP', 'path': '/hpp', 'icon': 'calculator'},
     {'name': 'Inventori & Opname', 'path': '/inventory', 'icon': 'boxes-stacked'},
     {'name': 'Member & Loyalty CRM', 'path': '/customers', 'icon': 'users'},
     {'name': 'Pengeluaran Toko', 'path': '/expenses', 'icon': 'receipt'},
@@ -48,10 +49,10 @@ APP_PAGES = [
 ]
 
 DEFAULT_ROLE_PERMISSIONS = {
-    'SUPERADMIN': ['/dashboard', '/pos', '/monitoring', '/menus', '/inventory', '/customers', '/expenses', '/reports', '/settings'],
-    'ADMIN': ['/dashboard', '/pos', '/monitoring', '/menus', '/inventory', '/customers', '/expenses', '/reports', '/settings'],
-    'OWNER': ['/dashboard', '/pos', '/monitoring', '/menus', '/inventory', '/customers', '/expenses', '/reports', '/settings'],
-    'HEADBAR': ['/pos', '/monitoring', '/menus', '/inventory', '/expenses'],
+    'SUPERADMIN': ['/dashboard', '/pos', '/monitoring', '/menus', '/hpp', '/inventory', '/customers', '/expenses', '/reports', '/settings'],
+    'ADMIN': ['/dashboard', '/pos', '/monitoring', '/menus', '/hpp', '/inventory', '/customers', '/expenses', '/reports', '/settings'],
+    'OWNER': ['/dashboard', '/pos', '/monitoring', '/menus', '/hpp', '/inventory', '/customers', '/expenses', '/reports', '/settings'],
+    'HEADBAR': ['/pos', '/monitoring', '/menus', '/hpp', '/inventory', '/expenses'],
     'CASHIER': ['/pos', '/monitoring', '/customers']
 }
 

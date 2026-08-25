@@ -22,6 +22,10 @@ def pos():
 def menus():
     return render_template('menus.html', active_page='menus')
 
+@web_bp.route('/hpp')
+def hpp():
+    return render_template('hpp.html', active_page='hpp')
+
 @web_bp.route('/inventory')
 def inventory():
     return render_template('inventory.html', active_page='inventory')
