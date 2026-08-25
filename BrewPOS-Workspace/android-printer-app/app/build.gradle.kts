@@ -4,9 +4,11 @@ plugins {
 }
 
 // Alamat server POS bisa diganti saat build tanpa menyentuh kode:
-//   gradle assembleDebug -PposUrl=https://pos.contoh.com
+//   gradle assembleDebug -PposUrl=https://server-lain.contoh.com
+// Wajib https: cleartext http diblokir Android (network_security_config
+// sudah dicabut sejak server dilayani lewat Tailscale HTTPS).
 val posUrl: String = (project.findProperty("posUrl") as String?)
-    ?: "http://phrolova.echidna-carob.ts.net:3001"
+    ?: "https://caffee.echidna-carob.ts.net"
 
 android {
     namespace = "com.arunika.pos"

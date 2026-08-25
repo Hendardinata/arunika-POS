@@ -12,9 +12,9 @@ on:
   workflow_dispatch:
     inputs:
       posUrl:
-        description: 'Alamat server POS yang dibuka aplikasi'
+        description: 'Alamat server POS (kosongkan untuk memakai default build.gradle.kts)'
         required: false
-        default: 'http://phrolova.echidna-carob.ts.net:3001'
+        default: ''
 
 jobs:
   build:
@@ -43,7 +43,12 @@ jobs:
       # Debug build sudah ditandatangani kunci debug bawaan, jadi APK-nya
       # langsung bisa dipasang tanpa mengurus keystore.
       - name: Build APK debug
-        run: gradle assembleDebug -PposUrl="${{ github.event.inputs.posUrl || 'http://phrolova.echidna-carob.ts.net:3001' }}" --no-daemon
+        run: |
+          if [ -n "${{ github.event.inputs.posUrl }}" ]; then
+            gradle assembleDebug -PposUrl="${{ github.event.inputs.posUrl }}" --no-daemon
+          else
+            gradle assembleDebug --no-daemon
+          fi
 
       - name: Unggah APK
         uses: actions/upload-artifact@v4
