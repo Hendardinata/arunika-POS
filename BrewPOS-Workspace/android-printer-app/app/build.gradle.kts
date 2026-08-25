@@ -8,7 +8,7 @@ plugins {
 // Wajib https: cleartext http diblokir Android (network_security_config
 // sudah dicabut sejak server dilayani lewat Tailscale HTTPS).
 val posUrl: String = (project.findProperty("posUrl") as String?)
-    ?: "https://caffee.echidna-carob.ts.net"
+    ?: "https://caffee.rhino-aldebaran.ts.net"
 
 android {
     namespace = "com.arunika.pos"
@@ -20,8 +20,8 @@ android {
         // sekali. Samsung S10 (Android 9+) jauh di atas batas ini.
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.4"
+        versionCode = 6
+        versionName = "1.5"
         buildConfigField("String", "POS_URL", "\"$posUrl\"")
     }
 
