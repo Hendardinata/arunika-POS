@@ -8,6 +8,7 @@ from app.models.expense import Expense
 from app.models.shift import Shift
 from app.models.transaction import Transaction
 from app.services.system_logger import log_activity
+from app.services import login_guard
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
@@ -43,17 +44,28 @@ def login():
     if not username or not password:
         return jsonify({'error': 'Username dan password wajib diisi'}), 401
 
+    # Rem dipasang sebelum query supaya percobaan yang tertahan tidak menyentuh
+    # DB sama sekali.
+    locked_for = login_guard.seconds_until_unlocked(username)
+    if locked_for:
+        return jsonify({
+            'error': f'Terlalu banyak percobaan login. Coba lagi dalam {locked_for // 60 + 1} menit.'
+        }), 429
+
     try:
         u_clean = username.strip()
         user = User.query.filter(db.func.lower(User.username) == u_clean.lower()).first()
         if not user:
+            login_guard.record_failure(username)
             return jsonify({'error': 'Username atau password salah'}), 401
 
         # Check password with bcrypt
         if not bcrypt.checkpw(password.encode('utf-8'), user.password.encode('utf-8')):
+            login_guard.record_failure(username)
             return jsonify({'error': 'Username atau password salah'}), 401
 
-        secret = current_app.config.get('JWT_SECRET_KEY', 'fallback_secret_for_development_only')
+        login_guard.clear(username)
+        secret = current_app.config['JWT_SECRET_KEY']
         token_payload = {
             'id': user.id,
             'username': user.username,

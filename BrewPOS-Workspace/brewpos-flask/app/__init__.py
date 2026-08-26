@@ -8,6 +8,18 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    # Kunci wajib ada sebelum apa pun dijalankan. Kalau kosong, JWT bisa
+    # ditandatangani dengan nilai yang bisa ditebak -- lebih baik gagal start
+    # dengan pesan jelas daripada melayani token palsu.
+    if not app.config.get('TESTING'):
+        for name in ('SECRET_KEY', 'JWT_SECRET_KEY', 'SQLALCHEMY_DATABASE_URI'):
+            if not app.config.get(name):
+                raise RuntimeError(
+                    f"{name} belum diisi. Salin .env.example jadi .env lalu isi "
+                    f"nilainya (SECRET_KEY/JWT_SECRET_KEY: "
+                    f"python -c \"import secrets; print(secrets.token_urlsafe(48))\")."
+                )
+
     # Ensure uploads directory exists
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'receipts'), exist_ok=True)

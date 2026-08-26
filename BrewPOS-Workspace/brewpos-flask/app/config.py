@@ -7,14 +7,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env')
 
 class Config:
-    SECRET_KEY = os.getenv('SECRET_KEY', 'default_secret_please_change_in_production')
-    JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'default_jwt_secret_please_change')
+    # Tanpa nilai cadangan: kunci cadangan yang tertulis di kode ikut terbaca
+    # siapa pun yang membuka repo, jadi lebih baik server menolak start daripada
+    # jalan dengan kunci yang sudah publik. Divalidasi di create_app().
+    SECRET_KEY = os.getenv('SECRET_KEY')
+    JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY')
     
     # Database
-    SQLALCHEMY_DATABASE_URI = os.getenv(
-        'DATABASE_URL',
-        'mssql+pyodbc://sa:12qwaszx#DB@localhost/grosirPusat?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes'
-    )
+    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
