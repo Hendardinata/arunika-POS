@@ -85,6 +85,7 @@ def auto_sync_schema(app):
     Automatically checks and adds missing columns to existing MSSQL tables without data loss.
     """
     schema_updates = [
+        ("User", "sessionEpoch", "INT NOT NULL DEFAULT 0"),
         ("Transaction", "discountAmount", "INT NOT NULL DEFAULT 0"),
         ("Transaction", "transactionCode", "NVARCHAR(50) NULL"),
         ("TransactionItem", "discountAmount", "INT NOT NULL DEFAULT 0"),

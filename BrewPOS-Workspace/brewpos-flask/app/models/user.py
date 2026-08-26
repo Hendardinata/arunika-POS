@@ -12,6 +12,14 @@ class User(db.Model):
     role = db.Column(db.String(50), nullable=False, default='CASHIER')  # SUPERADMIN, ADMIN, OWNER, HEADBAR, CASHIER
     assignedShift = db.Column(db.String(50), nullable=True)  # MORNING, NIGHT
     allowedPages = db.Column(db.Text, nullable=True)  # JSON list of paths (e.g. '["/pos", "/inventory"]'), None = default by role
+    # Penghitung pencabutan sesi. Token menyimpan nilai ini saat terbit dan
+    # ditolak begitu angkanya tidak sama lagi, jadi "keluarkan perangkat lain"
+    # cukup menaikkan satu kolom -- tidak perlu tabel daftar sesi.
+    #
+    # Sengaja penghitung, bukan stempel waktu: JWT menyimpan waktu dalam detik
+    # bulat, jadi token yang terbit di detik yang sama dengan pencabutan akan
+    # lolos. Perbandingan angka tidak punya celah itu.
+    sessionEpoch = db.Column(db.Integer, nullable=False, default=0, server_default='0')
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     expenses = db.relationship('Expense', backref='recordedBy', lazy=True)

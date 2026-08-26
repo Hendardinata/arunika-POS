@@ -35,6 +35,19 @@ def get_actor_role(actor):
         return 'CASHIER'
     return actor.role.upper()
 
+def issue_token(user):
+    """Terbitkan JWT yang membawa epoch sesi akun saat ini."""
+    payload = {
+        'id': user.id,
+        'username': user.username,
+        'role': user.role,
+        'assignedShift': user.assignedShift,
+        'sessionEpoch': int(user.sessionEpoch or 0),
+        'exp': datetime.utcnow() + timedelta(hours=24)
+    }
+    return jwt.encode(payload, current_app.config['JWT_SECRET_KEY'], algorithm='HS256')
+
+
 @auth_bp.route('/login', methods=['POST'])
 def login():
     data = request.get_json() or {}
@@ -65,15 +78,7 @@ def login():
             return jsonify({'error': 'Username atau password salah'}), 401
 
         login_guard.clear(username)
-        secret = current_app.config['JWT_SECRET_KEY']
-        token_payload = {
-            'id': user.id,
-            'username': user.username,
-            'role': user.role,
-            'assignedShift': user.assignedShift,
-            'exp': datetime.utcnow() + timedelta(hours=24)
-        }
-        token = jwt.encode(token_payload, secret, algorithm='HS256')
+        token = issue_token(user)
 
         # Default landing page based on role
         landing_page = '/dashboard'
@@ -115,6 +120,29 @@ def get_my_profile():
     data = actor.to_dict()
     data['landingPage'] = landing
     return jsonify(data)
+
+
+@auth_bp.route('/me/logout-others', methods=['POST'])
+def logout_other_devices():
+    """
+    Cabut semua sesi milik akun ini, lalu terbitkan token baru untuk pemanggil
+    supaya perangkat yang menekan tombol tidak ikut keluar. Perangkat lain akan
+    terlempar ke /login pada panggilan API berikutnya.
+    """
+    actor = get_current_actor()
+    if not actor:
+        return jsonify({'error': 'Sesi tidak valid'}), 401
+
+    actor.sessionEpoch = int(actor.sessionEpoch or 0) + 1
+    db.session.commit()
+
+    log_activity('LOGOUT_OTHER_DEVICES', user_id=actor.id,
+                 details=f'{actor.username} mengeluarkan sesi di perangkat lain')
+
+    return jsonify({
+        'message': 'Semua sesi di perangkat lain sudah dikeluarkan',
+        'token': issue_token(actor)
+    })
 
 
 @auth_bp.route('/me/password', methods=['PUT'])

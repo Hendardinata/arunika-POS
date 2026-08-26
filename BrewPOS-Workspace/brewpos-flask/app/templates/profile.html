@@ -111,6 +111,20 @@
             </form>
     </section>
 
+    <section class="card">
+        <div class="card-header">
+            <h3 class="card-title"><i class="fas fa-mobile-screen text-primary"></i> Perangkat Lain</h3>
+        </div>
+        <p class="text-muted" style="font-size: 0.8125rem; margin-bottom: 1rem;">
+            Mengeluarkan semua sesi akun ini di perangkat selain yang sedang kamu pakai.
+            Berguna kalau kamu pernah login di HP atau komputer yang bukan milikmu.
+            Perangkat itu akan diminta login ulang.
+        </p>
+        <button type="button" class="btn btn-danger" style="width: 100%;" id="btn-logout-others" onclick="logoutOtherDevices()">
+            <i class="fas fa-right-from-bracket"></i> Keluarkan Sesi di Perangkat Lain
+        </button>
+    </section>
+
 </div>
 {% endblock %}
 
@@ -268,6 +282,27 @@
         } finally {
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-floppy-disk"></i> Simpan Password Baru';
+        }
+    }
+
+    async function logoutOtherDevices() {
+        if (!confirm('Keluarkan semua sesi akun ini di perangkat lain? Perangkat tersebut harus login ulang.')) return;
+
+        const btn = document.getElementById('btn-logout-others');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...';
+
+        try {
+            const res = await apiFetch('/auth/me/logout-others', { method: 'POST' });
+            // Token lama ikut tercabut, jadi yang baru harus disimpan sekarang juga --
+            // kalau tidak, perangkat ini ikut terlempar ke /login pada panggilan berikutnya.
+            if (res && res.token) setUser(null, res.token);
+            showToast(res.message || 'Sesi di perangkat lain sudah dikeluarkan.', 'success');
+        } catch (e) {
+            showToast(e.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-right-from-bracket"></i> Keluarkan Sesi di Perangkat Lain';
         }
     }
 

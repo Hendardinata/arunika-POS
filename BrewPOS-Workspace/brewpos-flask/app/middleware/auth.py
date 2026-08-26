@@ -40,6 +40,11 @@ def _authenticate_request():
         payload = jwt.decode(token, secret, algorithms=['HS256'])
         g.user = payload
         request.user = payload
+        if _token_revoked(payload):
+            return jsonify({
+                'error': 'Unauthorized',
+                'message': 'Sesi ini sudah dikeluarkan dari perangkat lain'
+            }), 401
     except jwt.ExpiredSignatureError:
         return jsonify({'error': 'Unauthorized', 'message': 'Token has expired'}), 401
     except jwt.InvalidTokenError:
@@ -48,6 +53,23 @@ def _authenticate_request():
         return jsonify({'error': 'Unauthorized', 'message': str(e)}), 401
 
     return None
+
+
+def _token_revoked(payload):
+    """
+    True kalau epoch di token tertinggal dari epoch akun -- artinya pemiliknya
+    sudah mengeluarkan sesi ini. Satu lookup primary key per request API: murah
+    untuk POS satu toko, dan tanpa ini pencabutan baru berlaku setelah token
+    kedaluwarsa 24 jam kemudian.
+    """
+    from app.models.user import User
+    user = User.query.get(payload.get('id'))
+    if not user:
+        return False
+
+    # Token terbitan lama belum membawa sessionEpoch; dianggap epoch 0, jadi ikut
+    # tercabut begitu pemiliknya pernah menekan tombolnya.
+    return int(payload.get('sessionEpoch') or 0) != int(user.sessionEpoch or 0)
 
 
 def token_required(f):
