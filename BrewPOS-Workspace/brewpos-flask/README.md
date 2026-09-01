@@ -139,7 +139,10 @@ Ketiganya berlaku untuk seluruh halaman dan berjalan ulang lewat satu
    Dropdown yang tadinya pendek ikut berubah sendiri begitu datanya bertambah.
 2. **Tabel jadi kartu di bawah 640px.** Label tiap sel disalin dari `<thead>`
    ke `td[data-label]`, jadi 26 tabel yang ada -- dan tabel berikutnya -- dapat
-   tanpa diminta.
+   tanpa diminta. Selnya tetap **blok** dengan label dilabuhkan absolut di kiri,
+   bukan flex container: sebagai flex, tiap anak sel jadi item terpisah yang
+   berjejer ke samping, dan sel bertumpuk (nilai + jumlah bahan + catatan susut
+   di halaman HPP) terjepit lalu tumpah keluar kartu.
 3. **Kisi sebaris membungkus di bawah 640px.** Ada 32 tempat yang menulis
    `grid-template-columns` di atribut `style`; di layar 360px itu membuat
    seluruh halaman bisa digeser ke samping. Kisinya diubah jadi baris yang

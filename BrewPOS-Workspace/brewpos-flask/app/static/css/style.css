@@ -2684,14 +2684,18 @@ body.scroll-locked {
     background: transparent;
   }
 
+  /* Sel tetap BLOK, dan labelnya dilabuhkan absolut di kiri.
+     Bukan flex: sebagai flex container, tiap anak sel jadi item terpisah yang
+     berjejer ke samping. Sel di halaman HPP isinya bertumpuk -- nilai, jumlah
+     bahan, lalu catatan susut -- dan sebagai tiga item flex ketiganya terjepit
+     lalu tumpah keluar kartu ("+susut 5% -> Rp 9.702" terpotong tepi kanan).
+     Sebagai blok, isi sel menumpuk persis seperti di layar lebar. */
   .custom-table td {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 16px;
+    position: relative;
     text-align: right;
-    padding: 9px 14px;
+    padding: 9px 14px 9px 42%;
     border-bottom: 1px solid var(--border-light);
+    min-height: 40px;
   }
 
   .custom-table tr td:last-child {
@@ -2700,13 +2704,25 @@ body.scroll-locked {
 
   .custom-table td[data-label]::before {
     content: attr(data-label);
-    flex: 0 0 auto;
+    position: absolute;
+    left: 14px;
+    top: 11px;
+    width: calc(42% - 24px);
     text-align: left;
     font-size: 0.6562rem;
+    line-height: 1.35;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--text-muted);
     font-weight: 600;
+  }
+
+  /* Sebagian sel menulis white-space: nowrap di atribut style-nya sendiri
+     (mis. kolom Aksi di halaman HPP). Dalam bentuk kartu itu menahan tombolnya
+     tetap satu baris sampai keluar kartu, jadi harus ditimpa -- dan atribut
+     style hanya bisa dikalahkan dengan !important. */
+  .custom-table td[style] {
+    white-space: normal !important;
   }
 
   /* Sel tanpa label (baris "Memuat...", "Belum ada data") tetap satu blok penuh
