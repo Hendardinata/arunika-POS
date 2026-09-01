@@ -176,6 +176,52 @@ def _daftarkan_halaman_pisahan(conn):
         print(f"[Schema Sync] FAILED mewariskan /users ke allowedPages khusus: {e}")
 
 
+def _buka_database_untuk_owner(conn):
+    """
+    Buka halaman /database untuk ADMIN dan OWNER -- sekali saja.
+
+    Saat halaman ini lahir, backup dan restore sama-sama dikunci Superadmin.
+    Kebijakannya lalu dipisah: membuat dan mengunduh cadangan turun ke
+    Admin/Owner (itu data tokonya sendiri), sementara memulihkan tetap wajib
+    disetujui Superadmin lewat sandi yang diketik saat itu juga.
+
+    Dijalankan SEKALI dan ditandai di SystemSettings. Kalau tidak, tiap restart
+    akan memaksa izinnya kembali terbuka, dan pemilik yang sengaja menutupnya
+    lagi lewat Matriks Hak Akses tidak akan pernah bisa membuatnya tetap
+    tertutup.
+    """
+    PENANDA = 'MIGRASI_DATABASE_UNTUK_OWNER'
+    try:
+        sudah = conn.execute(text(
+            "SELECT COUNT(*) FROM [SystemSettings] WHERE [key] = :k"), {'k': PENANDA}).scalar()
+        if sudah:
+            return
+    except Exception as e:
+        print(f"[Schema Sync] Lewati pembukaan /database (SystemSettings): {e}")
+        return
+
+    try:
+        conn.execute(text("""
+            UPDATE ra
+               SET ra.[canView] = 1, ra.[canEdit] = 1
+              FROM [RoleAccess] ra
+              JOIN [AppMenu] m ON m.[id] = ra.[appMenuId] AND m.[path] = '/database'
+             WHERE ra.[role] IN ('ADMIN', 'OWNER')
+        """))
+        # updatedAt NOT NULL tanpa default di sisi basis data -- nilainya biasanya
+        # diisi ORM, dan di sini tidak ada ORM yang mengisinya.
+        conn.execute(text(
+            "INSERT INTO [SystemSettings] ([key], [value], [description], [updatedAt]) "
+            "VALUES (:k, '1', :d, GETDATE())"),
+            {'k': PENANDA,
+             'd': 'Penanda sekali jalan: /database dibuka untuk Admin/Owner '
+                  '(restore tetap wajib konfirmasi Superadmin)'})
+        conn.commit()
+        print("[Schema Sync] /database dibuka untuk Admin/Owner")
+    except Exception as e:
+        print(f"[Schema Sync] FAILED membuka /database untuk Admin/Owner: {e}")
+
+
 def auto_sync_schema(app):
     """
     Automatically checks and adds missing columns to existing MSSQL tables without data loss.
@@ -419,6 +465,7 @@ def auto_sync_schema(app):
 
                 _migrate_customer_identity(conn)
                 _daftarkan_halaman_pisahan(conn)
+                _buka_database_untuk_owner(conn)
 
                 try:
                     for needle, value in backfill_updates:

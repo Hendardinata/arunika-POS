@@ -190,26 +190,43 @@ tiap bagian punya alamat sendiri dan izinnya bisa diatur satu per satu:
 |---|---|---|
 | Pengaturan Sistem | `/settings` | Profil toko, parameter struk, tutup buku, tes printer |
 | Akun & Hak Akses | `/users` | Akun login, izin per-user, matriks hak akses role |
-| Manajemen Basis Data | `/database` | Backup & restore (Superadmin) |
+| Manajemen Basis Data | `/database` | Backup (Admin/Owner) & restore (konfirmasi Superadmin) |
 
 Untuk basis data yang sudah jalan, `/users` dan `/database` didaftarkan otomatis
 saat server start (`db_migrator`). `/users` **mewarisi izin `/settings` apa
 adanya** — termasuk daftar khusus per-user — karena di sanalah kelola akun dulu
-berada; `/database` hanya dibuka untuk Superadmin. Izin yang sudah pernah diubah
+berada; `/database` dibuka untuk Admin/Owner ke atas. Izin yang sudah pernah diubah
 lewat halaman Akun & Hak Akses tidak disentuh.
 
 ## Backup & Restore Basis Data
 
-Halamannya sendiri di **Sistem -> Manajemen Basis Data** (`/database`), dan hanya
-terlihat oleh **Superadmin**: berkas `.bak` berisi seluruh isi basis data,
-termasuk hash sandi setiap akun, jadi mengunduhnya sama beratnya dengan
-memulihkannya.
+Halamannya sendiri di **Sistem -> Manajemen Basis Data** (`/database`). Izinnya
+dua tingkat, karena bobot kedua tindakan ini jauh berbeda:
+
+| Tindakan | Siapa |
+|---|---|
+| Buat, unduh, hapus cadangan | **Admin/Owner** ke atas |
+| Pulihkan (restore) | Admin/Owner boleh menekan, tapi **wajib disetujui Superadmin** dengan sandi yang diketik saat itu juga |
 
 - **Buat Backup Sekarang** menjalankan `BACKUP DATABASE` penuh. Hasilnya satu
   berkas `.bak` di folder `backups/`, bisa diunduh lewat tombol **Unduh**.
 - **Pulihkan** menimpa seluruh basis data dengan isi cadangan. Semua sesi kasir
   yang sedang berjalan terputus, dan langkah ini tidak bisa dibatalkan. Bisa dari
   cadangan yang sudah ada di server, atau dari berkas `.bak` yang diunggah.
+
+Konfirmasi Superadmin diminta untuk **setiap** pemulihan, termasuk saat yang
+login memang Superadmin. Sesi yang tertinggal terbuka di perangkat lain tidak
+boleh cukup untuk menghapus isi toko. Percobaannya dibatasi rem yang sama dengan
+halaman login -- tanpa itu endpoint restore jadi alat penebak sandi Superadmin
+yang tidak tercatat di manapun sebagai kegagalan login. Catatan aktivitas
+menyimpan dua nama sekaligus: yang menjalankan dan yang menyetujui.
+
+Untuk basis data yang sudah jalan, `/database` dibuka untuk Admin/Owner otomatis
+saat server start -- **sekali saja**, ditandai di `SystemSettings`. Kalau nanti
+ditutup lagi lewat Matriks Hak Akses, pilihan itu tidak akan ditimpa restart.
+
+Berkas `.bak` berisi seluruh isi basis data, **termasuk hash sandi setiap akun**.
+Itu sebabnya mengunduhnya berhenti di Admin/Owner dan tidak turun lebih jauh.
 
 Berkas `.bak` **ditulis oleh SQL Server**, bukan oleh Flask. Karena itu foldernya
 harus bisa ditulis akun layanan SQL Server sekaligus dibaca proses Flask:

@@ -12,7 +12,8 @@
             <h3 class="card-title"><i class="fas fa-database text-primary"></i> Manajemen Basis Data</h3>
             <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
                 Cadangkan seluruh isi basis data ke satu berkas <code>.bak</code>, atau pulihkan
-                dari cadangan. <strong>Hanya Superadmin.</strong>
+                dari cadangan. Membuat &amp; mengunduh cadangan: <strong>Admin/Owner</strong>.
+                Memulihkan: <strong>wajib disetujui Superadmin</strong>.
             </p>
         </div>
         <button class="btn btn-primary btn-sm" onclick="buatBackupDb()" id="btn-backup-db">
@@ -52,19 +53,43 @@
             <i class="fas fa-upload"></i> Unggah &amp; Pulihkan
         </button>
     </div>
+
+    <!-- Konfirmasi Superadmin. Diisi tepat sebelum memulihkan, bukan disimpan:
+         sesi yang tertinggal terbuka di perangkat lain tidak boleh cukup untuk
+         menghapus isi toko. Sandinya diverifikasi di server; kotak ini hanya
+         tempat mengetiknya. -->
+    <div style="border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px 14px; margin-top: 12px;">
+        <div style="font-size: 0.8125rem; font-weight: 700; margin-bottom: 4px;">
+            <i class="fas fa-user-shield text-primary"></i> Konfirmasi Superadmin
+        </div>
+        <p style="font-size: 0.6875rem; color: var(--text-muted); margin-bottom: 10px;">
+            Wajib diisi untuk setiap pemulihan, termasuk bila Anda sendiri Superadmin.
+            Tidak dipakai untuk membuat atau mengunduh cadangan.
+        </p>
+        <div class="form-group" style="margin-bottom: 8px;">
+            <label class="form-label" for="sa-username">Username Superadmin</label>
+            <input type="text" id="sa-username" class="form-control" autocomplete="off"
+                   placeholder="Username Superadmin">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="sa-password">Sandi Superadmin</label>
+            <input type="password" id="sa-password" class="form-control" autocomplete="new-password"
+                   placeholder="Sandi Superadmin">
+        </div>
+    </div>
 </div>
 
-<!-- Terlihat hanya untuk yang bukan Superadmin. Halaman web tidak dijaga di
-     server (token ada di sisi klien), jadi tanpa pesan ini pembuka halaman
-     cuma melihat kartu kosong tanpa tahu kenapa. Gerbang sebenarnya ada di
-     /api/database, yang menolak siapa pun di bawah Superadmin. -->
+<!-- Terlihat untuk yang di bawah Admin/Owner. Halaman web tidak dijaga di
+     server (token ada di sisi klien), jadi tanpa pesan ini pembukanya cuma
+     melihat kartu kosong tanpa tahu kenapa. Gerbang sebenarnya ada di
+     /api/database. -->
 <div class="card" id="db-tanpa-izin" style="display: none;">
     <div style="padding: 40px 24px; text-align: center;">
         <i class="fas fa-lock" style="font-size: 28px; color: var(--text-muted); margin-bottom: 12px;"></i>
-        <h3 style="margin: 0 0 6px; font-size: 1rem;">Khusus Superadmin</h3>
+        <h3 style="margin: 0 0 6px; font-size: 1rem;">Khusus Admin/Owner</h3>
         <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 0;">
             Cadangan basis data berisi seluruh data toko, termasuk sandi setiap akun,
-            jadi hanya Superadmin yang boleh membuka halaman ini.
+            jadi hanya Admin/Owner ke atas yang boleh membuka halaman ini.
         </p>
     </div>
 </div>
@@ -87,7 +112,8 @@
 
     async function muatManajemenDb() {
         const user = getUser();
-        if (!user || (user.role || '').toUpperCase() !== 'SUPERADMIN') {
+        const bolehKelola = ['SUPERADMIN', 'ADMIN', 'OWNER'];
+        if (!user || !bolehKelola.includes((user.role || '').toUpperCase())) {
             document.getElementById('db-tanpa-izin').style.display = '';
             return;
         }
@@ -173,13 +199,32 @@
         }
     }
 
+    /**
+     * Ambil konfirmasi Superadmin, lalu tanya sekali lagi.
+     *
+     * Mengembalikan null bila dibatalkan atau kotaknya belum diisi. Sandinya
+     * TIDAK disimpan di mana pun -- dibaca saat dikirim lalu kotaknya dikosongkan.
+     */
     function konfirmasiRestore(sumber) {
-        return confirm(
+        const nama = document.getElementById('sa-username').value.trim();
+        const sandi = document.getElementById('sa-password').value;
+        if (!nama || !sandi) {
+            showToast('Isi username dan sandi Superadmin dulu untuk menyetujui pemulihan.', 'error');
+            document.getElementById(nama ? 'sa-password' : 'sa-username').focus();
+            return null;
+        }
+        const lanjut = confirm(
             `PULIHKAN dari ${sumber}?\n\n` +
             'SELURUH data sekarang akan ditimpa dan tidak bisa dikembalikan. ' +
             'Semua sesi kasir yang sedang berjalan akan terputus.\n\n' +
+            `Disetujui sebagai Superadmin: ${nama}\n\n` +
             'Buat cadangan dulu bila belum.'
         );
+        return lanjut ? { nama, sandi } : null;
+    }
+
+    function bersihkanKonfirmasi() {
+        document.getElementById('sa-password').value = '';
     }
 
     async function kirimRestore(options) {
@@ -194,24 +239,33 @@
     }
 
     async function pulihkanDbDariServer(filename) {
-        if (!konfirmasiRestore(filename)) return;
+        const izin = konfirmasiRestore(filename);
+        if (!izin) return;
         await kirimRestore({
             method: 'POST',
-            body: JSON.stringify({ filename, confirm: 'PULIHKAN' })
+            body: JSON.stringify({
+                filename, confirm: 'PULIHKAN',
+                superadminUsername: izin.nama, superadminPassword: izin.sandi
+            })
         });
+        bersihkanKonfirmasi();
     }
 
     async function pulihkanDbDariUnggahan() {
         const input = document.getElementById('db-restore-file');
         const berkas = input.files && input.files[0];
         if (!berkas) { showToast('Pilih berkas .bak dulu.', 'error'); return; }
-        if (!konfirmasiRestore(berkas.name)) return;
+        const izin = konfirmasiRestore(berkas.name);
+        if (!izin) return;
 
         const form = new FormData();
         form.append('file', berkas);
         form.append('confirm', 'PULIHKAN');
+        form.append('superadminUsername', izin.nama);
+        form.append('superadminPassword', izin.sandi);
         await kirimRestore({ method: 'POST', body: form });
         input.value = '';
+        bersihkanKonfirmasi();
     }
 </script>
 {% endblock %}

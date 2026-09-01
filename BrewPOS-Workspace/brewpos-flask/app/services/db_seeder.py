@@ -52,8 +52,8 @@ APP_PAGES = [
 
 DEFAULT_ROLE_PERMISSIONS = {
     'SUPERADMIN': ['/dashboard', '/pos', '/monitoring', '/menus', '/hpp', '/inventory', '/customers', '/expenses', '/reports', '/settings', '/users', '/database'],
-    'ADMIN': ['/dashboard', '/pos', '/monitoring', '/menus', '/hpp', '/inventory', '/customers', '/expenses', '/reports', '/settings', '/users'],
-    'OWNER': ['/dashboard', '/pos', '/monitoring', '/menus', '/hpp', '/inventory', '/customers', '/expenses', '/reports', '/settings', '/users'],
+    'ADMIN': ['/dashboard', '/pos', '/monitoring', '/menus', '/hpp', '/inventory', '/customers', '/expenses', '/reports', '/settings', '/users', '/database'],
+    'OWNER': ['/dashboard', '/pos', '/monitoring', '/menus', '/hpp', '/inventory', '/customers', '/expenses', '/reports', '/settings', '/users', '/database'],
     'HEADBAR': ['/pos', '/monitoring', '/menus', '/hpp', '/inventory', '/expenses'],
     'CASHIER': ['/pos', '/monitoring', '/customers']
 }
