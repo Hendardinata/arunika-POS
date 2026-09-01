@@ -80,6 +80,102 @@ def _migrate_customer_identity(conn):
             print(f"[Schema Sync] FAILED creating {index_name}: {e}")
 
 
+# Halaman yang dulunya menyatu di /settings, kini berdiri sendiri. Dipisah supaya
+# tiap kartunya punya alamat sendiri dan bisa diatur izinnya satu per satu.
+HALAMAN_PISAHAN = [
+    ('/users', 'Akun & Hak Akses', 'users-gear'),
+    ('/database', 'Manajemen Basis Data', 'database'),
+]
+
+
+def _daftarkan_halaman_pisahan(conn):
+    """
+    Daftarkan /users dan /database sebagai halaman tersendiri di AppMenu.
+
+    Tidak bisa diserahkan ke db_seeder: seeder menimpa SELURUH RoleAccess ke nilai
+    bawaan tiap kali jalan, jadi ia sengaja tidak ikut saat server start (lihat
+    create_app). Di sini yang dilakukan hanya MENAMBAH baris yang belum ada --
+    izin yang sudah disetel lewat halaman Akun & Hak Akses tidak pernah disentuh.
+
+    Izin awalnya diwarisi dari /settings, karena di sanalah kelola user dulu
+    berada: siapa pun yang tadinya bisa membuka Pengaturan harus tetap bisa
+    mengelola akun setelah dipisah. Kecuali /database -- isinya cadangan seluruh
+    basis data termasuk hash sandi, jadi hanya SUPERADMIN.
+    """
+    try:
+        for path, nama, ikon in HALAMAN_PISAHAN:
+            conn.execute(text("""
+                IF NOT EXISTS (SELECT 1 FROM [AppMenu] WHERE [path] = :path)
+                    INSERT INTO [AppMenu] ([name], [path], [icon])
+                    VALUES (:nama, :path, :ikon)
+            """), {'path': path, 'nama': nama, 'ikon': ikon})
+        conn.commit()
+    except Exception as e:
+        print(f"[Schema Sync] FAILED mendaftarkan halaman pisahan: {e}")
+        return
+
+    # /users mewarisi izin /settings apa adanya.
+    try:
+        conn.execute(text("""
+            INSERT INTO [RoleAccess] ([role], [appMenuId], [canView], [canEdit])
+            SELECT ra.[role], baru.[id], ra.[canView], ra.[canEdit]
+              FROM [RoleAccess] ra
+              JOIN [AppMenu] lama ON lama.[id] = ra.[appMenuId] AND lama.[path] = '/settings'
+             CROSS JOIN (SELECT [id] FROM [AppMenu] WHERE [path] = '/users') baru
+             WHERE NOT EXISTS (SELECT 1 FROM [RoleAccess] x
+                                WHERE x.[role] = ra.[role] AND x.[appMenuId] = baru.[id])
+        """))
+        conn.commit()
+    except Exception as e:
+        print(f"[Schema Sync] FAILED menurunkan izin /settings ke /users: {e}")
+
+    # /database hanya SUPERADMIN; role lain tetap punya barisnya, tapi tertutup.
+    try:
+        conn.execute(text("""
+            INSERT INTO [RoleAccess] ([role], [appMenuId], [canView], [canEdit])
+            SELECT r.[role], m.[id],
+                   CASE WHEN r.[role] = 'SUPERADMIN' THEN 1 ELSE 0 END,
+                   CASE WHEN r.[role] = 'SUPERADMIN' THEN 1 ELSE 0 END
+              FROM (SELECT DISTINCT [role] FROM [RoleAccess]) r
+             CROSS JOIN (SELECT [id] FROM [AppMenu] WHERE [path] = '/database') m
+             WHERE NOT EXISTS (SELECT 1 FROM [RoleAccess] x
+                                WHERE x.[role] = r.[role] AND x.[appMenuId] = m.[id])
+        """))
+        conn.commit()
+    except Exception as e:
+        print(f"[Schema Sync] FAILED menyiapkan izin /database: {e}")
+
+    # Nama menu /settings ikut menyempit sekarang isinya tinggal parameter toko.
+    try:
+        conn.execute(text(
+            "UPDATE [AppMenu] SET [name] = 'Pengaturan Sistem' WHERE [path] = '/settings'"))
+        conn.commit()
+    except Exception as e:
+        print(f"[Schema Sync] Nama menu /settings note: {e}")
+
+    # Pengguna dengan daftar halaman khusus (User.allowedPages) tidak melewati
+    # RoleAccess sama sekali. Tanpa langkah ini, yang tadinya diberi /settings
+    # kehilangan kelola akun begitu halamannya pindah alamat.
+    try:
+        import json
+        from app.models.user import User
+
+        for user in User.query.filter(User.allowedPages.isnot(None)).all():
+            try:
+                daftar = json.loads(user.allowedPages)
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(daftar, list) or '/settings' not in daftar or '/users' in daftar:
+                continue
+            daftar.insert(daftar.index('/settings') + 1, '/users')
+            user.allowedPages = json.dumps(daftar)
+            print(f"[Schema Sync] {user.username}: /users diwariskan dari /settings")
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"[Schema Sync] FAILED mewariskan /users ke allowedPages khusus: {e}")
+
+
 def auto_sync_schema(app):
     """
     Automatically checks and adds missing columns to existing MSSQL tables without data loss.
@@ -322,6 +418,7 @@ def auto_sync_schema(app):
                         print(f"[Schema Sync] FAILED shift backfill: {e}")
 
                 _migrate_customer_identity(conn)
+                _daftarkan_halaman_pisahan(conn)
 
                 try:
                     for needle, value in backfill_updates:

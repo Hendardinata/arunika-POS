@@ -5,6 +5,29 @@
 const API_BASE = '/api';
 let cachedStoreSettings = null;
 
+/**
+ * Nilai token warna dari CSS, sebagai string yang bisa dipakai di JavaScript.
+ *
+ * Chart.js menggambar ke <canvas>, dan canvas TIDAK mengerti `var(--x)` -- string
+ * itu diterima diam-diam lalu digambar sebagai transparan. Jadi palet grafik
+ * tidak bisa sekadar menulis `var(--color-primary)`; nilainya harus dibaca dulu
+ * dari :root supaya tetap satu sumber kebenaran dengan stylesheet.
+ */
+function cssVar(nama, cadangan = '#111111') {
+    const nilai = getComputedStyle(document.documentElement)
+        .getPropertyValue(nama).trim();
+    return nilai || cadangan;
+}
+
+/**
+ * Tangga netral untuk grafik: satu aksen di depan, sisanya abu yang makin muda.
+ * Deret warna-warni membuat mata menebak-nebak arti tiap warna; di sini urutan
+ * potongannya sendiri yang membawa informasi (terbesar lebih dulu).
+ */
+function paletGrafik() {
+    return [cssVar('--color-primary'), '#4A4A4A', '#7A7A7A', '#A8A8A8', '#D0D0D0'];
+}
+
 // Format Rupiah Helper
 function formatRp(amount) {
     if (amount === undefined || amount === null || isNaN(amount)) return 'Rp 0';
@@ -1315,3 +1338,261 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(tampilkanDiagnostikTampilan, 1200);
     }
 });
+
+/* ==========================================================================
+   Penyempurna antarmuka yang berjalan sendiri
+
+   Dua hal di bawah ini sengaja dipasang dari sini, bukan ditulis di tiap
+   templat: keduanya berlaku untuk SELURUH halaman, dan tabel maupun dropdown
+   di aplikasi ini digambar ulang lewat innerHTML terus-menerus. Menaruhnya di
+   templat berarti menuliskannya dua puluh enam kali lalu berharap tidak ada
+   yang lupa saat menambah tabel berikutnya.
+   ========================================================================== */
+
+/* Di bawah ini dropdown biasa sudah nyaman digulung; di atasnya mencari satu
+   bahan di antara puluhan berarti menggulung buta. */
+const AMBANG_CARI_DROPDOWN = 8;
+
+/**
+ * Jadikan sebuah <select> bisa diketik untuk menyaring pilihannya.
+ *
+ * <select> ASLINYA tetap tinggal di DOM. Ini keputusan yang menentukan seluruh
+ * bentuk fungsi ini: seluruh aplikasi mengisi dropdown dengan
+ * `sel.innerHTML = ...` dan membacanya dengan `sel.value` (Catat Pembelian,
+ * Resep, Pengeluaran, HPP, Reward POS -- sembilan tempat). Kalau elemennya
+ * diganti widget sendiri, kesembilan tempat itu harus dibongkar dan setiap
+ * dropdown baru nanti wajib ingat memakai API yang berbeda. Dengan membungkus,
+ * `innerHTML`, `.value`, `onchange`, dan FormData tetap bekerja apa adanya.
+ *
+ * <datalist> bawaan HTML tidak dipakai: ia mengembalikan teks, sementara
+ * dropdown di sini membawa id numerik, dan dukungannya di WebView Android --
+ * mesin yang sebenarnya dipakai kasir -- tidak bisa diandalkan.
+ */
+function pasangDropdownCari(select) {
+    if (select.dataset.comboSiap === '1' || select.multiple) return;
+    select.dataset.comboSiap = '1';
+
+    const bungkus = document.createElement('div');
+    bungkus.className = 'combo';
+    select.parentNode.insertBefore(bungkus, select);
+    bungkus.appendChild(select);
+
+    const kotak = document.createElement('input');
+    kotak.type = 'text';
+    kotak.className = 'form-control combo-input';
+    kotak.autocomplete = 'off';
+    kotak.setAttribute('role', 'combobox');
+    kotak.setAttribute('aria-expanded', 'false');
+    kotak.setAttribute('aria-autocomplete', 'list');
+
+    const panel = document.createElement('div');
+    panel.className = 'combo-panel';
+    panel.setAttribute('role', 'listbox');
+
+    bungkus.appendChild(kotak);
+    bungkus.insertAdjacentHTML('beforeend',
+        '<i class="fas fa-chevron-down combo-caret" aria-hidden="true"></i>');
+    bungkus.appendChild(panel);
+
+    // Select asli disembunyikan dari pembaca layar dan dari urutan Tab: kalau
+    // dibiarkan, pengguna keyboard menemui dua kontrol untuk satu isian yang sama.
+    select.setAttribute('aria-hidden', 'true');
+    select.tabIndex = -1;
+
+    let terbuka = false;
+    let aktif = -1;
+
+    const labelTerpilih = () => {
+        const o = select.options[select.selectedIndex];
+        return o ? o.textContent.trim() : '';
+    };
+
+    const sinkronLabel = () => {
+        if (!terbuka) kotak.value = labelTerpilih();
+        kotak.disabled = select.disabled;
+    };
+
+    // `select.value = x` tidak memicu event apa pun dan tidak terlihat oleh
+    // MutationObserver, padahal beberapa halaman memang menyetel nilainya
+    // langsung (mis. saat membuka modal Ubah Pengeluaran). Tanpa penyadap ini
+    // labelnya tetap menampilkan pilihan sebelumnya.
+    const asli = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+    if (asli && asli.set) {
+        Object.defineProperty(select, 'value', {
+            configurable: true,
+            get() { return asli.get.call(this); },
+            set(v) { asli.set.call(this, v); sinkronLabel(); },
+        });
+    }
+
+    const gambar = (saring = '') => {
+        const q = saring.trim().toLowerCase();
+        const opsi = Array.from(select.options);
+        // Dicocokkan di mana saja, bukan hanya di awal: kasir mengingat "susu
+        // full cream" sebagai "cream" sesering sebagai "susu".
+        const cocok = opsi.filter(o => !q || o.textContent.toLowerCase().includes(q));
+        aktif = cocok.findIndex(o => o.selected);
+
+        if (!cocok.length) {
+            panel.innerHTML = '<div class="combo-kosong">Tidak ada yang cocok</div>';
+            return;
+        }
+        panel.innerHTML = cocok.map((o, i) => {
+            const dipilih = o.selected ? ' dipilih' : '';
+            return `<div class="combo-option${dipilih}" role="option" tabindex="-1"` +
+                   ` aria-selected="${o.selected}" data-idx="${opsi.indexOf(o)}">` +
+                   `${o.textContent.trim()}</div>`;
+        }).join('');
+        tandaiAktif();
+    };
+
+    const tandaiAktif = () => {
+        const baris = panel.querySelectorAll('.combo-option');
+        baris.forEach((el, i) => el.classList.toggle('aktif', i === aktif));
+        if (aktif >= 0 && baris[aktif]) {
+            baris[aktif].scrollIntoView({ block: 'nearest' });
+        }
+    };
+
+    const buka = () => {
+        if (terbuka || select.disabled) return;
+        terbuka = true;
+        bungkus.classList.add('terbuka');
+        kotak.setAttribute('aria-expanded', 'true');
+        // Dikosongkan supaya bisa langsung diketik tanpa menghapus dulu; label
+        // yang sedang aktif pindah jadi placeholder agar tetap terlihat.
+        kotak.placeholder = labelTerpilih() || 'Cari...';
+        kotak.value = '';
+        gambar('');
+    };
+
+    const tutup = () => {
+        if (!terbuka) return;
+        terbuka = false;
+        bungkus.classList.remove('terbuka');
+        kotak.setAttribute('aria-expanded', 'false');
+        kotak.value = labelTerpilih();
+    };
+
+    const pilih = (idx) => {
+        if (idx == null || !select.options[idx]) return;
+        select.selectedIndex = idx;
+        tutup();
+        // Halaman-halaman lama bergantung pada onchange (mis. menghitung ulang
+        // harga satuan setelah bahan dipilih), jadi eventnya harus tetap lahir.
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        select.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+
+    kotak.addEventListener('focus', buka);
+    kotak.addEventListener('click', buka);
+    kotak.addEventListener('input', () => { if (terbuka) gambar(kotak.value); });
+
+    kotak.addEventListener('keydown', (e) => {
+        const baris = panel.querySelectorAll('.combo-option');
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (!terbuka) return buka();
+            if (!baris.length) return;
+            aktif = e.key === 'ArrowDown'
+                ? Math.min(aktif + 1, baris.length - 1)
+                : Math.max(aktif - 1, 0);
+            tandaiAktif();
+        } else if (e.key === 'Enter') {
+            if (terbuka) {
+                e.preventDefault();
+                if (baris[aktif]) pilih(Number(baris[aktif].dataset.idx));
+            }
+        } else if (e.key === 'Escape') {
+            if (terbuka) { e.preventDefault(); tutup(); }
+        } else if (e.key === 'Tab') {
+            tutup();
+        }
+    });
+
+    panel.addEventListener('mousedown', (e) => {
+        // mousedown, bukan click: click datang setelah blur, dan panelnya sudah
+        // tertutup sebelum pilihannya sempat terbaca.
+        const opsi = e.target.closest('.combo-option');
+        if (!opsi) return;
+        e.preventDefault();
+        pilih(Number(opsi.dataset.idx));
+    });
+
+    document.addEventListener('mousedown', (e) => {
+        if (terbuka && !bungkus.contains(e.target)) tutup();
+    });
+
+    // Isi dropdown diganti ulang (data dimuat dari server) -> label ikut menyesuaikan.
+    new MutationObserver(sinkronLabel).observe(select, { childList: true });
+    sinkronLabel();
+}
+
+/**
+ * Pindai halaman: dropdown yang pilihannya sudah banyak dijadikan bisa dicari.
+ *
+ * Dijalankan ulang tiap kali DOM berubah, jadi dropdown yang tadinya pendek
+ * ikut berubah sendiri begitu datanya bertambah -- tanpa ada yang perlu
+ * mengingat untuk menandainya.
+ *
+ * ponytail: sekali dipasang, tidak pernah dilepas lagi walau pilihannya kembali
+ * sedikit. Di aplikasi ini daftar bahan dan kategori hanya bertambah; kalau
+ * suatu saat ada yang menyusut drastis, di sinilah pelepasannya ditambahkan.
+ */
+function pindaiDropdownCari(akar = document) {
+    akar.querySelectorAll('select').forEach((sel) => {
+        const tanda = sel.dataset.searchable;
+        if (tanda === 'off') return;
+        if (tanda !== undefined || sel.options.length >= AMBANG_CARI_DROPDOWN) {
+            pasangDropdownCari(sel);
+        }
+    });
+}
+
+/**
+ * Salin judul kolom ke tiap sel sebagai data-label.
+ *
+ * Di layar sempit tabel berubah jadi kartu (lihat .custom-table di style.css),
+ * dan tiap sel butuh label kolomnya sendiri -- tanpa itu yang terbaca hanya
+ * deretan angka tanpa keterangan. Labelnya diambil dari <thead> yang memang
+ * sudah ada, jadi tidak ada satu pun dari 26 tabel yang perlu disunting, dan
+ * tabel berikutnya ikut dapat tanpa diminta.
+ */
+function pasangLabelKolom(akar = document) {
+    akar.querySelectorAll('table.custom-table').forEach((tabel) => {
+        const judul = Array.from(tabel.querySelectorAll('thead th'))
+            .map(th => th.textContent.trim());
+        if (!judul.length) return;
+        tabel.querySelectorAll('tbody tr').forEach((tr) => {
+            const sel = tr.querySelectorAll('td');
+            // Baris "Memuat..." / "Belum ada data" memakai colspan; jumlah selnya
+            // tidak cocok dan memang tidak butuh label.
+            if (sel.length !== judul.length) return;
+            sel.forEach((td, i) => {
+                if (judul[i] && td.getAttribute('data-label') !== judul[i]) {
+                    td.setAttribute('data-label', judul[i]);
+                }
+            });
+        });
+    });
+}
+
+(function pantauPerubahanHalaman() {
+    let tertunda = null;
+    const jalankan = () => {
+        tertunda = null;
+        pindaiDropdownCari();
+        pasangLabelKolom();
+    };
+
+    document.addEventListener('DOMContentLoaded', jalankan);
+
+    // Hanya childList: kedua fungsi di atas MENULIS atribut, dan mengamati
+    // atribut berarti mengamati perubahan yang dibuat sendiri -- putaran tanpa
+    // ujung. Ditunda satu frame supaya render yang menambah seratus baris
+    // sekaligus hanya memicu satu kali kerja.
+    new MutationObserver(() => {
+        if (tertunda) return;
+        tertunda = requestAnimationFrame(jalankan);
+    }).observe(document.documentElement, { childList: true, subtree: true });
+})();

@@ -17,41 +17,43 @@
             justify-content: center;
             width: 100vw;
             height: 100vh;
-            background: linear-gradient(135deg, #F5EFEB 0%, #FAF8F5 50%, #EADBCE 100%);
+            background: var(--bg-surface);
             padding: 20px;
         }
         .login-box {
-            background-color: #FFFFFF;
+            background-color: var(--bg-card);
             border: 1px solid var(--border-color);
-            border-radius: var(--radius-xl);
-            padding: 42px;
+            border-radius: var(--radius-lg);
+            padding: 44px 40px;
             width: 100%;
-            max-width: 440px;
-            box-shadow: var(--shadow-lg);
+            max-width: 400px;
             position: relative;
         }
+        /* Satu-satunya bidang beraksen di halaman ini. Gradien dan cahaya di
+           bawahnya dilepas: keduanya menarik mata ke kotaknya, bukan ke merek
+           yang seharusnya dibaca. */
         .login-logo {
-            width: 72px;
-            height: 72px;
-            background: linear-gradient(135deg, var(--color-primary), #8F6647);
-            border-radius: var(--radius-lg);
+            width: 56px;
+            height: 56px;
+            background: var(--color-primary);
+            border-radius: var(--radius-md);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 2.125rem;
-            color: #FFF;
-            margin: 0 auto 20px;
-            box-shadow: 0 8px 20px rgba(111, 78, 55, 0.35);
+            font-size: 1.5rem;
+            color: var(--text-inverse);
+            margin: 0 auto 22px;
         }
         .login-header {
             text-align: center;
-            margin-bottom: 28px;
+            margin-bottom: 32px;
         }
         .login-header h2 {
             font-family: var(--font-heading);
-            font-size: 1.5rem;
-            font-weight: 800;
-            color: var(--color-primary);
+            font-size: 1.375rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--text-main);
             margin-bottom: 6px;
         }
         .login-header p {

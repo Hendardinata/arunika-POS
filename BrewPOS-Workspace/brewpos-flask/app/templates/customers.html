@@ -133,8 +133,8 @@
                 </div>
 
                 <!-- Daily Free Quota for Employee -->
-                <div class="form-group" id="member-quota-group" style="display: none; background: #FFF8E1; padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid #FFE082;">
-                    <label class="form-label" style="font-size: 0.75rem; color: #8D6E63; font-weight: 700;">
+                <div class="form-group" id="member-quota-group" style="display: none; background: var(--color-warning-bg); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                    <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">
                         <i class="fas fa-mug-hot text-warning"></i> Jatah Minuman Gratis per Hari (Cup)
                     </label>
                     <input type="number" id="member-quota" class="form-control" placeholder="2" value="2" min="0">
@@ -497,7 +497,7 @@
         tbody.innerHTML = customers.map(c => {
             const isEmp = (c.customerType === 'EMPLOYEE');
             const typeBadge = isEmp 
-                ? `<span class="badge-chip warning" style="font-weight: 700;"><i class="fas fa-mug-hot"></i> Tipe Karyawan</span><div style="font-size: 0.6562rem; color: #8D6E63; margin-top: 2px;">Jatah: ${c.dailyQuota || 0} cup/hr</div>`
+                ? `<span class="badge-chip warning" style="font-weight: 700;"><i class="fas fa-mug-hot"></i> Tipe Karyawan</span><div style="font-size: 0.6562rem; color: var(--text-muted); margin-top: 2px;">Jatah: ${c.dailyQuota || 0} cup/hr</div>`
                 : `<span class="badge-chip success" style="font-weight: 700;"><i class="fas fa-user"></i> Tipe Pelanggan</span>`;
 
             const isActive = (c.status === 'AKTIF');
@@ -529,7 +529,7 @@
                     </td>
                     <td>
                         <span class="badge-chip primary" style="font-weight: 800;">Lvl ${c.level || 1}</span>
-                        <div style="width: 80px; height: 5px; background: #EADBCE; border-radius: 3px; margin-top: 4px; overflow: hidden;">
+                        <div style="width: 80px; height: 5px; background: var(--border-color); border-radius: 3px; margin-top: 4px; overflow: hidden;">
                             <div style="width: ${xpPct}%; height: 100%; background: var(--color-secondary);"></div>
                         </div>
                     </td>
@@ -558,7 +558,7 @@
         }
 
         container.innerHTML = questsList.map(q => `
-            <div style="padding: 12px 14px; background: #FAF8F5; border-radius: var(--radius-md); border: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
+            <div style="padding: 12px 14px; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <strong style="font-size: 0.8438rem; color: var(--text-main);">${q.name}</strong>
                     <div style="font-size: 0.7188rem; color: var(--text-muted); margin-top: 2px;">${q.description || ''}</div>
@@ -583,7 +583,7 @@
         }
 
         container.innerHTML = badgesList.map(b => `
-            <div style="padding: 12px; background: #FAF8F5; border-radius: var(--radius-md); border: 1px solid var(--border-light); text-align: center;">
+            <div style="padding: 12px; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-light); text-align: center;">
                 <div style="font-size: 1.75rem; color: var(--color-secondary); margin-bottom: 6px;"><i class="fas fa-medal"></i></div>
                 <strong style="font-size: 0.7812rem; display: block; color: var(--text-main); line-height: 1.2;">${b.name}</strong>
                 <div style="font-size: 0.6875rem; color: var(--color-primary); font-weight: 700; margin-top: 4px;">≥ ${b.requiredTransactions} Order</div>
@@ -601,7 +601,7 @@
         }
 
         container.innerHTML = rewardsList.map(r => `
-            <div style="padding: 14px; background: #FAF8F5; border-radius: var(--radius-md); border: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
+            <div style="padding: 14px; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <strong style="font-size: 0.8438rem; color: var(--color-primary);">${r.name}</strong>
                     <div style="font-size: 0.6875rem; color: var(--text-muted); margin-top: 2px;">${r.description || ''}</div>
@@ -638,18 +638,18 @@
                 </div>
             </div>
 
-            <div style="background: #FAF8F5; padding: 12px 14px; border-radius: var(--radius-sm); margin-bottom: 14px;">
+            <div style="background: var(--bg-surface); padding: 12px 14px; border-radius: var(--radius-sm); margin-bottom: 14px;">
                 <div style="font-size: 0.6875rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Kontak Member</div>
                 <div style="margin-top: 4px; font-size: 0.8125rem;"><strong>No. HP:</strong> ${c.phone || '-'}</div>
                 <div style="margin-top: 2px; font-size: 0.8125rem;"><strong>Email:</strong> ${c.email || '-'}</div>
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
-                <div style="background: #FAF8F5; padding: 10px 14px; border-radius: var(--radius-sm);">
+                <div style="background: var(--bg-surface); padding: 10px 14px; border-radius: var(--radius-sm);">
                     <div style="font-size: 0.6875rem; color: var(--text-muted);">Poin Aktif</div>
                     <strong style="font-size: 1rem; color: var(--color-primary);">${c.points || 0} Pts</strong>
                 </div>
-                <div style="background: #FAF8F5; padding: 10px 14px; border-radius: var(--radius-sm);">
+                <div style="background: var(--bg-surface); padding: 10px 14px; border-radius: var(--radius-sm);">
                     <div style="font-size: 0.6875rem; color: var(--text-muted);">Streak Kunjungan</div>
                     <strong style="font-size: 1rem; color: var(--color-accent);">${c.streakCount || 0} Hari Berturut-turut</strong>
                 </div>

@@ -99,7 +99,7 @@
 
             <!-- Customer Meta Info Card -->
             <div id="customer-info-box">
-                <div style="font-size: 0.7188rem; color: var(--text-secondary); background: #FAF8F5; padding: 8px 10px; border-radius: var(--radius-xs); border: 1px solid var(--border-light);">
+                <div style="font-size: 0.7188rem; color: var(--text-secondary); background: var(--bg-surface); padding: 8px 10px; border-radius: var(--radius-xs); border: 1px solid var(--border-light);">
                     <i class="fas fa-user-circle"></i> Transaksi sebagai <strong>Guest</strong> (Tanpa Poin Loyalty)
                 </div>
             </div>
@@ -287,7 +287,7 @@
                     </span>
                 </label>
 
-                <div id="backdate-fields" style="display: none; margin-top: 10px; background: #FFF4E5; border: 1px solid #E8B96A; border-radius: var(--radius-sm); padding: 12px;">
+                <div id="backdate-fields" style="display: none; margin-top: 10px; background: var(--color-warning-bg); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px;">
                     <div class="form-group" style="margin-bottom: 10px;">
                         <label class="form-label">Tanggal &amp; Jam Transaksi</label>
                         <input type="datetime-local" id="backdate-datetime" class="form-control">
@@ -443,7 +443,7 @@
         if (!['SUPERADMIN', 'ADMIN', 'OWNER', 'HEADBAR'].includes(posRole)) {
             const discountInput = document.getElementById('order-discount-input');
             discountInput.readOnly = true;
-            discountInput.style.background = '#F5F5F5';
+            discountInput.style.background = 'var(--bg-surface)';
             document.getElementById('order-discount-locked-note').style.display = 'block';
         }
 
@@ -528,7 +528,10 @@
             return;
         }
 
-        const fallbackColors = ['#6F4E37', '#C89058', '#8F6647', '#D4A373', '#5A3D2A', '#A26743'];
+        // Petak pengganti saat menu belum berfoto. Netral dan senada: enam warna
+        // berbeda di katalog membuat kartu tanpa foto justru lebih menarik mata
+        // daripada kartu yang berfoto.
+        const fallbackColors = ['#EFEFEF', '#E8E8E8', '#E2E2E2', '#EBEBEB', '#E5E5E5', '#EDEDED'];
 
         grid.innerHTML = filtered.map(m => {
             let imgContent = '';
@@ -538,7 +541,7 @@
                 const color = fallbackColors[m.id % fallbackColors.length];
                 const icon = (m.category && m.category.name.toLowerCase().includes('makan')) ? 'fa-utensils' : 'fa-mug-hot';
                 imgContent = `
-                    <div style="width: 100%; height: 100%; background: linear-gradient(135deg, ${color}, #3D2617); display: flex; align-items: center; justify-content: center;">
+                    <div style="width: 100%; height: 100%; background: ${color}; color: var(--text-muted); display: flex; align-items: center; justify-content: center;">
                         <i class="fas ${icon}"></i>
                     </div>
                 `;
@@ -1043,7 +1046,7 @@
             currentCustomer = null;
             setMemberCardSummary(`${nickname} (belum terdaftar)`, 'warning');
             document.getElementById('customer-info-box').innerHTML = `
-                <div style="background: #FFF9C4; border: 1px solid #FFE082; padding: 8px 10px; border-radius: var(--radius-xs); font-size: 0.7188rem; color: #8D6E63;">
+                <div style="background: var(--color-warning-bg); border: 1px solid var(--border-color); padding: 8px 10px; border-radius: var(--radius-xs); font-size: 0.7188rem; color: var(--text-muted);">
                     <i class="fas fa-user-plus text-warning"></i> <strong>"${nickname}"</strong> belum terdaftar sebagai member.
                     <div style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
                         <button type="button" class="btn btn-primary btn-sm" onclick="openQuickRegisterModal()">
@@ -1143,7 +1146,7 @@
         setMemberCardSummary('Guest');
         document.getElementById('customer-nickname').value = 'Guest';
         document.getElementById('customer-info-box').innerHTML = `
-            <div style="font-size: 0.7188rem; color: var(--text-secondary); background: #FAF8F5; padding: 8px 10px; border-radius: var(--radius-xs); border: 1px solid var(--border-light);">
+            <div style="font-size: 0.7188rem; color: var(--text-secondary); background: var(--bg-surface); padding: 8px 10px; border-radius: var(--radius-xs); border: 1px solid var(--border-light);">
                 <i class="fas fa-user-circle"></i> Transaksi sebagai <strong>Guest</strong> (Tanpa Poin Loyalty)
             </div>
         `;

@@ -106,6 +106,103 @@ Aplikasi web dan API siap diakses di: **`http://localhost:3001`**
 
 ---
 
+## Tampilan & Antarmuka
+
+Keluarga **Minimalism**: netral putih/abu/hitam dengan **satu** aksen (cokelat
+espresso, identitas kafenya). Hierarki dibangun dari tipografi, jarak, dan
+perataan -- bukan dari border tebal, gradien, atau bayangan berlapis. Halaman
+ini padat data, dan tiap elemen dekoratif bersaing dengan angkanya sendiri.
+
+Semua warna hidup di token `:root` pada `app/static/css/style.css`. **Jangan
+menulis heksadesimal langsung** di stylesheet maupun di atribut `style` templat;
+pakai `var(--…)`, kalau tidak nilainya tertinggal saat tema disetel ulang.
+
+Tiga pengecualian yang sengaja tidak memakai token:
+
+- Blok `@media print` dan CSS struk termal -- harus hitam-putih agar cocok
+  dengan kertas, bukan dengan layar.
+- Palet Chart.js -- `<canvas>` tidak mengerti `var(--x)` dan menggambarnya
+  sebagai transparan. Pakai `cssVar('--nama')` / `paletGrafik()` dari `app.js`,
+  yang membaca nilainya dari `:root` saat dijalankan.
+
+### Tiga penyempurna otomatis di `app.js`
+
+Ketiganya berlaku untuk seluruh halaman dan berjalan ulang lewat satu
+`MutationObserver`, karena tabel dan dropdown di sini digambar ulang lewat
+`innerHTML` terus-menerus. Tidak ada templat yang perlu disunting.
+
+1. **Dropdown bisa dicari.** Tiap `<select>` dengan **8 pilihan atau lebih**
+   otomatis dapat kotak ketik untuk menyaring. `<select>` aslinya tetap di DOM
+   dan tetap memegang nilainya, jadi `sel.innerHTML = …`, `sel.value`,
+   `onchange`, `FormData`, dan `required` semuanya tetap bekerja apa adanya.
+   Paksa dengan `data-searchable`, matikan dengan `data-searchable="off"`.
+   Dropdown yang tadinya pendek ikut berubah sendiri begitu datanya bertambah.
+2. **Tabel jadi kartu di bawah 640px.** Label tiap sel disalin dari `<thead>`
+   ke `td[data-label]`, jadi 26 tabel yang ada -- dan tabel berikutnya -- dapat
+   tanpa diminta.
+3. **Kisi sebaris ditumpuk di bawah 640px.** Ada 32 tempat yang menulis
+   `grid-template-columns: 1fr 1fr` di atribut `style`; di layar 360px itu
+   membuat seluruh halaman bisa digeser ke samping. Satu aturan CSS menumpuk
+   semuanya. Pakai kelas `.keep-grid` bila suatu kisi memang harus tetap
+   berkolom di layar sempit.
+
+### Menguji tampilan
+
+Server Flask **menyimpan templat di memori** saat start (`debug=False`), jadi
+perubahan pada `.html` tidak terlihat sampai server dijalankan ulang. CSS dan JS
+tidak terpengaruh -- keduanya disajikan langsung dari disk dengan `?v=mtime`.
+
+Acuan lebar uji: **360px** (Samsung S10), **820px** (tablet potret), **1440px**
+(desktop). Terakhir diperiksa: tidak ada geser horizontal di ketiganya.
+
+## Halaman di Menu Sistem
+
+Dulu satu halaman `/settings` memuat tiga hal sekaligus. Sekarang terpisah supaya
+tiap bagian punya alamat sendiri dan izinnya bisa diatur satu per satu:
+
+| Halaman | Alamat | Isi |
+|---|---|---|
+| Pengaturan Sistem | `/settings` | Profil toko, parameter struk, tutup buku, tes printer |
+| Akun & Hak Akses | `/users` | Akun login, izin per-user, matriks hak akses role |
+| Manajemen Basis Data | `/database` | Backup & restore (Superadmin) |
+
+Untuk basis data yang sudah jalan, `/users` dan `/database` didaftarkan otomatis
+saat server start (`db_migrator`). `/users` **mewarisi izin `/settings` apa
+adanya** — termasuk daftar khusus per-user — karena di sanalah kelola akun dulu
+berada; `/database` hanya dibuka untuk Superadmin. Izin yang sudah pernah diubah
+lewat halaman Akun & Hak Akses tidak disentuh.
+
+## Backup & Restore Basis Data
+
+Halamannya sendiri di **Sistem -> Manajemen Basis Data** (`/database`), dan hanya
+terlihat oleh **Superadmin**: berkas `.bak` berisi seluruh isi basis data,
+termasuk hash sandi setiap akun, jadi mengunduhnya sama beratnya dengan
+memulihkannya.
+
+- **Buat Backup Sekarang** menjalankan `BACKUP DATABASE` penuh. Hasilnya satu
+  berkas `.bak` di folder `backups/`, bisa diunduh lewat tombol **Unduh**.
+- **Pulihkan** menimpa seluruh basis data dengan isi cadangan. Semua sesi kasir
+  yang sedang berjalan terputus, dan langkah ini tidak bisa dibatalkan. Bisa dari
+  cadangan yang sudah ada di server, atau dari berkas `.bak` yang diunggah.
+
+Berkas `.bak` **ditulis oleh SQL Server**, bukan oleh Flask. Karena itu foldernya
+harus bisa ditulis akun layanan SQL Server sekaligus dibaca proses Flask:
+
+- Bawaannya `backups/` di dalam folder aplikasi ini. Saat pertama dipakai,
+  aplikasi memberi akun layanan SQL Server izin tulis ke folder itu (`icacls`,
+  tidak perlu hak administrator karena foldernya milik proses ini).
+- Folder backup bawaan SQL Server sengaja **tidak** dipakai: letaknya di dalam
+  `Program Files` dan proses Flask biasa ditolak membacanya, sehingga berkasnya
+  tidak akan pernah bisa diunduh.
+- Kalau perlu folder lain (mis. SQL Server di mesin terpisah, lewat share
+  jaringan), setel `DB_BACKUP_DIR` di `.env`.
+
+Folder `backups/` dan seluruh `*.bak` sudah masuk `.gitignore` — repo ini publik.
+
+> **Restore belum diuji terhadap instance nyata.** Jalur backup sudah diverifikasi
+> menghasilkan `.bak` yang sah; jalur restore ditulis lengkap tapi belum pernah
+> dijalankan. Uji pertama sebaiknya di basis data salinan, bukan basis data toko.
+
 ## Menjalankan Test
 
 Test berjalan di atas SQLite sementara, jadi tidak menyentuh database MSSQL sama sekali

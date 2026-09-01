@@ -121,7 +121,7 @@
         </div>
         <div class="modal-body" style="max-height: 65vh; overflow-y: auto;">
             <!-- Live Calculated HPP Summary Card -->
-            <div style="background: linear-gradient(135deg, #FAF8F5, #F4EAE1); border: 1px solid var(--border-color); padding: 14px 18px; border-radius: var(--radius-md); margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="background: linear-gradient(135deg, var(--bg-surface), var(--color-primary-light)); border: 1px solid var(--border-color); padding: 14px 18px; border-radius: var(--radius-md); margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <div style="font-size: 0.6875rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Total HPP Hasil Racikan</div>
                     <div id="recipe-live-hpp" style="font-family: var(--font-heading); font-size: 1.375rem; font-weight: 800; color: var(--color-primary); margin-top: 2px;">Rp 0</div>
@@ -425,7 +425,7 @@
         const container = document.getElementById('recipe-ingredients-list-container');
         if (currentRecipeIngredients.length === 0) {
             container.innerHTML = `
-                <div style="text-align: center; color: var(--text-muted); padding: 18px; background: #FAF8F5; border-radius: var(--radius-sm);">
+                <div style="text-align: center; color: var(--text-muted); padding: 18px; background: var(--bg-surface); border-radius: var(--radius-sm);">
                     <i class="fas fa-flask" style="font-size: 1.5rem; opacity: 0.35; margin-bottom: 6px;"></i>
                     <p style="font-size: 0.75rem;">Belum ada bahan baku racikan pada menu ini.</p>
                 </div>
@@ -441,7 +441,7 @@
             totalHpp += subCost;
 
             return `
-                <div style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 8px; align-items: center; padding: 8px 12px; background: #FAF8F5; border-radius: var(--radius-sm); border: 1px solid var(--border-light);">
+                <div style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 8px; align-items: center; padding: 8px 12px; background: var(--bg-surface); border-radius: var(--radius-sm); border: 1px solid var(--border-light);">
                     <div>
                         <strong style="color: var(--text-main); font-size: 0.8125rem;">${item.name}</strong>
                         <div style="font-size: 0.6875rem; color: var(--text-muted);">@ ${formatRp(unitCost)} / ${item.unit}</div>
@@ -554,7 +554,7 @@
     function renderCategoryList() {
         const box = document.getElementById('category-list-box');
         box.innerHTML = categoriesList.map(c => `
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #FAF8F5; border-radius: var(--radius-sm);">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--bg-surface); border-radius: var(--radius-sm);">
                 <span style="font-weight: 600; font-size: 0.8125rem;">${c.name}</span>
                 <span class="badge-chip primary" style="font-size: 0.625rem;">ID: ${c.id}</span>
             </div>

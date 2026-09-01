@@ -1,0 +1,217 @@
+{% extends 'base.html' %}
+
+{% block title %}Manajemen Basis Data | {{ store_name }}{% endblock %}
+{% block page_title %}Manajemen Basis Data{% endblock %}
+
+{% block content %}
+<div class="page-narrow">
+<!-- Manajemen Basis Data (Superadmin) -->
+<div class="card" id="card-database" style="margin-bottom: 24px; display: none;">
+    <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
+        <div>
+            <h3 class="card-title"><i class="fas fa-database text-primary"></i> Manajemen Basis Data</h3>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+                Cadangkan seluruh isi basis data ke satu berkas <code>.bak</code>, atau pulihkan
+                dari cadangan. <strong>Hanya Superadmin.</strong>
+            </p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="buatBackupDb()" id="btn-backup-db">
+            <i class="fas fa-download"></i> Buat Backup Sekarang
+        </button>
+    </div>
+
+    <div id="db-info" style="font-size: 0.75rem; color: var(--text-muted); padding: 0 4px 12px;"></div>
+
+    <div class="table-responsive">
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th>Berkas Cadangan</th>
+                    <th style="width: 120px;">Ukuran</th>
+                    <th style="width: 170px;">Dibuat</th>
+                    <th style="text-align: right; width: 250px;">Aksi</th>
+                </tr>
+            </thead>
+            <tbody id="db-backup-body">
+                <tr><td colspan="4" class="text-center text-muted" style="padding: 30px;">Memuat daftar cadangan...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div style="background: var(--color-danger-bg); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px 14px; margin-top: 16px;">
+        <div style="font-size: 0.8125rem; font-weight: 700; margin-bottom: 4px; color: var(--color-danger);">
+            <i class="fas fa-triangle-exclamation"></i> Pulihkan dari Berkas .bak
+        </div>
+        <p style="font-size: 0.6875rem; color: var(--text-muted); margin-bottom: 10px;">
+            Restore <strong>menimpa seluruh data yang ada sekarang</strong> &mdash; transaksi, stok,
+            akun, semuanya kembali ke keadaan saat cadangan dibuat. Semua sesi kasir yang
+            sedang berjalan akan terputus. Tidak bisa dibatalkan.
+        </p>
+        <input type="file" id="db-restore-file" accept=".bak" class="form-control" style="margin-bottom: 8px;">
+        <button type="button" class="btn btn-secondary btn-sm" style="width: 100%;" onclick="pulihkanDbDariUnggahan()">
+            <i class="fas fa-upload"></i> Unggah &amp; Pulihkan
+        </button>
+    </div>
+</div>
+
+<!-- Terlihat hanya untuk yang bukan Superadmin. Halaman web tidak dijaga di
+     server (token ada di sisi klien), jadi tanpa pesan ini pembuka halaman
+     cuma melihat kartu kosong tanpa tahu kenapa. Gerbang sebenarnya ada di
+     /api/database, yang menolak siapa pun di bawah Superadmin. -->
+<div class="card" id="db-tanpa-izin" style="display: none;">
+    <div style="padding: 40px 24px; text-align: center;">
+        <i class="fas fa-lock" style="font-size: 28px; color: var(--text-muted); margin-bottom: 12px;"></i>
+        <h3 style="margin: 0 0 6px; font-size: 1rem;">Khusus Superadmin</h3>
+        <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 0;">
+            Cadangan basis data berisi seluruh data toko, termasuk sandi setiap akun,
+            jadi hanya Superadmin yang boleh membuka halaman ini.
+        </p>
+    </div>
+</div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        muatManajemenDb();
+    });
+
+    function ukuranBerkas(bytes) {
+        if (bytes === null || bytes === undefined) return '-';
+        const unit = ['B', 'KB', 'MB', 'GB'];
+        let i = 0, n = bytes;
+        while (n >= 1024 && i < unit.length - 1) { n /= 1024; i++; }
+        return `${n.toFixed(i === 0 ? 0 : 1)} ${unit[i]}`;
+    }
+
+    async function muatManajemenDb() {
+        const user = getUser();
+        if (!user || (user.role || '').toUpperCase() !== 'SUPERADMIN') {
+            document.getElementById('db-tanpa-izin').style.display = '';
+            return;
+        }
+
+        document.getElementById('card-database').style.display = '';
+        const tbody = document.getElementById('db-backup-body');
+        const info = document.getElementById('db-info');
+        try {
+            const data = await apiFetch('/database/backups');
+            info.innerHTML = `Basis data <strong>${data.database}</strong> &middot; folder cadangan <code>${data.directory}</code>`;
+            if (!data.backups.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding: 30px;">Belum ada cadangan. Tekan "Buat Backup Sekarang".</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.backups.map(b => `
+                <tr>
+                    <td style="font-family: monospace; font-size: 0.75rem;">${b.filename}</td>
+                    <td>${ukuranBerkas(b.size)}</td>
+                    <td>${b.createdAt.replace('T', ' ')}</td>
+                    <td style="text-align: right; white-space: nowrap;">
+                        <button class="btn btn-secondary btn-sm" onclick="unduhBackupDb('${b.filename}')"><i class="fas fa-download"></i> Unduh</button>
+                        <button class="btn btn-secondary btn-sm" onclick="pulihkanDbDariServer('${b.filename}')"><i class="fas fa-rotate-left"></i> Pulihkan</button>
+                        <button class="btn btn-secondary btn-sm" onclick="hapusBackupDb('${b.filename}')"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>`).join('');
+        } catch (err) {
+            info.innerHTML = '';
+            tbody.innerHTML = `<tr><td colspan="4" class="text-center" style="padding: 24px; color: var(--color-danger);">${err.message}</td></tr>`;
+        }
+    }
+
+    async function buatBackupDb() {
+        const btn = document.getElementById('btn-backup-db');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Membuat cadangan...';
+        try {
+            const hasil = await apiFetch('/database/backup', { method: 'POST' });
+            showToast(`Cadangan dibuat: ${hasil.filename}`, 'success');
+            await muatManajemenDb();
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-download"></i> Buat Backup Sekarang';
+        }
+    }
+
+    async function unduhBackupDb(filename) {
+        // Tidak bisa <a href> biasa: endpointnya menuntut header Authorization,
+        // dan navigasi browser tidak membawa token dari localStorage.
+        try {
+            const res = await fetch(`/api/database/backup/${encodeURIComponent(filename)}`, {
+                headers: { 'Authorization': `Bearer ${getToken()}` }
+            });
+            if (!res.ok) {
+                const pesan = await res.json().catch(() => ({}));
+                throw new Error(pesan.error || `Gagal mengunduh (HTTP ${res.status})`);
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            // Dilepas belakangan: mencabut URL terlalu cepat membatalkan unduhan
+            // yang baru saja dimulai.
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+
+    async function hapusBackupDb(filename) {
+        if (!confirm(`Hapus berkas cadangan ${filename}?`)) return;
+        try {
+            await apiFetch(`/database/backup/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+            showToast('Berkas cadangan dihapus.', 'success');
+            await muatManajemenDb();
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+
+    function konfirmasiRestore(sumber) {
+        return confirm(
+            `PULIHKAN dari ${sumber}?\n\n` +
+            'SELURUH data sekarang akan ditimpa dan tidak bisa dikembalikan. ' +
+            'Semua sesi kasir yang sedang berjalan akan terputus.\n\n' +
+            'Buat cadangan dulu bila belum.'
+        );
+    }
+
+    async function kirimRestore(options) {
+        showToast('Memulihkan basis data... jangan tutup halaman ini.', 'info');
+        try {
+            await apiFetch('/database/restore', options);
+            showToast('Basis data dipulihkan. Halaman akan dimuat ulang.', 'success');
+            setTimeout(() => window.location.reload(), 1500);
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+
+    async function pulihkanDbDariServer(filename) {
+        if (!konfirmasiRestore(filename)) return;
+        await kirimRestore({
+            method: 'POST',
+            body: JSON.stringify({ filename, confirm: 'PULIHKAN' })
+        });
+    }
+
+    async function pulihkanDbDariUnggahan() {
+        const input = document.getElementById('db-restore-file');
+        const berkas = input.files && input.files[0];
+        if (!berkas) { showToast('Pilih berkas .bak dulu.', 'error'); return; }
+        if (!konfirmasiRestore(berkas.name)) return;
+
+        const form = new FormData();
+        form.append('file', berkas);
+        form.append('confirm', 'PULIHKAN');
+        await kirimRestore({ method: 'POST', body: form });
+        input.value = '';
+    }
+</script>
+{% endblock %}

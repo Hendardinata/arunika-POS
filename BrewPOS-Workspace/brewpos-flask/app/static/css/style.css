@@ -1,67 +1,88 @@
 /* ==========================================================================
-   Arunika-POS (BrewPOS) - Modern Warm Coffee Light Design System
-   Inspired by Square POS, Toast POS & Material Design 3
+   Arunika-POS (BrewPOS) - Minimalist Design System
+
+   Netral sebagai fondasi, satu aksen. Hierarki dibangun dari tipografi, jarak,
+   dan perataan -- bukan dari border tebal, blok warna, atau bayangan berlapis.
+   Halaman ini padat data (POS, laporan, HPP); tiap elemen dekoratif yang
+   dibiarkan tinggal akan bersaing dengan angkanya sendiri.
+
+   Nama token TIDAK diubah, hanya nilainya. --color-secondary dipakai 19 kali dan
+   --font-heading 38 kali di seluruh stylesheet dan templat; mengganti namanya
+   berarti menyunting semuanya tanpa satu pun perbedaan yang terlihat.
    ========================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+/* Satu keluarga huruf untuk seluruh antarmuka, plus mono khusus struk. 'Outfit'
+   dilepas: dua sans yang mirip tidak menghasilkan hierarki, hanya satu unduhan
+   font tambahan -- dan lewat Tailscale itu terasa. */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
 
 :root {
   /* Typography */
-  --font-heading: 'Outfit', sans-serif;
+  --font-heading: 'Plus Jakarta Sans', sans-serif;
   --font-body: 'Plus Jakarta Sans', sans-serif;
   --font-mono: 'Space Mono', monospace;
 
-  /* Warm Coffee Light Theme Palette */
-  --bg-main: #FAF8F5;          /* Warm clean off-white */
-  --bg-sidebar: #FFFFFF;       /* Crisp white sidebar */
-  --bg-card: #FFFFFF;          /* Pure white cards */
-  --bg-surface: #F5EFEB;       /* Subtle warm latte surface */
-  --bg-input: #FFFFFF;         /* Clean input background */
-  --bg-hover: #F0E6DE;         /* Soft hover highlight */
+  /* Netral. Tangga abu yang rapat: bedanya cukup untuk memisahkan lapisan,
+     tidak cukup untuk menarik perhatian. */
+  --bg-main: #FFFFFF;
+  --bg-sidebar: #FFFFFF;
+  --bg-card: #FFFFFF;
+  --bg-surface: #F7F7F7;       /* panel/kolom pembanding */
+  --bg-input: #FFFFFF;
+  --bg-hover: #F2F2F2;
 
-  /* Borders & Dividers */
-  --border-color: #EADBCE;     /* Subtle warm border */
-  --border-light: #F0E6DD;
-  --border-focus: #6F4E37;     /* Coffee brown focus ring */
+  /* Garis rambut. Inilah pengganti bayangan sebagai pemisah antar bidang. */
+  --border-color: #E5E5E5;
+  --border-light: #EFEFEF;
+  --border-focus: #5A3A28;
 
-  /* Brand Accents */
-  --color-primary: #6F4E37;       /* Rich Espresso / Coffee Brown */
-  --color-primary-hover: #5A3D2A;
-  --color-primary-light: #F4EAE1; /* Latte cream highlight */
-  --color-secondary: #C89058;     /* Warm Caramel */
-  --color-secondary-light: #FBF4EC;
-  --color-accent: #E07A5F;        /* Terracotta accent */
+  /* Aksen tunggal. Cokelat espresso dipertahankan -- ini identitas kafenya,
+     dan "aksen yang sangat terbatas" berarti satu, bukan nol. Dipekatkan dari
+     #6F4E37 supaya teks putih di atasnya lolos kontras AA. */
+  --color-primary: #5A3A28;
+  --color-primary-hover: #422A1C;
+  --color-primary-light: #F4F1EF; /* jejak aksen paling tipis, nyaris netral */
+  /* Bukan warna kedua, melainkan abu gelap: dipakai untuk penekanan sekunder
+     yang dulu memakai caramel. */
+  --color-secondary: #6B6B6B;
+  --color-secondary-light: #F7F7F7;
+  --color-accent: #5A3A28;
 
-  /* Functional Status Colors */
-  --color-success: #2E7D32;       /* Forest green */
-  --color-success-bg: #E8F5E9;
-  --color-warning: #ED6C02;       /* Warm amber */
-  --color-warning-bg: #FFF3E0;
-  --color-danger: #D32F2F;        /* Crimson */
-  --color-danger-bg: #FFEBEE;
-  --color-info: #0288D1;          /* Sky blue */
-  --color-info-bg: #E1F5FE;
+  /* Status TETAP berwarna: ini informasi, bukan hiasan. Kasir harus bisa
+     membedakan stok habis dari stok aman tanpa membaca teksnya. Yang diredam
+     adalah latarnya -- abu netral tipis, bukan pastel. */
+  --color-success: #1F6F3F;
+  --color-success-bg: #F2F6F3;
+  --color-warning: #9A5B00;
+  --color-warning-bg: #F8F5F0;
+  --color-danger: #A32020;
+  --color-danger-bg: #FAF3F3;
+  --color-info: #12608F;
+  --color-info-bg: #F2F5F8;
 
-  /* Text Colors */
-  --text-main: #2D2424;        /* Deep roasted charcoal brown */
-  --text-secondary: #5C524F;   /* Soft brown text */
-  --text-muted: #8E837D;       /* Muted gray-brown */
-  --text-dark: #1F1916;
+  /* Teks. Hierarki utama halaman ini hidup di sini, bukan di warna latar. */
+  --text-main: #111111;
+  --text-secondary: #555555;
+  --text-muted: #8A8A8A;
+  --text-dark: #000000;
   --text-inverse: #FFFFFF;
 
-  /* Shadows (Soft & Elegant) */
-  --shadow-xs: 0 1px 3px rgba(70, 45, 30, 0.05);
-  --shadow-sm: 0 2px 8px rgba(70, 45, 30, 0.06);
-  --shadow-md: 0 6px 18px rgba(70, 45, 30, 0.08);
-  --shadow-lg: 0 12px 32px rgba(70, 45, 30, 0.12);
-  --shadow-modal: 0 20px 50px rgba(45, 25, 15, 0.18);
+  /* Bayangan nyaris hilang. Yang tersisa hanya untuk lapisan yang benar-benar
+     mengambang di atas halaman (modal, dropdown, bottom sheet) -- di sana
+     bayangan menjelaskan susunan, bukan menghias. */
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.07);
+  --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.12);
 
-  /* Radius (Material 3 Touch-friendly) */
-  --radius-xs: 6px;
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
-  --radius-xl: 28px;
+  /* Radius diturunkan satu tingkat: sudut yang terlalu bulat membaca sebagai
+     "ramah", dan itu bukan nada yang dicari di sini. */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
   --radius-full: 9999px;
 }
 
@@ -121,33 +142,34 @@ body {
   border-bottom: 1px solid var(--border-color);
 }
 
+/* Blok aksen polos, bukan gradien. Gradien adalah tekstur, dan di keluarga ini
+   tekstur nyaris tidak ada -- yang tersisa hanya bidang, garis, dan jarak. */
 .brand-logo {
-  width: 44px;
-  height: 44px;
-  background: linear-gradient(135deg, var(--color-primary), #8F6647);
-  border-radius: var(--radius-md);
+  width: 40px;
+  height: 40px;
+  background: var(--color-primary);
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.375rem;
-  color: #FFF;
-  box-shadow: 0 4px 12px rgba(111, 78, 55, 0.3);
+  font-size: 1.125rem;
+  color: var(--text-inverse);
 }
 
 .brand-info h1 {
   font-family: var(--font-heading);
-  font-size: 1.125rem;
-  font-weight: 800;
-  color: var(--color-primary);
-  letter-spacing: -0.2px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.02em;
   line-height: 1.2;
 }
 
 .brand-info p {
-  font-size: 0.6875rem;
-  color: var(--color-secondary);
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  font-size: 0.625rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
@@ -161,48 +183,51 @@ body {
 }
 
 .nav-section-title {
-  font-size: 0.6875rem;
+  font-size: 0.625rem;
   text-transform: uppercase;
   color: var(--text-muted);
-  padding: 14px 12px 6px;
-  font-weight: 700;
-  letter-spacing: 0.8px;
+  padding: 18px 12px 6px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 11px 14px;
+  padding: 10px 14px;
   color: var(--text-secondary);
   text-decoration: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   font-size: 0.8438rem;
-  font-weight: 600;
-  transition: all 0.2s ease;
+  font-weight: 500;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .nav-item i {
-  font-size: 1.0625rem;
-  width: 22px;
+  font-size: 0.9375rem;
+  width: 20px;
   text-align: center;
   color: var(--text-muted);
-  transition: color 0.2s ease;
+  transition: color 0.15s ease;
 }
 
 .nav-item:hover {
-  background-color: var(--bg-surface);
-  color: var(--color-primary);
+  background-color: var(--bg-hover);
+  color: var(--text-main);
 }
 
 .nav-item:hover i {
-  color: var(--color-primary);
+  color: var(--text-main);
 }
 
+/* Halaman aktif ditandai teks yang menghitam dan menebal, bukan blok warna.
+   Sidebar ini punya sebelas tautan; satu blok terisi di antaranya sudah cukup
+   menonjol tanpa perlu latar berwarna. */
 .nav-item.active {
-  background-color: var(--color-primary-light);
-  color: var(--color-primary);
-  font-weight: 700;
+  background-color: var(--bg-hover);
+  color: var(--text-main);
+  font-weight: 600;
 }
 
 .nav-item.active i {
@@ -212,7 +237,7 @@ body {
 .sidebar-footer {
   padding: 16px 14px;
   border-top: 1px solid var(--border-color);
-  background-color: #FAFAFA;
+  background-color: var(--bg-sidebar);
 }
 
 .user-profile-badge {
@@ -220,9 +245,9 @@ body {
   align-items: center;
   gap: 12px;
   padding: 8px 10px;
-  background-color: #FFF;
+  background-color: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
 }
 
 .user-avatar {
@@ -366,8 +391,8 @@ body {
   height: 68px;
   flex-shrink: 0;
   border-radius: var(--radius-full);
-  background: linear-gradient(135deg, var(--color-primary), #8F6647);
-  color: #FFF;
+  background: var(--color-primary);
+  color: var(--text-inverse);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -488,29 +513,32 @@ body {
   overflow-y: auto;
 }
 
-/* Cards (Clean Light Surface) */
+/* Kartu. Dibatasi garis rambut, bukan bayangan: begitu bayangannya hilang,
+   yang memisahkan kartu dari halaman tinggal garis dan jarak -- dan itu cukup. */
 .card {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: 22px;
-  box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  border-radius: var(--radius-md);
+  padding: 26px;
+  transition: border-color 0.15s ease;
 }
 
 .card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 18px;
-  padding-bottom: 12px;
+  margin-bottom: 22px;
+  padding-bottom: 14px;
   border-bottom: 1px solid var(--border-light);
 }
 
+/* Judul kartu tidak lagi berteriak. Yang membedakannya dari isi adalah bobot
+   dan jarak di bawahnya, bukan ukuran yang melompat. */
 .card-title {
   font-family: var(--font-heading);
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--text-main);
   display: flex;
   align-items: center;
@@ -525,26 +553,27 @@ body {
   margin-bottom: 24px;
 }
 
+/* Kartu KPI. Garis aksen tebal di sisi kiri dilepas: warnanya sama di semua
+   kartu, jadi ia tidak pernah membedakan apa pun -- hanya menambah berat pada
+   deretan angka yang justru harus jadi hal paling menonjol di halaman. */
 .stat-card {
-  background-color: #FFF;
+  background-color: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: 18px 20px;
+  border-radius: var(--radius-md);
+  padding: 20px 22px;
   display: flex;
   align-items: center;
   gap: 16px;
-  box-shadow: var(--shadow-sm);
-  border-left: 4px solid var(--color-primary);
 }
 
 .stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-md);
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.375rem;
+  font-size: 1.125rem;
   flex-shrink: 0;
 }
 
@@ -553,23 +582,28 @@ body {
 }
 
 .stat-label {
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   color: var(--text-muted);
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 4px;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
 }
 
+/* Angkanya yang jadi jangkar visual halaman, bukan kotaknya. */
 .stat-value {
   font-family: var(--font-heading);
-  font-size: 1.375rem;
-  font-weight: 800;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--text-main);
   line-height: 1.1;
 }
 
 /* Buttons (Material 3 Touch Style) */
+/* Tombol. Umpan balik hover hanya mengubah warna -- tidak ada yang terangkat,
+   bersinar, atau berbayang. Di halaman sepadat POS, tombol yang melompat tiap
+   kali kursor lewat membuat seluruh baris aksi terasa gelisah. */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -578,59 +612,58 @@ body {
   padding: 10px 18px;
   border-radius: var(--radius-sm);
   font-size: 0.8438rem;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   border: 1px solid transparent;
   text-decoration: none;
-  transition: all 0.2s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   font-family: var(--font-body);
 }
 
 .btn-primary {
   background-color: var(--color-primary);
-  color: #FFF;
-  box-shadow: 0 4px 12px rgba(111, 78, 55, 0.25);
+  color: var(--text-inverse);
 }
 
 .btn-primary:hover {
   background-color: var(--color-primary-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(111, 78, 55, 0.35);
 }
 
+/* Sekunder = garis tipis di atas latar polos. Bedanya dengan primary adalah
+   ada-tidaknya bidang terisi, bukan dua warna yang bersaing. */
 .btn-secondary {
-  background-color: #FFF;
+  background-color: transparent;
   border-color: var(--border-color);
   color: var(--text-secondary);
 }
 
 .btn-secondary:hover {
-  background-color: var(--bg-surface);
-  border-color: var(--color-secondary);
-  color: var(--color-primary);
+  background-color: var(--bg-hover);
+  border-color: var(--text-muted);
+  color: var(--text-main);
 }
 
 .btn-success {
   background-color: var(--color-success);
-  color: #FFF;
+  color: var(--text-inverse);
 }
 
 .btn-success:hover {
-  background-color: #256628;
+  background-color: #17532F;
 }
 
 .btn-danger {
   background-color: var(--color-danger);
-  color: #FFF;
+  color: var(--text-inverse);
 }
 
 .btn-danger:hover {
-  background-color: #B71C1C;
+  background-color: #7E1818;
 }
 
 .btn-warning {
   background-color: var(--color-warning);
-  color: #FFF;
+  color: var(--text-inverse);
 }
 
 .btn-sm {
@@ -666,10 +699,10 @@ body {
 
 .form-label {
   display: block;
-  font-size: 0.7812rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: 6px;
+  margin-bottom: 7px;
 }
 
 .form-control {
@@ -681,21 +714,25 @@ body {
   color: var(--text-main);
   font-size: 0.8438rem;
   font-family: var(--font-body);
-  transition: all 0.2s ease;
+  transition: border-color 0.15s ease;
 }
 
+/* Fokus ditandai garisnya sendiri yang menghitam, bukan cincin tebal di
+   sekelilingnya. Di formulir rapat seperti Catat Pembelian, cincin 3px membuat
+   kotak yang sedang diisi terlihat membengkak dan menggeser tetangganya. */
 .form-control:focus {
   outline: none;
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px rgba(111, 78, 55, 0.12);
+  box-shadow: 0 0 0 1px var(--border-focus);
 }
 
 .form-control::placeholder {
   color: var(--text-muted);
-  opacity: 0.7;
+  opacity: 0.8;
 }
 
-/* Tables (Clean Light) */
+/* Tabel. Hanya garis horizontal: kolom dipisahkan oleh perataan dan jarak,
+   dan garis vertikal pada tabel selebar layar hanya menambah kebisingan. */
 .table-responsive {
   width: 100%;
   overflow-x: auto;
@@ -709,14 +746,14 @@ body {
 }
 
 .custom-table th {
-  background-color: #F8F5F2;
-  color: var(--text-secondary);
-  font-weight: 700;
-  padding: 12px 16px;
-  border-bottom: 2px solid var(--border-color);
+  background-color: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-color);
   text-transform: uppercase;
-  font-size: 0.6875rem;
-  letter-spacing: 0.5px;
+  font-size: 0.6562rem;
+  letter-spacing: 0.09em;
 }
 
 .custom-table td {
@@ -727,18 +764,19 @@ body {
 }
 
 .custom-table tr:hover td {
-  background-color: rgba(245, 239, 235, 0.4);
+  background-color: var(--bg-surface);
 }
 
-/* Badges & Status Chips */
+/* Lencana status. Latar netral tipis + teks berwarna: warnanya tetap terbaca
+   sekilas, tanpa deretan blok warna penuh yang membuat tabel terlihat belang. */
 .badge-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 4px 10px;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-xs);
   font-size: 0.6875rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .badge-chip.primary {
@@ -792,8 +830,8 @@ body {
 }
 
 .modal-dialog {
-  background-color: #FFF;
-  border-radius: var(--radius-xl);
+  background-color: var(--bg-card);
+  border-radius: var(--radius-lg);
   width: 100%;
   max-width: 520px;
   max-height: 90vh;
@@ -802,8 +840,10 @@ body {
   overflow: hidden;
   box-shadow: var(--shadow-modal);
   border: 1px solid var(--border-color);
-  transform: scale(0.96);
-  transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transform: scale(0.98);
+  /* Melambat lalu berhenti, tanpa memantul melewati ukuran akhirnya. Pantulan
+     menarik mata ke gerakannya sendiri; di sini modal cuma perlu muncul. */
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .modal-backdrop.show .modal-dialog {
@@ -875,7 +915,7 @@ body {
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
-  background-color: #FAF8F5;
+  background-color: var(--bg-surface);
   border-radius: 0 0 var(--radius-xl) var(--radius-xl);
   flex-shrink: 0;
 }
@@ -892,34 +932,37 @@ body {
 }
 
 .toast {
-  background-color: #FFF;
+  background-color: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   padding: 14px 18px;
   box-shadow: var(--shadow-lg);
   display: flex;
   align-items: center;
   gap: 12px;
   font-size: 0.8438rem;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-main);
   min-width: 280px;
-  animation: slideInToast 0.3s ease;
+  animation: slideInToast 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @keyframes slideInToast {
-  from { transform: translateX(100%); opacity: 0; }
+  from { transform: translateX(12px); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
 }
 
-.toast.success { border-left: 4px solid var(--color-success); }
-.toast.success i { color: var(--color-success); font-size: 1.125rem; }
-.toast.error { border-left: 4px solid var(--color-danger); }
-.toast.error i { color: var(--color-danger); font-size: 1.125rem; }
-.toast.warning { border-left: 4px solid var(--color-warning); }
-.toast.warning i { color: var(--color-warning); font-size: 1.125rem; }
-.toast.info { border-left: 4px solid var(--color-info); }
-.toast.info i { color: var(--color-info); font-size: 1.125rem; }
+/* Garis penanda dipertahankan -- berhasil dan gagal harus bisa dibedakan
+   sebelum teksnya sempat dibaca -- tapi menyusut ke 2px supaya setebal garis
+   lain di antarmuka ini. Ikonnya sudah membawa warna yang sama. */
+.toast.success { border-left: 2px solid var(--color-success); }
+.toast.success i { color: var(--color-success); font-size: 1rem; }
+.toast.error { border-left: 2px solid var(--color-danger); }
+.toast.error i { color: var(--color-danger); font-size: 1rem; }
+.toast.warning { border-left: 2px solid var(--color-warning); }
+.toast.warning i { color: var(--color-warning); font-size: 1rem; }
+.toast.info { border-left: 2px solid var(--color-info); }
+.toast.info i { color: var(--color-info); font-size: 1rem; }
 
 /* ==========================================================================
    POS Specific Styles (Product Cards, Split Cart Panel, Cash Presets)
@@ -951,7 +994,7 @@ body {
 
 .category-chip {
   padding: 8px 18px;
-  background-color: #FFF;
+  background-color: var(--text-inverse);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-full);
   color: var(--text-secondary);
@@ -971,9 +1014,9 @@ body {
 
 .category-chip.active {
   background-color: var(--color-primary);
-  color: #FFF;
+  color: var(--text-inverse);
   border-color: var(--color-primary);
-  box-shadow: 0 4px 12px rgba(111, 78, 55, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .pos-search-bar {
@@ -1000,7 +1043,7 @@ body {
   display: flex;
   flex-direction: column;
   width: 100%;
-  background-color: #FFF;
+  background-color: var(--text-inverse);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: 10px 12px;
@@ -1024,7 +1067,7 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 1.75rem;
-  color: #FFF;
+  color: var(--text-inverse);
   margin-bottom: 8px;
   object-fit: cover;
   overflow: hidden;
@@ -1121,7 +1164,7 @@ body {
 }
 
 .pos-side-card {
-  background-color: #FFF;
+  background-color: var(--text-inverse);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-md);
@@ -1155,7 +1198,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  background-color: #FAF8F5;
+  background-color: var(--bg-surface);
   cursor: pointer;
   flex-shrink: 0;
   user-select: none;
@@ -1199,7 +1242,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  background-color: #FCFBF9;
+  background-color: var(--bg-surface);
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
@@ -1211,10 +1254,10 @@ body {
   top: 100%;
   left: 0;
   right: 0;
-  background: #FFF;
+  background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  box-shadow: 0 10px 25px rgba(70, 45, 30, 0.18);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
   max-height: 220px;
   overflow-y: auto;
   z-index: 100;
@@ -1254,8 +1297,8 @@ body {
 }
 
 .member-selected-card {
-  background: #FAF5EE;
-  border: 1px solid #E6D7C8;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   padding: 13px 14px;
 }
@@ -1265,7 +1308,7 @@ body {
   height: 28px;
   border-radius: 50%;
   background: var(--color-primary);
-  color: #FFF;
+  color: var(--text-inverse);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1291,7 +1334,7 @@ body {
   flex-direction: column;
   gap: 9px;
   padding: 14px 14px;
-  background-color: #FAF8F5;
+  background-color: var(--bg-surface);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-light);
 }
@@ -1319,10 +1362,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #FFF;
+  background: var(--bg-card);
   padding: 4px 8px;
   border-radius: var(--radius-xs);
-  border: 1px dashed #EADBCE;
+  border: 1px dashed var(--border-color);
   font-size: 0.6875rem;
 }
 
@@ -1339,7 +1382,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  background-color: #FFF;
+  background-color: var(--text-inverse);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-full);
   padding: 2px 6px;
@@ -1369,7 +1412,7 @@ body {
   padding: 18px 20px;
   flex-shrink: 0;
   border-top: 1px solid var(--border-color);
-  background-color: #FAF8F5;
+  background-color: var(--bg-surface);
   font-size: 0.75rem;
 }
 
@@ -1427,7 +1470,7 @@ body {
   padding: 6px 10px;
   border-radius: var(--radius-full);
   border: 1px solid var(--border-color);
-  background: #FFF;
+  background: var(--bg-card);
   font-size: 0.6875rem;
   font-weight: 700;
   color: var(--text-secondary);
@@ -1441,9 +1484,9 @@ body {
 }
 
 .loyalty-chip.warning {
-  border-color: #FFE082;
-  background: #FFF8E1;
-  color: #8D6E63;
+  border-color: var(--color-warning);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .loyalty-chip-value {
@@ -1457,8 +1500,8 @@ body {
   gap: 6px;
   padding: 4px 10px;
   border-radius: var(--radius-full);
-  border: 1px solid #E6D7C8;
-  background: #FAF5EE;
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
   font-size: 0.6875rem;
   min-width: 0;
   flex: 1 1 160px;
@@ -1538,7 +1581,7 @@ body {
   padding: 14px 10px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
-  background: #FFF;
+  background: var(--bg-card);
   font-size: 0.8125rem;
   font-weight: 700;
   color: var(--text-secondary);
@@ -1554,8 +1597,8 @@ body {
 .pay-method-btn.active {
   border-color: var(--color-primary);
   background: var(--color-primary);
-  color: #FFF;
-  box-shadow: 0 4px 12px rgba(111, 78, 55, 0.25);
+  color: var(--text-inverse);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 /* Quick Cash Presets */
@@ -1568,7 +1611,7 @@ body {
 
 .cash-preset-btn {
   padding: 12px 6px;
-  background-color: #FFF;
+  background-color: var(--text-inverse);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xs);
   font-size: 0.7188rem;
@@ -1592,7 +1635,7 @@ body {
   width: 100%;
   max-width: 330px;
   box-sizing: border-box;
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: 20px 16px;
@@ -1665,6 +1708,147 @@ body {
 
 .mobile-cart-bar {
   display: none;
+}
+
+/* ==========================================================================
+   Dropdown yang bisa dicari
+
+   Dipasang otomatis oleh pindaiDropdownCari() di app.js pada tiap <select>
+   yang pilihannya sudah banyak. <select> aslinya tetap ada di dalam .combo --
+   disembunyikan, tapi tetap yang memegang nilainya.
+   ========================================================================== */
+
+.combo {
+  position: relative;
+  width: 100%;
+}
+
+/* Bukan display:none: elemen yang tidak dirender tidak ikut divalidasi browser,
+   dan `required` pada dropdown wajib (mis. bahan di Catat Pembelian) akan
+   berhenti bekerja tanpa satu pun pesan. */
+.combo > select {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+  bottom: 0;
+  left: 50%;
+}
+
+.combo-input {
+  cursor: pointer;
+  padding-right: 36px;
+  text-overflow: ellipsis;
+}
+
+.combo.terbuka .combo-input {
+  cursor: text;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 1px var(--border-focus);
+}
+
+.combo-caret {
+  position: absolute;
+  right: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.625rem;
+  color: var(--text-muted);
+  pointer-events: none;
+  transition: transform 0.15s ease;
+}
+
+.combo.terbuka .combo-caret {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.combo-panel {
+  display: none;
+  position: absolute;
+  z-index: 1200;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  padding: 4px;
+}
+
+.combo.terbuka .combo-panel {
+  display: block;
+}
+
+.combo-option {
+  padding: 9px 12px;
+  border-radius: var(--radius-xs);
+  font-size: 0.8125rem;
+  color: var(--text-main);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Satu penanda saja untuk baris yang sedang disorot, dipakai bersama oleh
+   tetikus dan panah keyboard -- dua penanda berbeda di daftar yang sama
+   membuat mata ragu mana yang akan terpilih saat Enter ditekan. */
+.combo-option:hover,
+.combo-option.aktif {
+  background: var(--bg-hover);
+}
+
+.combo-option.dipilih {
+  font-weight: 600;
+}
+
+.combo-option.dipilih::after {
+  content: '\f00c';                 /* fa-check */
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  float: right;
+  font-size: 0.625rem;
+  color: var(--color-primary);
+  margin-left: 10px;
+}
+
+.combo-kosong {
+  padding: 14px 12px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Di layar sentuh daftarnya melabuh ke bawah layar, bukan mengambang di bawah
+   kotaknya. Sebagai panel mengambang di dalam bottom sheet POS atau modal
+   pendek, daftarnya terpotong tepi induknya dan pilihan terbawah tidak pernah
+   bisa diketuk -- persis masalah yang dulu sudah muncul pada hasil cari member. */
+@media (max-width: 768px) {
+  .combo-panel {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-height: 50vh;
+    max-height: 50dvh;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    border-bottom: 0;
+    padding: 8px;
+    z-index: 3000;
+  }
+
+  .combo-option {
+    padding: 13px 14px;
+    font-size: 0.875rem;
+  }
 }
 
 /* ==========================================================================
@@ -2053,7 +2237,7 @@ body.scroll-locked {
     max-height: 88vh;
     max-height: 88dvh;
     z-index: 1000;
-    background: #FFF;
+    background: var(--bg-card);
     border-top-left-radius: var(--radius-lg);
     border-top-right-radius: var(--radius-lg);
     box-shadow: 0 -6px 16px rgba(0, 0, 0, 0.22);
@@ -2166,18 +2350,18 @@ body.scroll-locked {
     right: 0;
     height: calc(60px + env(safe-area-inset-bottom));
     background: var(--color-primary);
-    color: #FFF;
+    color: var(--text-inverse);
     padding: 0 18px env(safe-area-inset-bottom);
     align-items: center;
     justify-content: space-between;
     z-index: 990;
-    box-shadow: 0 -4px 16px rgba(111, 78, 55, 0.35);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.35);
     cursor: pointer;
   }
 
   .mobile-cart-bar .cart-badge {
     background: var(--color-secondary);
-    color: #FFF;
+    color: var(--text-inverse);
     padding: 3px 8px;
     border-radius: var(--radius-full);
     font-size: 0.7188rem;
@@ -2348,7 +2532,7 @@ body.scroll-locked {
    dan struk tidak terbaca sebagai lembaran. */
 #receipt-modal-body,
 #report-receipt-body {
-  background: #E9E2DB;
+  background: var(--border-color);
   padding: 18px 12px !important;
 }
 
@@ -2361,13 +2545,13 @@ body.scroll-locked {
   box-sizing: content-box !important;
   width: calc(var(--receipt-cols, 32) * 1ch) !important;
   max-width: none !important;
-  background: #FFFDFA;
+  background: #FFFFFF;
   border: none;
   border-radius: 0;
   padding: 22px 18px 26px !important;
   margin: 6px auto;
-  box-shadow: 0 6px 22px rgba(70, 45, 30, 0.16);
-  color: #2A2320;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.16);
+  color: #111111;
   font-size: 13px;
   letter-spacing: 0;
 }
@@ -2415,17 +2599,192 @@ body.scroll-locked {
 }
 
 .receipt-rule {
-  border-top: 1px dashed #C9B9A8;
+  border-top: 1px dashed #BBBBBB;
   margin: 7px 0;
 }
 
 .receipt-rule.strong {
-  border-top: 1px solid #8A7561;
+  border-top: 1px solid #888888;
 }
 
 /* ==========================================================================
    Print CSS Engine: Thermal Receipt & Reports
    ========================================================================== */
+
+/* ==========================================================================
+   Penyempurnaan Responsif
+
+   Ditaruh setelah seluruh breakpoint di atas, mengikuti kebiasaan berkas ini:
+   yang terakhir menang tanpa perlu !important.
+   ========================================================================== */
+
+/* Lebar baca. Di monitor lebar, formulir satu kolom yang dibiarkan melar
+   membuat label dan isiannya berjauhan sampai mata harus melompat. */
+.page-narrow {
+  max-width: 900px;
+}
+
+/* --------------------------------------------------------------------------
+   Tabel di layar sempit: tiap baris jadi satu kartu
+
+   Sebelumnya tabel hanya bisa digeser ke samping. Di layar 360px itu berarti
+   kolom paling kanan -- yang justru berisi tombol aksi -- praktis tidak pernah
+   terlihat kecuali pengguna tahu harus menggeser. Label tiap sel disalin dari
+   <thead> oleh pasangLabelKolom() di app.js, jadi tidak ada satu templat pun
+   yang perlu disunting.
+   -------------------------------------------------------------------------- */
+@media (max-width: 640px) {
+  .table-responsive {
+    overflow-x: visible;
+  }
+
+  /* Blok geser-horizontal untuk tabel lebar (lihat min-width: 680px di
+     breakpoint 768px) tidak berlaku lagi di sini: barisnya sudah jadi kartu,
+     jadi tidak ada yang perlu digeser. Selektornya harus sama spesifiknya
+     dengan yang ditimpa, kalau tidak tabelnya tetap 680px dan seluruh halaman
+     ikut meluber. */
+  .table-responsive .custom-table {
+    min-width: 0;
+  }
+
+  .custom-table,
+  .custom-table tbody,
+  .custom-table tr,
+  .custom-table td {
+    display: block;
+    width: 100%;
+  }
+
+  /* nowrap juga datang dari blok geser itu. Dalam bentuk kartu, nilai panjang
+     harus boleh membungkus -- kalau tidak, nama bahan yang panjang mendorong
+     kartunya melebihi lebar layar. */
+  .custom-table th,
+  .custom-table td {
+    white-space: normal;
+  }
+
+  /* Judul kolom sudah pindah ke tiap sel; barisnya sendiri tidak perlu lagi. */
+  .custom-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .custom-table tr {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 4px 0;
+    margin-bottom: 10px;
+  }
+
+  .custom-table tr:hover td {
+    background: transparent;
+  }
+
+  .custom-table td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    text-align: right;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .custom-table tr td:last-child {
+    border-bottom: 0;
+  }
+
+  .custom-table td[data-label]::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    text-align: left;
+    font-size: 0.6562rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+
+  /* Sel tanpa label (baris "Memuat...", "Belum ada data") tetap satu blok penuh
+     dan rata tengah seperti aslinya. */
+  .custom-table td:not([data-label]) {
+    display: block;
+    text-align: center;
+  }
+
+  /* Tombol aksi mendapat barisnya sendiri, tidak lagi terjepit di tepi kanan. */
+  .custom-table td .btn {
+    flex: 0 0 auto;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Tablet potret (768-1024px)
+
+   Sebelumnya lompat langsung dari tata letak lebar ke satu kolom. Di iPad atau
+   tab Samsung yang dipakai berdiri, itu menyisakan setengah layar kosong pada
+   halaman yang isinya justru banyak.
+   -------------------------------------------------------------------------- */
+@media (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
+  .content-area {
+    padding: 20px 22px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+
+  .card {
+    padding: 22px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Kisi berkolom tetap yang ditulis di atribut style
+
+   Ada 32 tempat di sembilan templat yang menulis
+   `style="display: grid; grid-template-columns: 1fr 1fr"` langsung di markup --
+   formulir Catat Pembelian, Tambah Menu, Member, dan seterusnya. Di layar 360px
+   dua kolom itu tidak muat, dan karena kisi tidak menyusut di bawah lebar
+   isinya, SELURUH halaman jadi bisa digeser ke samping: kartu terpotong dan
+   tombol simpan berada di luar layar.
+
+   Satu aturan di sini menumpuk semuanya, dan ikut menangani kisi sebaris yang
+   ditambahkan nanti. !important memang diperlukan: yang ditimpa adalah atribut
+   style, dan tidak ada cara lain untuk menang darinya. Pakai kelas .keep-grid
+   pada elemen yang memang harus tetap berkolom di layar sempit.
+   -------------------------------------------------------------------------- */
+@media (max-width: 640px) {
+  [style*="grid-template-columns"]:not(.keep-grid) {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Ruang tepi lebih hemat di HP: 28px kiri-kanan pada layar 360px berarti
+   sepertujuh lebarnya habis sebelum isinya mulai. */
+@media (max-width: 640px) {
+  .content-area {
+    padding: 16px 14px;
+  }
+
+  .card {
+    padding: 18px 16px;
+    border-radius: var(--radius-sm);
+  }
+
+  .stats-grid {
+    gap: 10px;
+  }
+
+  .stat-card {
+    padding: 16px;
+  }
+}
 
 @media print {
   /* Hiasan pratinjau tidak boleh ikut tercetak */

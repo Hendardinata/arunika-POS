@@ -200,13 +200,14 @@
                 datasets: [{
                     label: 'Omset (Rp)',
                     data: values.length > 0 ? values : [0],
-                    borderColor: '#6F4E37',
-                    backgroundColor: 'rgba(111, 78, 55, 0.1)',
-                    borderWidth: 3,
+                    borderColor: cssVar('--color-primary'),
+                    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                    borderWidth: 1.5,
                     fill: true,
-                    tension: 0.35,
-                    pointBackgroundColor: '#C89058',
-                    pointRadius: 4
+                    tension: 0.3,
+                    pointBackgroundColor: cssVar('--color-primary'),
+                    pointRadius: 0,
+                    pointHoverRadius: 4
                 }]
             },
             options: {
@@ -216,9 +217,9 @@
                     legend: { display: false }
                 },
                 scales: {
-                    x: { grid: { color: '#EADBCE' } },
+                    x: { grid: { display: false } },
                     y: {
-                        grid: { color: '#EADBCE' },
+                        grid: { color: cssVar('--border-light', '#EFEFEF') },
                         ticks: {
                             callback: val => 'Rp ' + (val / 1000) + 'k'
                         }
@@ -247,9 +248,9 @@
                 labels: labels.length > 0 ? labels : ['Kopi', 'Non-Kopi', 'Pastry'],
                 datasets: [{
                     data: data.length > 0 ? data : [10, 5, 3],
-                    backgroundColor: ['#6F4E37', '#C89058', '#8F6647', '#D4A373', '#E07A5F'],
+                    backgroundColor: paletGrafik(),
                     borderWidth: 2,
-                    borderColor: '#FFF'
+                    borderColor: cssVar('--bg-card', '#FFFFFF')
                 }]
             },
             options: {

@@ -444,7 +444,7 @@
                         </tr>
                         <!-- Rincian pos biaya, diisi renderPnlOpexDetail() -->
                         <tr id="pnl-opex-detail-anchor" style="display: none;"></tr>
-                        <tr style="background: #FFF5F0; border-top: 2px solid var(--color-primary); font-weight: 800; font-size: 1rem;">
+                        <tr style="background: var(--color-warning-bg); border-top: 2px solid var(--color-primary); font-weight: 800; font-size: 1rem;">
                             <td style="padding: 16px 12px; color: var(--color-primary);">= LABA BERSIH BERJALAN (NET OPERATING PROFIT) <span id="pnl-net-margin" class="badge-chip success" style="margin-left: 8px;">0%</span></td>
                             <td style="padding: 16px 12px; text-align: right; color: var(--color-success);" id="pnl-net-profit">Rp 0</td>
                         </tr>
@@ -697,7 +697,7 @@
                     </td>
                 </tr>
             `).join('') + `
-                <tr style="background: #FAF8F5;">
+                <tr style="background: var(--bg-surface);">
                     <td><strong>Total ${res.days} hari</strong></td>
                     <td colspan="4"><strong>${formatRp(res.totalAmount)}</strong></td>
                 </tr>`;
@@ -791,7 +791,7 @@
                         ${r.userId ? `<button class="btn btn-secondary btn-sm" onclick="lihatRincianKasir(${r.userId}, '${escapeHtmlSafe(r.username)}')">Rincian</button>` : ''}
                     </td>
                 </tr>`).join('')
-                + `<tr style="background: #FAF8F5;">
+                + `<tr style="background: var(--bg-surface);">
                      <td><strong>Total</strong></td>
                      <td><strong>${data.totalOrders}</strong></td>
                      <td></td>
@@ -982,7 +982,7 @@
             const statusBadge = '<span class="badge-chip danger"><i class="fas fa-ban"></i> VOID</span>';
 
             return `
-                <tr style="background: #FFF5F5;">
+                <tr style="background: var(--color-danger-bg);">
                     <td><strong style="color: var(--color-danger); font-family: var(--font-mono); font-size: 0.8125rem;">${txCode}</strong></td>
                     <td>${dateStr}</td>
                     <td><strong>${t.customer ? t.customer.nickname : 'Guest'}</strong></td>

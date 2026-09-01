@@ -50,6 +50,14 @@ def monitoring():
 def settings():
     return render_template('settings.html', active_page='settings')
 
+@web_bp.route('/users')
+def users():
+    return render_template('users.html', active_page='users')
+
+@web_bp.route('/database')
+def database():
+    return render_template('database.html', active_page='database')
+
 @web_bp.route('/profile')
 def profile():
     return render_template('profile.html', active_page='profile')
