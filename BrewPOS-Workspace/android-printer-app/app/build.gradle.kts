@@ -5,10 +5,13 @@ plugins {
 
 // Alamat server POS bisa diganti saat build tanpa menyentuh kode:
 //   gradle assembleDebug -PposUrl=https://server-lain.contoh.com
+// Boleh lebih dari satu, dipisah koma. Aplikasi mencoba satu per satu sesuai
+// urutan ini dan memakai yang pertama menjawab -- server POS bisa berpindah
+// antar host Tailscale tanpa APK harus dibangun ulang.
 // Wajib https: cleartext http diblokir Android (network_security_config
 // sudah dicabut sejak server dilayani lewat Tailscale HTTPS).
 val posUrl: String = (project.findProperty("posUrl") as String?)
-    ?: "https://caffee.rhino-aldebaran.ts.net"
+    ?: "https://caffee.rhino-aldebaran.ts.net,https://phrolova.echidna-carob.ts.net"
 
 android {
     namespace = "com.arunika.pos"
@@ -20,9 +23,9 @@ android {
         // sekali. Samsung S10 (Android 9+) jauh di atas batas ini.
         minSdk = 26
         targetSdk = 34
-        versionCode = 6
-        versionName = "1.5"
-        buildConfigField("String", "POS_URL", "\"$posUrl\"")
+        versionCode = 7
+        versionName = "1.6"
+        buildConfigField("String", "POS_URLS", "\"$posUrl\"")
     }
 
     buildFeatures {

@@ -34,7 +34,8 @@ Workflow `.github/workflows/android-apk.yml` membangun APK di server GitHub.
 
 1. Buka repo di GitHub → tab **Actions** → **Build APK Kasir** → **Run workflow**.
 2. Isi **posUrl** dengan alamat server POS Anda (mis. `https://pos.contoh.com`).
-   Kalau dikosongkan, dipakai nilai bawaan `https://caffee.rhino-aldebaran.ts.net`.
+   Boleh diisi beberapa alamat dipisah koma. Kalau dikosongkan, dipakai bawaannya:
+   `https://caffee.rhino-aldebaran.ts.net,https://phrolova.echidna-carob.ts.net`.
 3. Tunggu build selesai (~3–5 menit), lalu unduh **arunika-pos-apk** di bagian
    *Artifacts* pada halaman run tersebut.
 4. Kirim APK-nya ke HP kasir dan pasang (perlu izin "Install unknown apps").
@@ -55,6 +56,20 @@ menyentuh kode:
 ```
 gradle assembleDebug -PposUrl=https://pos.contoh.com
 ```
+
+## Beberapa alamat server
+
+`posUrl` boleh berisi lebih dari satu alamat, dipisah koma. Saat dibuka, aplikasi
+mengirim satu permintaan `HEAD` singkat (batas 4 detik) ke tiap alamat **secara
+berurutan** dan langsung memuat yang pertama menjawab — kode status apa pun dari
+server dianggap hidup, termasuk 401 atau 404, karena yang dicari cuma "host-nya
+terjangkau atau tidak". Kalau dua-duanya hidup, yang pertama di daftar menang.
+
+Gunanya: server POS bisa berpindah host Tailscale tanpa APK dibangun ulang. Kalau
+sambungan putus di tengah pemakaian, aplikasi mencari ulang sekali sebelum
+menampilkan halaman galat, dan tombol **Coba Lagi** di halaman itu mencari ulang
+dari awal — bukan mengulang alamat yang barusan gagal. Daftar alamat dan mana yang
+sedang aktif bisa dilihat di **Pengaturan -> Diagnostik**.
 
 ## Kalau server masih HTTP
 
@@ -82,4 +97,4 @@ di manifest.
 | Baris terakhir struk terpotong | Perbesar `Thread.sleep(400)` sebelum socket ditutup |
 | Karakter aneh tercetak | Struk sengaja ASCII saja; laporkan bila masih muncul — mungkin butuh codepage lain |
 | Kertas tidak terpotong | Wajar bila printer tanpa auto-cutter. Set "Potong Kertas Otomatis" = Tidak |
-| Halaman tidak termuat | `POS_URL` salah, atau HTTP diblokir (lihat `network_security_config.xml`) |
+| Halaman tidak termuat | Tidak ada alamat di `posUrl` yang menjawab, atau HTTP diblokir (lihat `network_security_config.xml`). Cek daftar alamat lewat Diagnostik |

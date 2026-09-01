@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       posUrl:
-        description: 'Alamat server POS (kosongkan untuk memakai default build.gradle.kts)'
+        description: 'Alamat server POS, boleh beberapa dipisah koma (kosongkan untuk memakai default build.gradle.kts)'
         required: false
         default: ''
 

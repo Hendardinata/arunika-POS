@@ -29,6 +29,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import java.io.OutputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.text.SimpleDateFormat
@@ -56,7 +58,10 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "ArunikaPOS"
-        private val POS_URL = BuildConfig.POS_URL
+        /** Alamat server yang dicoba berurutan; yang pertama menjawab yang dipakai. */
+        private val POS_URLS: List<String> = BuildConfig.POS_URLS
+            .split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        private const val TIMEOUT_PROBE = 4000
         private val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
         private const val PREFS = "arunika_printer"
         private const val KEY_MAC = "printer_mac"
@@ -67,6 +72,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private lateinit var webView: WebView
+
+    /** Server yang menjawab terakhir kali. Dibaca dari thread lain, maka @Volatile. */
+    @Volatile private var serverAktif: String? = null
+
+    /** Kapan pencarian server terakhir dimulai; menahan putaran coba-gagal-coba. */
+    private var probeTerakhir = 0L
 
     /* Kotak <input type="file"> di halaman web. WebView tidak punya pemilih
        berkas bawaan: tanpa onShowFileChooser di bawah, mengetuk "Pilih File"
@@ -150,7 +161,17 @@ class MainActivity : AppCompatActivity() {
                 // Gambar atau ikon yang gagal bukan alasan mengganti halaman.
                 if (!request.isForMainFrame) return
                 val sebab = try { error.description?.toString() } catch (_: Throwable) { null }
-                tampilkanHalamanGagal(view, sebab ?: "tidak diketahui")
+                // Server yang tadinya hidup ternyata putus di tengah pemakaian:
+                // coba server satunya sebelum menyerah ke halaman galat. Tapi
+                // sekali saja per selang waktu -- kalau alamat yang lolos probe
+                // ternyata tetap gagal dimuat, mengulang terus hanya membuat
+                // aplikasi berputar antara "mencari" dan gagal tanpa henti.
+                val sekarang = System.currentTimeMillis()
+                if (sekarang - probeTerakhir > 15_000) {
+                    cariServerLaluMuat(sebab ?: "tidak diketahui")
+                } else {
+                    tampilkanHalamanGagal(view, sebab ?: "tidak diketahui")
+                }
             }
         }
 
@@ -192,7 +213,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         webView.addJavascriptInterface(PrinterBridge(), "AndroidPrinter")
-        webView.loadUrl(POS_URL)
+        cariServerLaluMuat()
 
         requestBluetoothPermission()
         showPendingCrashIfAny()
@@ -202,6 +223,92 @@ class MainActivity : AppCompatActivity() {
         if (webView.canGoBack()) webView.goBack() else super.onBackPressed()
     }
 
+
+    // ------------------------------------------------------------------
+    // Pemilihan server
+    // ------------------------------------------------------------------
+
+    /**
+     * Coba tiap alamat di POS_URLS sampai ada yang menjawab, lalu muat yang itu.
+     *
+     * Server POS berpindah-pindah antar host Tailscale, dan sebelumnya alamatnya
+     * tertanam mati di APK: begitu servernya pindah, aplikasi kasir hanya
+     * menampilkan galat sampai ada APK baru. Sekarang daftar alamat dicoba
+     * berurutan -- yang pertama menjawab yang dipakai, jadi cukup hidupkan
+     * servernya di salah satu host.
+     *
+     * Urutannya berarti: kalau dua-duanya hidup, yang pertama di daftar menang.
+     */
+    private fun cariServerLaluMuat(sebabSebelumnya: String? = null) {
+        if (POS_URLS.isEmpty()) {
+            tampilkanHalamanGagal(webView, "Alamat server belum diisi saat aplikasi dibangun")
+            return
+        }
+        probeTerakhir = System.currentTimeMillis()
+        tampilkanHalamanMencari()
+        thread {
+            val ketemu = POS_URLS.firstOrNull { bisaDijangkau(it) }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (ketemu == null) {
+                    serverAktif = null
+                    tampilkanHalamanGagal(
+                        webView,
+                        sebabSebelumnya ?: "tidak ada server yang menjawab"
+                    )
+                } else {
+                    serverAktif = ketemu
+                    webView.loadUrl(ketemu)
+                }
+            }
+        }
+    }
+
+    /**
+     * Satu permintaan HEAD singkat. Kode status apa pun dari server dianggap
+     * "hidup" -- 401 atau 404 sekalipun berarti ada yang menjawab di sana, dan
+     * halaman POS-nya sendiri yang nanti mengurus login. Yang dicari di sini
+     * cuma: apakah host-nya terjangkau.
+     */
+    private fun bisaDijangkau(alamat: String): Boolean {
+        var koneksi: HttpURLConnection? = null
+        return try {
+            koneksi = (URL(alamat).openConnection() as HttpURLConnection).apply {
+                requestMethod = "HEAD"
+                connectTimeout = TIMEOUT_PROBE
+                readTimeout = TIMEOUT_PROBE
+                instanceFollowRedirects = true
+            }
+            koneksi.responseCode in 200..499
+        } catch (e: Throwable) {
+            Log.w(TAG, "Server tidak menjawab: $alamat", e)
+            false
+        } finally {
+            try { koneksi?.disconnect() } catch (_: Throwable) {}
+        }
+    }
+
+    /** Layar sementara selama alamat server dicoba satu per satu. */
+    private fun tampilkanHalamanMencari() {
+        val html = """
+            <!doctype html><meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>@keyframes p{to{transform:rotate(360deg)}}</style>
+            <div style="font-family:system-ui,-apple-system,sans-serif;padding:64px 24px;
+                        text-align:center;color:#3D2617;">
+              <div style="width:34px;height:34px;margin:0 auto 18px;border-radius:50%;
+                          border:3px solid #EADFD3;border-top-color:#6F4E37;
+                          animation:p .9s linear infinite;"></div>
+              <h2 style="margin:0 0 6px;font-size:17px;">Mencari server POS</h2>
+              <p style="margin:0;font-size:13px;color:#7A6A5D;">Sebentar ya...</p>
+            </div>
+        """.trimIndent()
+        try {
+            webView.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
+        } catch (e: Throwable) {
+            recordError("Gagal menampilkan layar pencarian", e)
+        }
+    }
+
     // ------------------------------------------------------------------
     // Utilitas galat
     // ------------------------------------------------------------------
@@ -209,14 +316,15 @@ class MainActivity : AppCompatActivity() {
     /**
      * Halaman galat sendiri, menggantikan "net::ERR_..." bawaan WebView.
      *
-     * Base URL-nya sengaja POS_URL supaya tombolnya cukup menavigasi ke "/"
-     * dan halaman aslinya dimuat ulang -- tanpa perlu jembatan JavaScript,
-     * yang membuat halaman ini tetap bekerja walau apa pun gagal.
+     * Tombolnya memanggil jembatan JavaScript, bukan menavigasi ke satu alamat:
+     * sejak ada lebih dari satu kandidat server, "coba lagi" harus berarti
+     * mencari ulang dari awal -- bukan mencoba alamat yang barusan gagal.
      */
     private fun tampilkanHalamanGagal(view: WebView, sebab: String) {
         // "&" lebih dulu: kalau "<" diganti duluan, "&lt;" hasilnya ikut
         // terkena putaran kedua dan berubah jadi "&amp;lt;".
         val aman = sebab.replace("&", "&amp;").replace("<", "&lt;")
+        val daftar = POS_URLS.joinToString("<br>") { it.replace("&", "&amp;").replace("<", "&lt;") }
         val html = """
             <!doctype html><meta name="viewport" content="width=device-width, initial-scale=1">
             <div style="font-family:system-ui,-apple-system,sans-serif;padding:32px 24px;
@@ -231,13 +339,14 @@ class MainActivity : AppCompatActivity() {
               <p style="margin:0 0 4px;font-size:14px;color:#7A6A5D;">
                 Periksa WiFi atau sambungan Tailscale ke server kasir.</p>
               <p style="margin:0 0 22px;font-size:12px;color:#A0928A;">$aman</p>
-              <a href="$POS_URL" style="display:inline-block;background:#6F4E37;color:#FFF;
-                 text-decoration:none;padding:13px 30px;border-radius:10px;font-size:15px;
-                 font-weight:600;">Coba Lagi</a>
+              <button onclick="AndroidPrinter.retry()"
+                 style="background:#6F4E37;color:#FFF;border:0;padding:13px 30px;
+                 border-radius:10px;font-size:15px;font-weight:600;">Coba Lagi</button>
+              <p style="margin:18px 0 0;font-size:11px;color:#A0928A;">Alamat yang dicoba:<br>$daftar</p>
             </div>
         """.trimIndent()
         try {
-            view.loadDataWithBaseURL(POS_URL, html, "text/html", "utf-8", null)
+            view.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
         } catch (e: Throwable) {
             recordError("Gagal menampilkan halaman galat", e)
         }
@@ -316,6 +425,13 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        /** Cari ulang server dari halaman galat. */
+        @JavascriptInterface
+        fun retry() {
+            try { runOnUiThread { cariServerLaluMuat() } }
+            catch (e: Throwable) { recordError("Gagal mencoba ulang", e) }
+        }
+
         /** Buka pemilih printer dari halaman web. */
         @JavascriptInterface
         fun choosePrinter() {
@@ -344,7 +460,8 @@ class MainActivity : AppCompatActivity() {
                 val mac = prefs().getString(KEY_MAC, null)
                 val bonded = try { bondedDevices().size } catch (e: Throwable) { -1 }
                 val info = buildString {
-                    appendLine("Alamat server : $POS_URL")
+                    appendLine("Server aktif  : ${serverAktif ?: "belum ada"}")
+                    appendLine("Alamat dicoba : ${POS_URLS.joinToString(", ")}")
                     appendLine("Android SDK   : ${Build.VERSION.SDK_INT}")
                     appendLine("Perangkat     : ${Build.MANUFACTURER} ${Build.MODEL}")
                     // Mesin render halaman. WebView memakai Chromium yang sama
