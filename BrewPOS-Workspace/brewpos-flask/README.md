@@ -139,10 +139,11 @@ Ketiganya berlaku untuk seluruh halaman dan berjalan ulang lewat satu
    Dropdown yang tadinya pendek ikut berubah sendiri begitu datanya bertambah.
 2. **Tabel jadi kartu di bawah 640px.** Label tiap sel disalin dari `<thead>`
    ke `td[data-label]`, jadi 26 tabel yang ada -- dan tabel berikutnya -- dapat
-   tanpa diminta. Selnya tetap **blok** dengan label dilabuhkan absolut di kiri,
-   bukan flex container: sebagai flex, tiap anak sel jadi item terpisah yang
-   berjejer ke samping, dan sel bertumpuk (nilai + jumlah bahan + catatan susut
-   di halaman HPP) terjepit lalu tumpah keluar kartu.
+   tanpa diminta. Label ditaruh **di atas** nilainya, keduanya berlebar penuh.
+   Judul kolom di sini ditulis untuk header tabel lebar ("Nama Bahan Baku /
+   Kemasan", "Kontak (Telp / Email)") dan tidak muat di kolom sempit mana pun;
+   susunan sisi-sisian selalu berakhir dengan label tiga baris atau tabrakan
+   antar baris. Ditumpuk, tidak ada tawar-menawar lebar sama sekali.
 3. **Kisi sebaris membungkus di bawah 640px.** Ada 32 tempat yang menulis
    `grid-template-columns` di atribut `style`; di layar 360px itu membuat
    seluruh halaman bisa digeser ke samping. Kisinya diubah jadi baris yang
