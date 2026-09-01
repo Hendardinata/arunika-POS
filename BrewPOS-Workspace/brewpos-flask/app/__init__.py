@@ -183,7 +183,7 @@ def create_app(config_class=Config):
         analytics_bp, gamification_bp, inventory_bp, expenses_bp,
         settings_bp, shift_bp, attendance_bp, role_access_bp, recipe_bp, logs_bp,
         historical_bp, notifications_bp, bootstrap_bp,
-        monitoring_bp, web_bp
+        monitoring_bp, database_bp, web_bp
     )
 
     app.register_blueprint(auth_bp)
@@ -205,6 +205,7 @@ def create_app(config_class=Config):
     app.register_blueprint(notifications_bp)
     app.register_blueprint(bootstrap_bp)
     app.register_blueprint(monitoring_bp)
+    app.register_blueprint(database_bp)
     app.register_blueprint(web_bp)
 
     # Schedule Cron Jobs if not in reload process

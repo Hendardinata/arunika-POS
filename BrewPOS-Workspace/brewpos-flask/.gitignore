@@ -15,3 +15,7 @@ build/
 
 # Kunci & kredensial produksi -- jangan pernah masuk repo
 .env
+
+# Cadangan basis data. Isinya seluruh data toko termasuk hash sandi -- repo ini publik.
+backups/
+*.bak

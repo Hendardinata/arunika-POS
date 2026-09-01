@@ -17,6 +17,7 @@ from app.routes.historical_sales import historical_bp
 from app.routes.notifications import notifications_bp
 from app.routes.bootstrap import bootstrap_bp
 from app.routes.monitoring import monitoring_bp
+from app.routes.database import database_bp
 from app.routes.web import web_bp
 
 __all__ = [
@@ -39,5 +40,6 @@ __all__ = [
     'notifications_bp',
     'bootstrap_bp',
     'monitoring_bp',
+    'database_bp',
     'web_bp'
 ]
