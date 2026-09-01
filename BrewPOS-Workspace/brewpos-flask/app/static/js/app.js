@@ -1596,3 +1596,160 @@ function pasangLabelKolom(akar = document) {
         tertunda = requestAnimationFrame(jalankan);
     }).observe(document.documentElement, { childList: true, subtree: true });
 })();
+
+/* ==========================================================================
+   Pintasan papan ketik (desktop)
+
+   Hanya aktif pada perangkat berpenunjuk presisi. Di HP dan tablet tidak ada
+   papan ketik yang selalu ada, dan menyalakannya di sana justru berisiko:
+   papan ketik layar yang muncul untuk mengisi takaran bisa memicu pintasan
+   yang tidak diminta.
+
+   Semuanya diturunkan dari DOM yang sudah ada -- tautan menu samping, kotak
+   pencarian, tombol utama -- jadi tidak ada satu templat pun yang perlu
+   mendaftarkan pintasannya sendiri, dan halaman baru langsung ikut dapat.
+   ========================================================================== */
+
+const PINTASAN = [
+    ['Alt + 1…9', 'Buka halaman ke-1..9 di menu samping'],
+    ['/  atau  Ctrl + K', 'Fokus ke kotak pencarian halaman ini'],
+    ['Ctrl + Enter', 'Jalankan tombol utama (Simpan / Bayar)'],
+    ['Esc', 'Tutup dialog, panel, atau menu yang terbuka'],
+    ['?', 'Tampilkan daftar pintasan ini'],
+];
+
+function pakaiPintasan() {
+    return window.matchMedia('(pointer: fine)').matches;
+}
+
+/** Sedang mengetik? Pintasan huruf tunggal tidak boleh merebut ketikan. */
+function sedangMengetik(el) {
+    if (!el) return false;
+    if (el.isContentEditable) return true;
+    const t = el.tagName;
+    return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT';
+}
+
+/** Dialog paling atas yang sedang terbuka, kalau ada. */
+function modalTeratas() {
+    const semua = document.querySelectorAll('.modal-backdrop.show');
+    return semua.length ? semua[semua.length - 1] : null;
+}
+
+/**
+ * Kotak pencarian halaman ini.
+ *
+ * Dicari lewat placeholder-nya, bukan lewat daftar id: tiap halaman menamai
+ * kotaknya sendiri (menu-search-input, crm-search, inventory-search, ...) dan
+ * daftar id akan ketinggalan begitu ada halaman baru.
+ */
+function kotakPencarian() {
+    const kandidat = document.querySelectorAll(
+        'input[type="text"], input[type="search"], input:not([type])');
+    for (const el of kandidat) {
+        if (el.offsetParent === null || el.disabled) continue;
+        const p = (el.placeholder || '').toLowerCase();
+        if (p.includes('cari')) return el;
+    }
+    return null;
+}
+
+/** Tombol utama yang berlaku sekarang: di dalam dialog kalau ada, kalau tidak di halaman. */
+function tombolUtama() {
+    const lingkup = modalTeratas() || document;
+    const kandidat = lingkup.querySelectorAll(
+        'button[type="submit"], .btn-primary, .btn-success');
+    for (const el of kandidat) {
+        if (el.offsetParent !== null && !el.disabled) return el;
+    }
+    return null;
+}
+
+function tampilkanDaftarPintasan() {
+    const lama = document.getElementById('panel-pintasan');
+    if (lama) { lama.remove(); return; }
+
+    const panel = document.createElement('div');
+    panel.id = 'panel-pintasan';
+    panel.className = 'modal-backdrop show';
+    panel.innerHTML = `
+        <div class="modal-dialog" style="max-width: 470px;">
+            <div class="modal-header">
+                <h3 class="modal-title"><i class="fas fa-keyboard text-primary"></i> Pintasan Papan Ketik</h3>
+                <button class="modal-close" aria-label="Tutup">&times;</button>
+            </div>
+            <div style="padding: 8px 24px 22px;">
+                ${PINTASAN.map(([tombol, arti]) => `
+                    <div class="baris-pintasan">
+                        <kbd>${tombol}</kbd>
+                        <span>${arti}</span>
+                    </div>`).join('')}
+            </div>
+        </div>`;
+    panel.addEventListener('click', (e) => {
+        // Klik di luar dialog, atau pada tombol tutup
+        if (e.target === panel || e.target.closest('.modal-close')) panel.remove();
+    });
+    document.body.appendChild(panel);
+}
+
+if (pakaiPintasan()) {
+    document.addEventListener('keydown', (e) => {
+        // Pintasan bawaan browser (Ctrl+T, Ctrl+R, ...) tidak diganggu.
+        if (e.altKey && e.key >= '1' && e.key <= '9') {
+            const tautan = Array.from(document.querySelectorAll('.sidebar .nav-item[href]'))
+                .filter(a => a.offsetParent !== null);   // yang disembunyikan RBAC tidak dihitung
+            const target = tautan[Number(e.key) - 1];
+            if (target) { e.preventDefault(); window.location.href = target.getAttribute('href'); }
+            return;
+        }
+
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            const tombol = tombolUtama();
+            if (tombol) { e.preventDefault(); tombol.click(); }
+            return;
+        }
+
+        if (e.key === 'k' && (e.ctrlKey || e.metaKey)) {
+            const kotak = kotakPencarian();
+            if (kotak) { e.preventDefault(); kotak.focus(); kotak.select(); }
+            return;
+        }
+
+        if (e.key === 'Escape') {
+            const panel = document.getElementById('panel-pintasan');
+            if (panel) { panel.remove(); return; }
+            const modal = modalTeratas();
+            // Dialog ditutup di sini; sidebar dan panel keranjang sudah punya
+            // penangan Esc sendiri di atas, dan urutannya memang begitu: yang
+            // paling atas di layar yang paling dulu tertutup.
+            if (modal) { modal.classList.remove('show'); return; }
+            return;
+        }
+
+        if (sedangMengetik(e.target)) return;
+
+        if (e.key === '/') {
+            const kotak = kotakPencarian();
+            if (kotak) { e.preventDefault(); kotak.focus(); kotak.select(); }
+        } else if (e.key === '?') {
+            e.preventDefault();
+            tampilkanDaftarPintasan();
+        }
+    });
+
+    // Tombol bantuan di topbar. Pintasan yang tidak diketahui siapa pun sama
+    // saja dengan tidak ada, jadi harus ada satu pintu masuk yang terlihat.
+    document.addEventListener('DOMContentLoaded', () => {
+        const bar = document.querySelector('.topbar-actions');
+        if (!bar || document.getElementById('btn-pintasan')) return;
+        const b = document.createElement('button');
+        b.id = 'btn-pintasan';
+        b.className = 'btn btn-icon btn-secondary hanya-desktop';
+        b.title = 'Pintasan papan ketik (?)';
+        b.setAttribute('aria-label', 'Pintasan papan ketik');
+        b.innerHTML = '<i class="fas fa-keyboard"></i>';
+        b.onclick = tampilkanDaftarPintasan;
+        bar.insertBefore(b, bar.firstChild);
+    });
+}

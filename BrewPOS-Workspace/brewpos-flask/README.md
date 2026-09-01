@@ -140,11 +140,33 @@ Ketiganya berlaku untuk seluruh halaman dan berjalan ulang lewat satu
 2. **Tabel jadi kartu di bawah 640px.** Label tiap sel disalin dari `<thead>`
    ke `td[data-label]`, jadi 26 tabel yang ada -- dan tabel berikutnya -- dapat
    tanpa diminta.
-3. **Kisi sebaris ditumpuk di bawah 640px.** Ada 32 tempat yang menulis
-   `grid-template-columns: 1fr 1fr` di atribut `style`; di layar 360px itu
-   membuat seluruh halaman bisa digeser ke samping. Satu aturan CSS menumpuk
-   semuanya. Pakai kelas `.keep-grid` bila suatu kisi memang harus tetap
+3. **Kisi sebaris membungkus di bawah 640px.** Ada 32 tempat yang menulis
+   `grid-template-columns` di atribut `style`; di layar 360px itu membuat
+   seluruh halaman bisa digeser ke samping. Kisinya diubah jadi baris yang
+   membungkus -- bukan ditumpuk satu kolom, karena menumpuk membuat tombol
+   kecil (hapus, tambah) memenuhi lebar layar dan nilai rata-kanan menggantung
+   sendirian. Pakai kelas `.keep-grid` bila suatu kisi memang harus tetap
    berkolom di layar sempit.
+
+### Pintasan papan ketik (desktop)
+
+| Tombol | Fungsi |
+|---|---|
+| `Alt` + `1`…`9` | Buka halaman ke-1..9 di menu samping (hanya yang boleh dibuka) |
+| `/` atau `Ctrl` + `K` | Fokus ke kotak pencarian halaman ini |
+| `Ctrl` + `Enter` | Jalankan tombol utama -- di dalam dialog kalau ada, kalau tidak di halaman |
+| `Esc` | Tutup dialog, panel keranjang, atau menu samping |
+| `?` | Tampilkan daftar pintasan |
+
+Hanya aktif pada `(pointer: fine)`. Di layar sentuh papan ketik cuma muncul saat
+mengisi, dan pintasan huruf tunggal di sana lebih sering salah picu daripada
+membantu. Tombol keyboard di topbar adalah pintu masuknya -- pintasan yang tidak
+diketahui siapa pun sama saja dengan tidak ada.
+
+Semuanya diturunkan dari DOM yang sudah ada: kotak pencarian dicari lewat
+placeholder "Cari" (bukan daftar id, yang akan ketinggalan), tombol utama lewat
+`[type=submit]`/`.btn-primary`, dan menu samping lewat tautan yang **terlihat**
+-- jadi urutan `Alt`+angka otomatis mengikuti hak akses tiap pengguna.
 
 ### Menguji tampilan
 
