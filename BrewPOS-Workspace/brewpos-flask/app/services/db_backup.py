@@ -35,6 +35,12 @@ NAMA_BERKAS = re.compile(r'^[A-Za-z0-9._-]+\.bak$')
 # Server hanya bisa membaca-tulis di sana.
 AWALAN_SEMENTARA = ('unduh-', 'upload-')
 
+# Berkas unggahan yang sedang menunggu keputusan Superadmin. Disembunyikan dari
+# riwayat seperti berkas kerja lain, tapi SENGAJA tidak ikut disapu penyapu satu
+# jam: ia memang harus bertahan sampai permintaannya diputus. Yang membuangnya
+# adalah alur permintaan restore (setujui/tolak/batal/kedaluwarsa 24 jam).
+AWALAN_TERSEMBUNYI = AWALAN_SEMENTARA + ('pending-',)
+
 
 class DbBackupError(Exception):
     """Kegagalan yang pesannya memang untuk dibaca pengguna."""
@@ -152,7 +158,7 @@ def daftar_backup():
     hasil = []
     try:
         for nama in os.listdir(folder):
-            if not NAMA_BERKAS.match(nama) or nama.startswith(AWALAN_SEMENTARA):
+            if not NAMA_BERKAS.match(nama) or nama.startswith(AWALAN_TERSEMBUNYI):
                 continue
             try:
                 stat = os.stat(os.path.join(folder, nama))

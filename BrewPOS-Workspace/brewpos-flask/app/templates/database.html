@@ -44,41 +44,32 @@
 
     <div style="background: var(--color-danger-bg); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px 14px; margin-top: 16px;">
         <div style="font-size: 0.8125rem; font-weight: 700; margin-bottom: 4px; color: var(--color-danger);">
-            <i class="fas fa-triangle-exclamation"></i> Pulihkan dari Berkas .bak
+            <i class="fas fa-triangle-exclamation"></i> <span id="judul-pulihkan">Ajukan Pemulihan</span>
         </div>
-        <p style="font-size: 0.6875rem; color: var(--text-muted); margin-bottom: 10px;">
+        <p style="font-size: 0.6875rem; color: var(--text-muted); margin-bottom: 10px;" id="catatan-pulihkan">
             Restore <strong>menimpa seluruh data yang ada sekarang</strong> &mdash; transaksi, stok,
-            akun, semuanya kembali ke keadaan saat cadangan dibuat. Semua sesi kasir yang
-            sedang berjalan akan terputus. Tidak bisa dibatalkan.
+            akun, semuanya kembali ke keadaan saat cadangan dibuat. Tidak bisa dibatalkan.
         </p>
+
+        <div class="form-group" style="margin-bottom: 8px;">
+            <label class="form-label" for="alasan-pulihkan">Alasan pemulihan</label>
+            <textarea id="alasan-pulihkan" class="form-control" rows="2"
+                      placeholder="Contoh: data transaksi 2 hari terakhir hilang setelah listrik padam"></textarea>
+        </div>
+
         <input type="file" id="db-restore-file" accept=".bak" class="form-control" style="margin-bottom: 8px;">
         <button type="button" class="btn btn-secondary btn-sm" style="width: 100%;" onclick="pulihkanDbDariUnggahan()">
-            <i class="fas fa-upload"></i> Unggah &amp; Pulihkan
+            <i class="fas fa-upload"></i> <span id="label-unggah">Unggah &amp; Ajukan</span>
         </button>
     </div>
 
-    <!-- Konfirmasi Superadmin. Diisi tepat sebelum memulihkan, bukan disimpan:
-         sesi yang tertinggal terbuka di perangkat lain tidak boleh cukup untuk
-         menghapus isi toko. Sandinya diverifikasi di server; kotak ini hanya
-         tempat mengetiknya. -->
-    <div style="border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px 14px; margin-top: 12px;">
-        <div style="font-size: 0.8125rem; font-weight: 700; margin-bottom: 4px;">
-            <i class="fas fa-user-shield text-primary"></i> Konfirmasi Superadmin
+    <!-- Kotak masuk persetujuan. Hanya Superadmin yang melihat tombol putusannya;
+         pemohon melihat baris yang sama sebagai status permintaannya. -->
+    <div id="kotak-permintaan" style="margin-top: 16px; display: none;">
+        <div style="font-size: 0.8125rem; font-weight: 700; margin-bottom: 8px;">
+            <i class="fas fa-inbox text-primary"></i> <span id="judul-permintaan">Permintaan Pemulihan</span>
         </div>
-        <p style="font-size: 0.6875rem; color: var(--text-muted); margin-bottom: 10px;">
-            Wajib diisi untuk setiap pemulihan, termasuk bila Anda sendiri Superadmin.
-            Tidak dipakai untuk membuat atau mengunduh cadangan.
-        </p>
-        <div class="form-group" style="margin-bottom: 8px;">
-            <label class="form-label" for="sa-username">Username Superadmin</label>
-            <input type="text" id="sa-username" class="form-control" autocomplete="off"
-                   placeholder="Username Superadmin">
-        </div>
-        <div class="form-group" style="margin-bottom: 0;">
-            <label class="form-label" for="sa-password">Sandi Superadmin</label>
-            <input type="password" id="sa-password" class="form-control" autocomplete="new-password"
-                   placeholder="Sandi Superadmin">
-        </div>
+        <div id="daftar-permintaan"></div>
     </div>
 </div>
 
@@ -103,6 +94,7 @@
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         muatManajemenDb();
+        muatPermintaan();
     });
 
     function ukuranBerkas(bytes) {
@@ -128,6 +120,22 @@
         // ada daftar untuk ditampilkan.
         const superadmin = peran === 'SUPERADMIN';
         document.getElementById('db-riwayat').style.display = superadmin ? '' : 'none';
+        // Superadmin memutuskan; yang lain mengajukan. Kata-katanya ikut berubah
+        // supaya tombolnya tidak menjanjikan sesuatu yang tidak terjadi.
+        document.getElementById('judul-pulihkan').textContent =
+            superadmin ? 'Pulihkan dari Berkas .bak' : 'Ajukan Pemulihan';
+        document.getElementById('label-unggah').textContent =
+            superadmin ? 'Unggah & Pulihkan' : 'Unggah & Ajukan';
+        document.getElementById('judul-permintaan').textContent =
+            superadmin ? 'Permintaan Menunggu Persetujuan' : 'Permintaan Pemulihan Saya';
+        document.getElementById('alasan-pulihkan').closest('.form-group').style.display =
+            superadmin ? 'none' : '';
+        document.getElementById('catatan-pulihkan').innerHTML = superadmin
+            ? 'Restore <strong>menimpa seluruh data yang ada sekarang</strong> &mdash; transaksi, stok, '
+              + 'akun, semuanya kembali ke keadaan saat cadangan dibuat. Tidak bisa dibatalkan.'
+            : 'Permintaan Anda dikirim ke Superadmin untuk disetujui. Restore '
+              + '<strong>menimpa seluruh data yang ada sekarang</strong> dan tidak bisa dibatalkan.';
+
         document.getElementById('db-catatan-peran').innerHTML = superadmin
             ? 'Cadangan yang Anda buat tersimpan di server dan bisa diunduh ulang kapan saja.'
             : 'Cadangan langsung terunduh ke perangkat Anda dan <strong>tidak disimpan di server</strong>. '
@@ -228,38 +236,135 @@
         }
     }
 
-    /**
-     * Ambil konfirmasi Superadmin, lalu tanya sekali lagi.
-     *
-     * Mengembalikan null bila dibatalkan atau kotaknya belum diisi. Sandinya
-     * TIDAK disimpan di mana pun -- dibaca saat dikirim lalu kotaknya dikosongkan.
-     */
-    function konfirmasiRestore(sumber) {
-        const nama = document.getElementById('sa-username').value.trim();
-        const sandi = document.getElementById('sa-password').value;
-        if (!nama || !sandi) {
-            showToast('Isi username dan sandi Superadmin dulu untuk menyetujui pemulihan.', 'error');
-            document.getElementById(nama ? 'sa-password' : 'sa-username').focus();
-            return null;
+    // ------------------------------------------------------------------
+    // Permintaan & persetujuan pemulihan
+    // ------------------------------------------------------------------
+
+    const LABEL_STATUS = {
+        PENDING: ['warning', 'Menunggu keputusan'],
+        APPROVED: ['success', 'Disetujui'],
+        REJECTED: ['danger', 'Ditolak'],
+        CANCELLED: ['primary', 'Dibatalkan'],
+        FAILED: ['danger', 'Gagal'],
+    };
+
+    async function muatPermintaan() {
+        const user = getUser();
+        const peran = (user && user.role || '').toUpperCase();
+        if (!['SUPERADMIN', 'ADMIN', 'OWNER'].includes(peran)) return;
+
+        const kotak = document.getElementById('kotak-permintaan');
+        const daftar = document.getElementById('daftar-permintaan');
+        try {
+            const data = await apiFetch('/database/restore-request');
+            if (!data.requests.length) { kotak.style.display = 'none'; return; }
+            kotak.style.display = '';
+            daftar.innerHTML = data.requests.map(p => barisPermintaan(p, data.canApprove)).join('');
+        } catch (err) {
+            kotak.style.display = 'none';
         }
-        const lanjut = confirm(
-            `PULIHKAN dari ${sumber}?\n\n` +
+    }
+
+    function barisPermintaan(p, bolehPutuskan) {
+        const [warna, teks] = LABEL_STATUS[p.status] || ['primary', p.status];
+        const menunggu = p.status === 'PENDING';
+        const aksi = menunggu && bolehPutuskan
+            ? `<button class="btn btn-primary btn-sm" onclick="setujuiPermintaan(${p.id}, '${escHtml(p.filename)}')">
+                   <i class="fas fa-check"></i> Setujui &amp; Pulihkan</button>
+               <button class="btn btn-secondary btn-sm" onclick="tolakPermintaan(${p.id})">
+                   <i class="fas fa-xmark"></i> Tolak</button>`
+            : menunggu
+            ? `<button class="btn btn-secondary btn-sm" onclick="batalkanPermintaan(${p.id})">
+                   <i class="fas fa-rotate-left"></i> Batalkan</button>`
+            : '';
+
+        return `
+            <div style="border: 1px solid var(--border-color); border-radius: var(--radius-sm);
+                        padding: 12px 14px; margin-bottom: 8px;">
+                <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 6px;">
+                    <span class="badge-chip ${warna}">${teks}</span>
+                    <strong style="font-size: 0.8125rem;">${escHtml(p.filename)}</strong>
+                </div>
+                <div style="font-size: 0.6875rem; color: var(--text-muted); margin-bottom: 8px;">
+                    Diajukan <strong>${escHtml(p.requestedBy || '-')}</strong>
+                    &middot; ${(p.createdAt || '').replace('T', ' ')}
+                    ${p.decidedBy ? `<br>Diputus <strong>${escHtml(p.decidedBy)}</strong>` : ''}
+                    ${p.decisionNote ? `<br>Catatan: ${escHtml(p.decisionNote)}` : ''}
+                </div>
+                ${p.reason ? `<div style="font-size: 0.75rem; margin-bottom: 8px;">"${escHtml(p.reason)}"</div>` : ''}
+                <div>${aksi}</div>
+            </div>`;
+    }
+
+    function escHtml(teks) {
+        const d = document.createElement('div');
+        d.textContent = teks == null ? '' : String(teks);
+        return d.innerHTML;
+    }
+
+    async function setujuiPermintaan(id, namaBerkas) {
+        if (!confirm(
+            `SETUJUI pemulihan dari ${namaBerkas}?\n\n` +
             'SELURUH data sekarang akan ditimpa dan tidak bisa dikembalikan. ' +
-            'Semua sesi kasir yang sedang berjalan akan terputus.\n\n' +
-            `Disetujui sebagai Superadmin: ${nama}\n\n` +
-            'Buat cadangan dulu bila belum.'
-        );
-        return lanjut ? { nama, sandi } : null;
-    }
-
-    function bersihkanKonfirmasi() {
-        document.getElementById('sa-password').value = '';
-    }
-
-    async function kirimRestore(options) {
+            'Semua sesi kasir yang sedang berjalan akan terputus.'
+        )) return;
         showToast('Memulihkan basis data... jangan tutup halaman ini.', 'info');
         try {
-            await apiFetch('/database/restore', options);
+            await apiFetch(`/database/restore-request/${id}/approve`, {
+                method: 'POST', body: JSON.stringify({ confirm: 'PULIHKAN' })
+            });
+            showToast('Basis data dipulihkan. Halaman akan dimuat ulang.', 'success');
+            setTimeout(() => window.location.reload(), 1500);
+        } catch (err) {
+            showToast(err.message, 'error');
+            muatPermintaan();
+        }
+    }
+
+    async function tolakPermintaan(id) {
+        const catatan = prompt('Alasan penolakan (opsional):') ;
+        if (catatan === null) return;
+        try {
+            await apiFetch(`/database/restore-request/${id}/reject`, {
+                method: 'POST', body: JSON.stringify({ note: catatan })
+            });
+            showToast('Permintaan ditolak.', 'success');
+            muatPermintaan();
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+
+    async function batalkanPermintaan(id) {
+        if (!confirm('Batalkan permintaan pemulihan ini?')) return;
+        try {
+            await apiFetch(`/database/restore-request/${id}`, { method: 'DELETE' });
+            showToast('Permintaan dibatalkan.', 'success');
+            muatPermintaan();
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+
+    /** Superadmin memulihkan langsung; yang lain mengajukan permintaan. */
+    function akuSuperadmin() {
+        const u = getUser();
+        return (u && u.role || '').toUpperCase() === 'SUPERADMIN';
+    }
+
+    async function pulihkanDbDariServer(filename) {
+        // Hanya muncul di riwayat, yang hanya dilihat Superadmin.
+        if (!confirm(
+            `PULIHKAN dari ${filename}?\n\n` +
+            'SELURUH data sekarang akan ditimpa dan tidak bisa dikembalikan. ' +
+            'Semua sesi kasir yang sedang berjalan akan terputus.'
+        )) return;
+        showToast('Memulihkan basis data... jangan tutup halaman ini.', 'info');
+        try {
+            await apiFetch('/database/restore', {
+                method: 'POST',
+                body: JSON.stringify({ filename, confirm: 'PULIHKAN' })
+            });
             showToast('Basis data dipulihkan. Halaman akan dimuat ulang.', 'success');
             setTimeout(() => window.location.reload(), 1500);
         } catch (err) {
@@ -267,34 +372,48 @@
         }
     }
 
-    async function pulihkanDbDariServer(filename) {
-        const izin = konfirmasiRestore(filename);
-        if (!izin) return;
-        await kirimRestore({
-            method: 'POST',
-            body: JSON.stringify({
-                filename, confirm: 'PULIHKAN',
-                superadminUsername: izin.nama, superadminPassword: izin.sandi
-            })
-        });
-        bersihkanKonfirmasi();
-    }
-
     async function pulihkanDbDariUnggahan() {
         const input = document.getElementById('db-restore-file');
         const berkas = input.files && input.files[0];
         if (!berkas) { showToast('Pilih berkas .bak dulu.', 'error'); return; }
-        const izin = konfirmasiRestore(berkas.name);
-        if (!izin) return;
 
         const form = new FormData();
         form.append('file', berkas);
-        form.append('confirm', 'PULIHKAN');
-        form.append('superadminUsername', izin.nama);
-        form.append('superadminPassword', izin.sandi);
-        await kirimRestore({ method: 'POST', body: form });
-        input.value = '';
-        bersihkanKonfirmasi();
+
+        if (akuSuperadmin()) {
+            if (!confirm(
+                `PULIHKAN dari ${berkas.name}?\n\n` +
+                'SELURUH data sekarang akan ditimpa dan tidak bisa dikembalikan.'
+            )) return;
+            form.append('confirm', 'PULIHKAN');
+            showToast('Memulihkan basis data... jangan tutup halaman ini.', 'info');
+            try {
+                await apiFetch('/database/restore', { method: 'POST', body: form });
+                showToast('Basis data dipulihkan. Halaman akan dimuat ulang.', 'success');
+                setTimeout(() => window.location.reload(), 1500);
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+            input.value = '';
+            return;
+        }
+
+        const alasan = document.getElementById('alasan-pulihkan').value.trim();
+        if (alasan.length < 10) {
+            showToast('Tulis alasan pemulihan dulu (minimal 10 karakter).', 'error');
+            document.getElementById('alasan-pulihkan').focus();
+            return;
+        }
+        form.append('reason', alasan);
+        try {
+            await apiFetch('/database/restore-request', { method: 'POST', body: form });
+            showToast('Permintaan dikirim. Menunggu persetujuan Superadmin.', 'success');
+            input.value = '';
+            document.getElementById('alasan-pulihkan').value = '';
+            muatPermintaan();
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
     }
 </script>
 {% endblock %}

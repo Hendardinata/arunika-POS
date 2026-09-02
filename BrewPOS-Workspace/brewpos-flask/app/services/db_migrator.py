@@ -334,6 +334,24 @@ def auto_sync_schema(app):
                 [updatedAt] DATETIME NOT NULL DEFAULT GETDATE()
             )
         """),
+        # Permintaan pemulihan yang menunggu keputusan Superadmin. Restore
+        # menimpa seluruh isi toko, jadi tindakannya dipecah dua orang:
+        # Admin/Owner mengajukan, Superadmin memutuskan.
+        ("RestoreRequest", """
+            CREATE TABLE [RestoreRequest] (
+                [id] INT IDENTITY(1,1) PRIMARY KEY,
+                [requestedBy] INT NULL,
+                [sourceType] NVARCHAR(20) NOT NULL DEFAULT 'HISTORY',
+                [filename] NVARCHAR(255) NOT NULL,
+                [storedName] NVARCHAR(255) NOT NULL,
+                [reason] NVARCHAR(MAX) NULL,
+                [status] NVARCHAR(20) NOT NULL DEFAULT 'PENDING',
+                [decidedBy] INT NULL,
+                [decidedAt] DATETIME NULL,
+                [decisionNote] NVARCHAR(MAX) NULL,
+                [createdAt] DATETIME NOT NULL DEFAULT GETDATE()
+            )
+        """),
         # Resep menu: berapa banyak tiap bahan yang terpakai per 1 porsi.
         # Sempat hanya lahir lewat seed.py, jadi database yang dibangun tanpa
         # seed tidak punya tabel ini sama sekali -- akibatnya potong stok

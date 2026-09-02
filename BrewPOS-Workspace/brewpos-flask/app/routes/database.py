@@ -16,26 +16,30 @@ berkas .bak berisi SELURUH isi basis data, termasuk hash sandi setiap akun.
 Dengan "buat & unduh", Owner hanya pernah memegang salinan yang ia buat sendiri
 saat itu juga, dan server tidak menyimpan apa pun untuknya.
 
-Memulihkan berdiri sendiri: Admin/Owner boleh menekan tombolnya, tapi WAJIB
-disetujui Superadmin dengan sandi yang diketik saat itu juga -- Superadmin
-sendiri pun tetap harus mengetiknya. Restore menimpa seluruh basis data dan
-tidak bisa dibatalkan, jadi tidak cukup bersandar pada "yang sedang login
-siapa": sesi yang tertinggal terbuka di perangkat lain tidak boleh cukup untuk
-menghapus isi toko.
+Memulihkan dipecah jadi dua tindakan oleh dua orang: Admin/Owner MENGAJUKAN,
+Superadmin MEMUTUSKAN dari halamannya sendiri. Restore menimpa seluruh isi toko
+dan tidak bisa dibatalkan, jadi keputusannya tidak boleh jatuh pada satu orang
+di satu klik.
+
+Sengaja BUKAN dengan meminta sandi Superadmin diketik di layar pemohon: itu
+memaksa sandi berpindah tangan, dan begitu berpindah ia tidak bisa ditarik lagi.
+Di sini masing-masing bertindak sambil masuk sebagai dirinya sendiri, dan
+jejaknya menyebut dua nama yang berbeda.
 """
 
 import os
+import secrets
+from datetime import datetime, timedelta
 from io import BytesIO
 
-import bcrypt
 from flask import Blueprint, jsonify, request, send_file
 
 from app.extensions import db
 from app.middleware.auth import (ROLE_LEVELS, get_current_user_id,
                                  has_role_level)
-from app.models.user import User
-from app.services import login_guard, tiket_unduh
-from app.services.db_backup import (AWALAN_SEMENTARA, DbBackupError,
+from app.models.restore_request import UMUR_JAM, RestoreRequest
+from app.services import tiket_unduh
+from app.services.db_backup import (AWALAN_TERSEMBUNYI, DbBackupError,
                                     buat_backup, daftar_backup, hapus_backup,
                                     path_backup, pulihkan_backup,
                                     sapu_berkas_sementara)
@@ -75,53 +79,44 @@ def _wajib_superadmin():
     return None
 
 
-def _izin_superadmin(data):
+def _permintaan_menggantung():
+    """Permintaan restore yang masih menunggu keputusan, atau None."""
+    _buang_permintaan_kedaluwarsa()
+    return (RestoreRequest.query
+            .filter_by(status='PENDING')
+            .order_by(RestoreRequest.createdAt.desc())
+            .first())
+
+
+def _buang_permintaan_kedaluwarsa():
     """
-    Verifikasi sandi Superadmin yang diketikkan untuk menyetujui restore.
+    Tutup permintaan yang menganggur lewat batas, dan buang berkas unggahannya.
 
-    Mengembalikan (nama_superadmin, None) bila sah, atau (None, respons_galat).
-
-    Yang dikembalikan sengaja STRING, bukan objek User: pemanggilnya mencatat
-    nama itu setelah restore selesai, dan saat itu sesi ORM sudah dilepas serta
-    basis datanya sudah diganti -- membaca atribut dari objek yang terlepas akan
-    meledak atau, lebih buruk, diam-diam menanyakannya ke basis data yang baru.
-
-    Memakai rem yang sama dengan halaman login. Tanpa itu endpoint ini jadi alat
-    penebak sandi Superadmin yang nyaman: pemegang token Owner bisa mencoba
-    tanpa batas, dan tidak satu pun kegagalannya muncul sebagai kegagalan login
-    karena jalurnya bukan /api/auth/login.
-
-    Pesan galatnya sengaja sama untuk semua sebab -- username tidak ada, bukan
-    Superadmin, atau sandi salah. Membedakannya sama dengan memberi tahu penebak
-    bagian mana yang sudah benar.
+    Berkas itu berisi seluruh basis data. Tanpa langkah ini, permintaan yang
+    dilupakan meninggalkannya di server tanpa batas waktu.
     """
-    nama = (data.get('superadminUsername') or '').strip()
-    sandi = data.get('superadminPassword') or ''
-    if not nama or not sandi:
-        return None, (jsonify({
-            'error': 'Restore harus disetujui Superadmin. Isi username dan sandi Superadmin.'
-        }), 403)
+    batas = datetime.utcnow() - timedelta(hours=UMUR_JAM)
+    basi = RestoreRequest.query.filter(
+        RestoreRequest.status == 'PENDING',
+        RestoreRequest.createdAt < batas).all()
+    if not basi:
+        return
+    for p in basi:
+        p.status = 'CANCELLED'
+        p.decisionNote = f'Kedaluwarsa otomatis setelah {UMUR_JAM} jam tanpa keputusan'
+        p.decidedAt = datetime.utcnow()
+        _buang_berkas_unggahan(p)
+    db.session.commit()
 
-    tertahan = login_guard.seconds_until_unlocked(nama)
-    if tertahan:
-        return None, (jsonify({
-            'error': f'Terlalu banyak percobaan. Coba lagi dalam {tertahan // 60 + 1} menit.'
-        }), 429)
 
-    user = User.query.filter(db.func.lower(User.username) == nama.lower()).first()
-    sah = False
-    if user and (user.role or '').upper() == 'SUPERADMIN':
-        try:
-            sah = bcrypt.checkpw(sandi.encode('utf-8'), user.password.encode('utf-8'))
-        except (ValueError, TypeError):
-            sah = False   # hash rusak diperlakukan sebagai gagal, bukan galat 500
-
-    if not sah:
-        login_guard.record_failure(nama)
-        return None, (jsonify({'error': 'Konfirmasi Superadmin tidak valid.'}), 403)
-
-    login_guard.clear(nama)
-    return user.username, None
+def _buang_berkas_unggahan(permintaan):
+    """Hapus berkas unggahan milik satu permintaan. Berkas riwayat tidak disentuh."""
+    if permintaan.sourceType != 'UPLOAD':
+        return
+    try:
+        os.remove(path_backup(permintaan.storedName, harus_ada=False))
+    except (OSError, DbBackupError):
+        pass
 
 
 @database_bp.route('/backups', methods=['GET'])
@@ -155,7 +150,7 @@ def download_backup(filename):
     galat = _wajib_superadmin()
     if galat:
         return galat
-    if (filename or '').startswith(AWALAN_SEMENTARA):
+    if (filename or '').startswith(AWALAN_TERSEMBUNYI):
         return jsonify({'error': 'Berkas kerja sementara tidak bisa diunduh.'}), 404
     try:
         penuh = path_backup(filename)
@@ -178,7 +173,7 @@ def tiket_unduh_riwayat(filename):
     galat = _wajib_superadmin()
     if galat:
         return galat
-    if (filename or '').startswith(AWALAN_SEMENTARA):
+    if (filename or '').startswith(AWALAN_TERSEMBUNYI):
         return jsonify({'error': 'Berkas kerja sementara tidak bisa diunduh.'}), 404
     try:
         penuh = path_backup(filename)
@@ -285,17 +280,215 @@ def ambil_cadangan(token):
                      mimetype='application/octet-stream')
 
 
+# ==============================================================================
+# Permintaan & persetujuan restore
+# ==============================================================================
+
+@database_bp.route('/restore-request', methods=['GET'])
+def daftar_permintaan():
+    """
+    Permintaan yang perlu dilihat pemanggil.
+
+    Superadmin melihat semuanya -- inilah kotak masuk persetujuannya. Admin/Owner
+    melihat miliknya sendiri, supaya tahu permintaannya sudah diputus atau belum.
+    """
+    _buang_permintaan_kedaluwarsa()
+    q = RestoreRequest.query
+    if not has_role_level(ROLE_LEVELS['SUPERADMIN']):
+        q = q.filter_by(requestedBy=get_current_user_id())
+    baris = q.order_by(RestoreRequest.createdAt.desc()).limit(20).all()
+    return jsonify({
+        'canApprove': has_role_level(ROLE_LEVELS['SUPERADMIN']),
+        'requests': [b.to_dict() for b in baris],
+    })
+
+
+@database_bp.route('/restore-request', methods=['POST'])
+def ajukan_permintaan():
+    """
+    Ajukan pemulihan, dari berkas riwayat atau dari berkas .bak yang diunggah.
+
+    Satu permintaan menggantung pada satu waktu. Antrean permintaan restore tidak
+    masuk akal -- yang kedua akan memulihkan di atas hasil yang pertama -- dan
+    tiap permintaan unggahan menahan satu berkas seukuran seluruh basis data.
+    """
+    request.max_content_length = MAKS_UNGGAH
+
+    berkas = request.files.get('file')
+    diunggah = berkas is not None and berkas.filename
+    data = request.form if diunggah else (request.get_json(silent=True) or {})
+
+    alasan = (data.get('reason') or '').strip()
+    if len(alasan) < 10:
+        return jsonify({
+            'error': 'Tulis alasan pemulihan (minimal 10 karakter). '
+                     'Superadmin memutuskan berdasarkan alasan ini.'
+        }), 400
+
+    if _permintaan_menggantung():
+        return jsonify({
+            'error': 'Masih ada permintaan pemulihan yang menunggu keputusan. '
+                     'Batalkan dulu sebelum mengajukan yang baru.'
+        }), 409
+
+    if diunggah:
+        if not berkas.filename.lower().endswith('.bak'):
+            return jsonify({'error': 'Hanya berkas .bak yang bisa dipulihkan.'}), 400
+        # Menunggu di folder cadangan dengan awalan yang menyembunyikannya dari
+        # riwayat. Nama dari pengguna tidak dipakai untuk menamai berkas di disk.
+        disimpan = f'pending-{secrets.token_hex(8)}.bak'
+        try:
+            berkas.save(path_backup(disimpan, harus_ada=False))
+        except DbBackupError as e:
+            return jsonify({'error': str(e)}), 400
+        nama_tampil = os.path.basename(berkas.filename)
+        jenis = 'UPLOAD'
+    else:
+        nama_tampil = disimpan = data.get('filename') or ''
+        try:
+            path_backup(disimpan)          # memastikan berkasnya benar-benar ada
+        except DbBackupError as e:
+            return jsonify({'error': str(e)}), 400
+        jenis = 'HISTORY'
+
+    permintaan = RestoreRequest(
+        requestedBy=get_current_user_id(), sourceType=jenis,
+        filename=nama_tampil, storedName=disimpan, reason=alasan)
+    db.session.add(permintaan)
+    db.session.commit()
+
+    log_activity('DB_RESTORE_REQUEST', get_current_user_id(),
+                 f'Mengajukan pemulihan dari {nama_tampil}; alasan: {alasan}',
+                 'RestoreRequest', permintaan.id)
+    return jsonify(permintaan.to_dict()), 201
+
+
+@database_bp.route('/restore-request/<int:permintaan_id>', methods=['DELETE'])
+def batalkan_permintaan(permintaan_id):
+    """Pemohon menarik permintaannya sendiri; Superadmin juga boleh membersihkan."""
+    permintaan = RestoreRequest.query.get(permintaan_id)
+    if not permintaan or permintaan.status != 'PENDING':
+        return jsonify({'error': 'Permintaan tidak ditemukan atau sudah diputus.'}), 404
+
+    milik_sendiri = permintaan.requestedBy == get_current_user_id()
+    if not milik_sendiri and not has_role_level(ROLE_LEVELS['SUPERADMIN']):
+        return jsonify({'error': 'Hanya pemohon atau Superadmin yang bisa membatalkan.'}), 403
+
+    permintaan.status = 'CANCELLED'
+    permintaan.decidedBy = get_current_user_id()
+    permintaan.decidedAt = datetime.utcnow()
+    _buang_berkas_unggahan(permintaan)
+    db.session.commit()
+    log_activity('DB_RESTORE_CANCEL', get_current_user_id(),
+                 f'Membatalkan permintaan pemulihan #{permintaan_id}',
+                 'RestoreRequest', permintaan_id)
+    return jsonify(permintaan.to_dict())
+
+
+@database_bp.route('/restore-request/<int:permintaan_id>/reject', methods=['POST'])
+def tolak_permintaan(permintaan_id):
+    galat = _wajib_superadmin()
+    if galat:
+        return galat
+
+    permintaan = RestoreRequest.query.get(permintaan_id)
+    if not permintaan or permintaan.status != 'PENDING':
+        return jsonify({'error': 'Permintaan tidak ditemukan atau sudah diputus.'}), 404
+
+    catatan = ((request.get_json(silent=True) or {}).get('note') or '').strip()
+    permintaan.status = 'REJECTED'
+    permintaan.decidedBy = get_current_user_id()
+    permintaan.decidedAt = datetime.utcnow()
+    permintaan.decisionNote = catatan or 'Ditolak tanpa catatan'
+    _buang_berkas_unggahan(permintaan)
+    db.session.commit()
+    log_activity('DB_RESTORE_REJECT', get_current_user_id(),
+                 f'Menolak permintaan pemulihan #{permintaan_id}: {permintaan.decisionNote}',
+                 'RestoreRequest', permintaan_id)
+    return jsonify(permintaan.to_dict())
+
+
+@database_bp.route('/restore-request/<int:permintaan_id>/approve', methods=['POST'])
+def setujui_permintaan(permintaan_id):
+    """
+    Setujui SEKALIGUS jalankan pemulihannya.
+
+    Sengaja satu tindakan, bukan "disetujui" lalu "dijalankan" belakangan:
+    permintaan yang sudah disetujui tapi belum dijalankan adalah izin menghapus
+    isi toko yang menganggur -- dan siapa pun yang menemukannya nanti tinggal
+    menekan tombol.
+    """
+    galat = _wajib_superadmin()
+    if galat:
+        return galat
+
+    permintaan = RestoreRequest.query.get(permintaan_id)
+    if not permintaan or permintaan.status != 'PENDING':
+        return jsonify({'error': 'Permintaan tidak ditemukan atau sudah diputus.'}), 404
+
+    # Konfirmasi ketikan tetap ada. Ini bukan sandi, melainkan pengaman terakhir
+    # supaya tombol Setujui tidak bisa tertekan tanpa sengaja.
+    if ((request.get_json(silent=True) or {}).get('confirm') or '').strip().upper() != 'PULIHKAN':
+        return jsonify({
+            'error': 'Restore menimpa seluruh data. Kirim confirm="PULIHKAN" untuk melanjutkan.'
+        }), 400
+
+    nama_tampil = permintaan.filename
+    pemohon = permintaan.pemohon.username if permintaan.pemohon else 'tidak diketahui'
+
+    try:
+        sumber = path_backup(permintaan.storedName)
+    except DbBackupError as e:
+        return jsonify({'error': str(e)}), 400
+
+    # Keputusannya dicatat SEBELUM restore jalan. Barisnya sendiri memang tidak
+    # akan selamat -- restore menimpa seluruh basis data, termasuk tabel ini --
+    # tapi urutan ini yang benar kalau restore gagal di tengah: statusnya sudah
+    # menyebut siapa yang memutuskan, bukan tertinggal PENDING selamanya.
+    permintaan.status = 'APPROVED'
+    permintaan.decidedBy = get_current_user_id()
+    permintaan.decidedAt = datetime.utcnow()
+    db.session.commit()
+
+    try:
+        hasil = pulihkan_backup(sumber)
+    except DbBackupError as e:
+        permintaan.status = 'FAILED'
+        permintaan.decisionNote = str(e)[:500]
+        db.session.commit()
+        return jsonify({'error': str(e)}), 400
+    finally:
+        if permintaan.sourceType == 'UPLOAD':
+            _buang_berkas_unggahan(permintaan)
+
+    # Ditulis setelah restore, jadi masuk ke basis data yang BARU. Tabel
+    # RestoreRequest ikut tertimpa isi cadangan, jadi baris permintaannya hilang
+    # -- catatan inilah satu-satunya jejak yang tersisa, dan ia menyebut dua nama.
+    log_activity('DB_RESTORE', get_current_user_id(),
+                 f'Memulihkan basis data dari {nama_tampil}; '
+                 f'diajukan {pemohon}, disetujui {_nama_pemanggil()}',
+                 'Database', None)
+    return jsonify({**hasil, 'requestedBy': pemohon})
+
+
+def _nama_pemanggil():
+    from app.middleware.auth import get_current_user
+    u = get_current_user()
+    return u.username if u else 'tidak diketahui'
+
+
 @database_bp.route('/restore', methods=['POST'])
 def restore():
     """
-    Pulihkan dari berkas .bak yang diunggah, atau dari salah satu backup yang
-    sudah ada di server ({"filename": "..."}).
+    Pemulihan langsung oleh Superadmin, tanpa lewat permintaan.
 
-    Ini menimpa SELURUH basis data, dan wajib disetujui Superadmin dengan sandi
-    yang diketik saat itu juga. Keduanya ditegakkan di sini, bukan hanya di
-    tampilan: siapa pun yang memegang token Admin/Owner bisa memanggil endpoint
-    ini langsung.
+    Superadmin adalah yang menyetujui; memintanya mengajukan permintaan kepada
+    dirinya sendiri hanya menambah langkah tanpa menambah pengaman.
     """
+    galat = _wajib_superadmin()
+    if galat:
+        return galat
+
     request.max_content_length = MAKS_UNGGAH
 
     berkas = request.files.get('file')
@@ -313,23 +506,11 @@ def restore():
             'error': 'Restore menimpa seluruh data. Kirim confirm="PULIHKAN" untuk melanjutkan.'
         }), 400
 
-    # Diperiksa SEBELUM berkas unggahan disimpan: konfirmasi yang gagal tidak
-    # boleh sempat menulis apa pun ke folder cadangan.
-    nama_penyetuju, galat = _izin_superadmin(data)
-    if galat:
-        return galat
-
     sementara = None
     try:
         if diunggah:
-            # Ditulis ke folder backup, bukan ke temp milik Flask: SQL Server yang
-            # membaca berkas ini, dan folder temp proses Flask belum tentu
-            # terjangkau layanan SQL Server.
             if not nama_asli.lower().endswith('.bak'):
                 return jsonify({'error': 'Hanya berkas .bak yang bisa dipulihkan.'}), 400
-            # Nama berkas dari pengguna tidak dipakai sama sekali untuk menamai
-            # berkas di disk -- hanya untuk catatan log. Nama aslinya bisa berisi
-            # spasi, huruf non-ASCII, atau '..'; tidak ada gunanya diselamatkan.
             sementara = path_backup(f'upload-{os.getpid()}.bak', harus_ada=False)
             berkas.save(sementara)
             sumber = sementara
@@ -346,11 +527,7 @@ def restore():
             except OSError:
                 pass
 
-    # Dicatat setelah restore, jadi barisnya masuk ke basis data yang BARU --
-    # justru itu yang diinginkan: jejaknya ikut hidup bersama data hasil restore.
-    # Dua nama dicatat sekaligus: yang menjalankan dan yang menyetujui. Kalau
-    # hanya salah satu, jejaknya tidak bisa menjawab siapa yang memutuskan.
     log_activity('DB_RESTORE', get_current_user_id(),
-                 f"Memulihkan basis data dari {nama_asli or 'unggahan'}; "
-                 f"disetujui Superadmin {nama_penyetuju}", 'Database', None)
+                 f'Memulihkan basis data dari {nama_asli or "unggahan"} (langsung oleh Superadmin)',
+                 'Database', None)
     return jsonify(hasil)

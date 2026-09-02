@@ -190,7 +190,7 @@ tiap bagian punya alamat sendiri dan izinnya bisa diatur satu per satu:
 |---|---|---|
 | Pengaturan Sistem | `/settings` | Profil toko, parameter struk, tutup buku, tes printer |
 | Akun & Hak Akses | `/users` | Akun login, izin per-user, matriks hak akses role |
-| Manajemen Basis Data | `/database` | Buat & unduh cadangan (Admin/Owner); riwayat & restore (Superadmin) |
+| Manajemen Basis Data | `/database` | Buat & unduh cadangan (Admin/Owner); riwayat & persetujuan restore (Superadmin) |
 
 Untuk basis data yang sudah jalan, `/users` dan `/database` didaftarkan otomatis
 saat server start (`db_migrator`). `/users` **mewarisi izin `/settings` apa
@@ -208,7 +208,7 @@ dan siapa yang cuma boleh mengambil salinan untuk dirinya sendiri.
 |---|---|---|
 | Buat & unduh cadangan (tidak disimpan di server) | ya | ya |
 | Lihat riwayat, simpan, unduh ulang, hapus | **tidak** | ya |
-| Pulihkan (restore) | boleh menekan | **wajib menyetujui dengan sandi** |
+| Pulihkan (restore) | **mengajukan** | **memutuskan** (setujui / tolak) |
 
 **Kenapa Owner tidak boleh membaca riwayat.** Kalau boleh, ia juga bisa mengunduh
 cadangan yang dibuat Superadmin kapan saja — dan tiap `.bak` berisi seluruh isi
@@ -246,12 +246,33 @@ tumbuh ke ratusan MB, kembali ke aliran — tapi dengan penghapus yang diuji.
   cadangan yang sudah ada di server (Superadmin), atau dari berkas `.bak` yang
   diunggah.
 
-Konfirmasi Superadmin diminta untuk **setiap** pemulihan, termasuk saat yang
-login memang Superadmin. Sesi yang tertinggal terbuka di perangkat lain tidak
-boleh cukup untuk menghapus isi toko. Percobaannya dibatasi rem yang sama dengan
-halaman login -- tanpa itu endpoint restore jadi alat penebak sandi Superadmin
-yang tidak tercatat di manapun sebagai kegagalan login. Catatan aktivitas
-menyimpan dua nama sekaligus: yang menjalankan dan yang menyetujui.
+### Alur persetujuan pemulihan
+
+Restore menimpa seluruh isi toko dan tidak bisa dibatalkan, jadi keputusannya
+dipecah **dua tindakan oleh dua orang**:
+
+1. Admin/Owner **mengajukan** — memilih berkas riwayat atau mengunggah `.bak`,
+   disertai **alasan** (minimal 10 karakter). Satu permintaan menggantung pada
+   satu waktu; antrean restore tidak masuk akal karena yang kedua akan memulihkan
+   di atas hasil yang pertama.
+2. Superadmin melihatnya di **halamannya sendiri** (bagian *Permintaan Menunggu
+   Persetujuan* di `/database`) lalu **Setujui & Pulihkan** atau **Tolak**.
+   Menyetujui langsung menjalankan pemulihannya — permintaan yang sudah disetujui
+   tapi belum dijalankan adalah izin menghapus isi toko yang menganggur.
+
+Pemohon boleh membatalkan permintaannya sendiri selama belum diputus, dan
+permintaan yang menganggur lebih dari **24 jam** ditutup otomatis beserta berkas
+unggahannya.
+
+**Tidak ada sandi yang berpindah tangan.** Masing-masing bertindak sambil masuk
+sebagai dirinya sendiri, dan catatan aktivitas menyebut dua nama: yang mengajukan
+dan yang menyetujui. Superadmin tetap bisa memulihkan langsung tanpa lewat
+permintaan — ia memang yang menyetujui, jadi mengajukan kepada dirinya sendiri
+hanya menambah langkah tanpa menambah pengaman.
+
+Berkas `.bak` yang diunggah menunggu di server sampai diputus, disembunyikan dari
+riwayat dan **tidak** ikut disapu penyapu berkas kerja satu jam. Ia dibuang
+begitu permintaannya ditolak, dibatalkan, kedaluwarsa, atau selesai dipulihkan.
 
 Untuk basis data yang sudah jalan, `/database` dibuka untuk Admin/Owner otomatis
 saat server start -- **sekali saja**, ditandai di `SystemSettings`. Kalau nanti

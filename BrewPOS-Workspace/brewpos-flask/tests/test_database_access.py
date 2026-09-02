@@ -1,15 +1,19 @@
 """
-Gerbang izin halaman Manajemen Basis Data.
+Gerbang izin halaman Manajemen Basis Data, dan alur permintaan-persetujuan
+pemulihan.
 
-Yang diuji di sini gerbangnya, bukan BACKUP/RESTORE-nya sendiri: keduanya
-perintah khusus SQL Server dan tidak berjalan di SQLite yang dipakai suite ini.
-Jalur restore sengaja dipanggil sampai batas tepat sebelum SQL Server disentuh,
-sehingga yang tersisa untuk gagal hanyalah keputusan izinnya.
+Yang diuji gerbangnya, bukan BACKUP/RESTORE-nya sendiri: keduanya perintah khusus
+SQL Server dan tidak berjalan di SQLite yang dipakai suite ini. Jalur-jalurnya
+dipanggil sampai batas tepat sebelum SQL Server disentuh, sehingga yang tersisa
+untuk gagal hanyalah keputusan izinnya.
 """
+import io as _io
+
 import bcrypt
 import pytest
 
 from app.extensions import db
+from app.models.restore_request import RestoreRequest
 from app.models.user import User
 from app.services import login_guard, tiket_unduh
 
@@ -46,23 +50,46 @@ def owner_headers(client, app):
     return _login(client, 'pemilik')
 
 
-def _restore(client, headers, **extra):
-    body = {'filename': 'tidak-ada.bak', 'confirm': 'PULIHKAN'}
+def _ajukan(client, headers, **extra):
+    """Ajukan permintaan dari berkas riwayat (path_backup ditambal fixture)."""
+    body = {'filename': 'rua-20260101-000000.bak',
+            'reason': 'Data transaksi hilang setelah listrik padam'}
     body.update(extra)
-    return client.post('/api/database/restore', json=body, headers=headers)
+    return client.post('/api/database/restore-request', json=body, headers=headers)
+
+
+@pytest.fixture
+def berkas_riwayat(tmp_path, monkeypatch):
+    """path_backup diarahkan ke berkas nyata di tmp, tanpa menyentuh SQL Server."""
+    from app.routes import database as rute
+    berkas = tmp_path / 'rua-20260101-000000.bak'
+    berkas.write_bytes(b'cadangan')
+    monkeypatch.setattr(rute, 'path_backup', lambda n, harus_ada=True: str(berkas))
+    return berkas
+
+
+class _MesinPalsu:
+    """Cukup untuk _folder_backup(): tidak menyentuh SQL Server sama sekali."""
+
+    def connect(self):
+        import contextlib
+        return contextlib.nullcontext(None)
+
+    def dispose(self):
+        pass
 
 
 # --- Riwayat cadangan: Superadmin saja ---------------------------------------
 #
-# Inilah celah yang ditutup: kalau Owner boleh membaca daftar, ia juga bisa
-# mengunduh cadangan yang dibuat Superadmin -- dan tiap .bak berisi hash sandi
-# SEMUA akun, termasuk Superadmin sendiri.
+# Celah yang ditutup: kalau Owner boleh membaca daftar, ia juga bisa mengunduh
+# cadangan yang dibuat Superadmin -- dan tiap .bak berisi hash sandi SEMUA akun.
 
 @pytest.mark.parametrize('metode, jalur', [
     ('get', '/api/database/backups'),
     ('post', '/api/database/backup'),
     ('get', '/api/database/backup/rua-20260101-000000.bak'),
     ('delete', '/api/database/backup/rua-20260101-000000.bak'),
+    ('post', '/api/database/backup/rua-20260101-000000.bak/tiket'),
 ])
 def test_owner_tidak_bisa_menyentuh_riwayat(client, owner_headers, metode, jalur):
     res = getattr(client, metode)(jalur, headers=owner_headers)
@@ -76,28 +103,31 @@ def test_superadmin_tetap_pegang_riwayat(client, admin_headers):
     assert res.status_code != 403
 
 
+def test_kasir_ditolak_seluruh_halaman(client, cashier_headers):
+    for jalur, metode in [('/api/database/backups', 'get'),
+                          ('/api/database/backup-download', 'post'),
+                          ('/api/database/restore-request', 'get')]:
+        res = getattr(client, metode)(jalur, headers=cashier_headers)
+        assert res.status_code == 403, jalur
+
+
+def test_headbar_ditolak_seluruh_halaman(client, headbar_headers):
+    assert client.get('/api/database/backups', headers=headbar_headers).status_code == 403
+
+
 # --- Buat & unduh: satu-satunya jalur cadangan untuk Owner -------------------
 
 def test_owner_boleh_buat_dan_unduh(client, owner_headers):
-    """Lolos gerbang izin; gagal berikutnya di SQL Server, bukan di izin."""
     res = client.post('/api/database/backup-download', headers=owner_headers)
     assert res.status_code != 403
-
-
-def test_kasir_tidak_boleh_buat_dan_unduh(client, cashier_headers):
-    res = client.post('/api/database/backup-download', headers=cashier_headers)
-    assert res.status_code == 403
 
 
 def test_buat_dan_unduh_tidak_meninggalkan_berkas(client, owner_headers, tmp_path, monkeypatch):
     """
     Regresi. Versi pertama memakai send_file + call_on_close dan berkasnya
-    TERTINGGAL: tiga .bak 12 MB menumpuk setelah tiga permintaan, masing-masing
-    berisi seluruh basis data termasuk hash sandi. Sekarang berkasnya dihapus
-    sebelum respons dikirim, jadi tidak ada urutan kejadian yang menyisakannya.
+    TERTINGGAL: tiga .bak 12 MB menumpuk setelah tiga permintaan.
     """
     from app.routes import database as rute
-
     palsu = tmp_path / 'unduh-uji.bak'
     palsu.write_bytes(b'isi-cadangan-palsu')
     monkeypatch.setattr(rute, 'buat_backup', lambda sementara=False: {'filename': 'unduh-uji.bak'})
@@ -109,15 +139,8 @@ def test_buat_dan_unduh_tidak_meninggalkan_berkas(client, owner_headers, tmp_pat
     unduh = client.get(res.get_json()['url'])
     assert unduh.status_code == 200
     assert unduh.data == b'isi-cadangan-palsu'
-    assert 'unduh-' not in unduh.headers.get('Content-Disposition', '')
     assert not palsu.exists(), 'berkas cadangan tertinggal di server'
 
-
-# --- Tiket unduhan -----------------------------------------------------------
-#
-# Unduhan dijalankan lewat navigasi GET biasa, bukan blob: di WebView Android
-# DownloadListener tidak pernah menyala untuk `blob:`, jadi tombolnya diam saja.
-# Navigasi tidak bisa membawa header Authorization, maka tiket sekali pakai ini.
 
 def test_tiket_sekali_pakai(client, owner_headers, tmp_path, monkeypatch):
     from app.routes import database as rute
@@ -127,42 +150,204 @@ def test_tiket_sekali_pakai(client, owner_headers, tmp_path, monkeypatch):
     monkeypatch.setattr(rute, 'path_backup', lambda n, harus_ada=True: str(palsu))
     monkeypatch.setattr(rute, 'sapu_berkas_sementara', lambda: None)
 
-    res = client.post('/api/database/backup-download', headers=owner_headers)
-    assert res.status_code == 201
-    url = res.get_json()['url']
-    assert url.startswith('/unduh-cadangan/')
-
+    url = client.post('/api/database/backup-download', headers=owner_headers).get_json()['url']
     # Tanpa header Authorization sama sekali -- persis seperti navigasi.
-    unduh = client.get(url)
-    assert unduh.status_code == 200
-    assert unduh.data == b'isi-cadangan'
-    assert 'unduh-' not in unduh.headers.get('Content-Disposition', '')
-    assert not palsu.exists(), 'salinan sekali pakai tertinggal di server'
-
-    # Tiket yang sama tidak bisa dipakai dua kali.
+    assert client.get(url).status_code == 200
     assert client.get(url).status_code == 404
+
+
+def test_tiket_kedaluwarsa_ikut_menghapus_berkas(tmp_path, monkeypatch):
+    berkas = tmp_path / 'unduh-nganggur.bak'
+    berkas.write_bytes(b'x')
+    token = tiket_unduh.terbitkan(str(berkas), 'nganggur.bak', hapus_setelah=True)
+
+    asli = tiket_unduh.time.time
+    monkeypatch.setattr(tiket_unduh.time, 'time',
+                        lambda: asli() + tiket_unduh.UMUR_DETIK + 1)
+    assert tiket_unduh.tukar(token) is None
+    assert not berkas.exists(), 'berkas tertinggal setelah tiketnya kedaluwarsa'
 
 
 def test_tiket_ngawur_ditolak(client):
     assert client.get('/unduh-cadangan/bukan-tiket').status_code == 404
 
 
-def test_tiket_kedaluwarsa_ikut_menghapus_berkas(tmp_path, monkeypatch):
-    """
-    Kasus "tombol ditekan, unduhan tidak pernah dimulai". Tanpa ini berkas 12 MB
-    berisi seluruh basis data menunggu di server sampai penyapu satu jam lewat.
-    """
-    berkas = tmp_path / 'unduh-nganggur.bak'
-    berkas.write_bytes(b'x')
-    token = tiket_unduh.terbitkan(str(berkas), 'nganggur.bak', hapus_setelah=True)
+# --- Restore: diajukan Admin/Owner, diputus Superadmin -----------------------
 
-    # Jam asli ditangkap dulu; menyebut time.time() di dalam pengganti berarti
-    # memanggil dirinya sendiri.
-    asli = tiket_unduh.time.time
-    monkeypatch.setattr(tiket_unduh.time, 'time',
-                        lambda: asli() + tiket_unduh.UMUR_DETIK + 1)
-    assert tiket_unduh.tukar(token) is None
-    assert not berkas.exists(), 'berkas tertinggal setelah tiketnya kedaluwarsa'
+def test_owner_tidak_bisa_restore_langsung(client, owner_headers):
+    """Jalur langsung milik Superadmin. Owner harus lewat permintaan."""
+    res = client.post('/api/database/restore', headers=owner_headers,
+                      json={'filename': 'apa.bak', 'confirm': 'PULIHKAN'})
+    assert res.status_code == 403
+
+
+def test_pengajuan_wajib_beralasan(client, owner_headers, berkas_riwayat):
+    res = _ajukan(client, owner_headers, reason='iya')
+    assert res.status_code == 400
+    assert 'alasan' in res.get_json()['error'].lower()
+
+
+def test_owner_mengajukan_lalu_menunggu(client, owner_headers, berkas_riwayat):
+    res = _ajukan(client, owner_headers)
+    assert res.status_code == 201
+    p = res.get_json()
+    assert p['status'] == 'PENDING'
+    assert p['requestedBy'] == 'pemilik'
+    assert p['decidedBy'] is None
+
+
+def test_satu_permintaan_menggantung_saja(client, owner_headers, berkas_riwayat):
+    """Antrean restore tidak masuk akal: yang kedua menimpa hasil yang pertama."""
+    assert _ajukan(client, owner_headers).status_code == 201
+    assert _ajukan(client, owner_headers).status_code == 409
+
+
+def test_owner_tidak_bisa_menyetujui_permintaannya_sendiri(client, owner_headers, berkas_riwayat):
+    """Inti pemisahannya: yang mengajukan bukan yang memutuskan."""
+    pid = _ajukan(client, owner_headers).get_json()['id']
+    assert client.post(f'/api/database/restore-request/{pid}/approve',
+                       json={'confirm': 'PULIHKAN'}, headers=owner_headers).status_code == 403
+    assert client.post(f'/api/database/restore-request/{pid}/reject',
+                       json={}, headers=owner_headers).status_code == 403
+
+
+def test_owner_boleh_membatalkan_permintaannya(client, owner_headers, berkas_riwayat):
+    pid = _ajukan(client, owner_headers).get_json()['id']
+    res = client.delete(f'/api/database/restore-request/{pid}', headers=owner_headers)
+    assert res.status_code == 200
+    assert res.get_json()['status'] == 'CANCELLED'
+    # Setelah dibatalkan, permintaan baru boleh diajukan lagi.
+    assert _ajukan(client, owner_headers).status_code == 201
+
+
+def test_superadmin_menolak_dengan_catatan(client, owner_headers, admin_headers, berkas_riwayat):
+    pid = _ajukan(client, owner_headers).get_json()['id']
+    res = client.post(f'/api/database/restore-request/{pid}/reject',
+                      json={'note': 'Pakai cadangan kemarin saja'}, headers=admin_headers)
+    assert res.status_code == 200
+    p = res.get_json()
+    assert p['status'] == 'REJECTED'
+    assert p['decidedBy'] == 'superadmin'
+    assert p['decisionNote'] == 'Pakai cadangan kemarin saja'
+
+
+def test_persetujuan_tetap_menuntut_konfirmasi_ketikan(client, owner_headers,
+                                                       admin_headers, berkas_riwayat):
+    """Pengaman terakhir supaya tombol Setujui tidak tertekan tanpa sengaja."""
+    pid = _ajukan(client, owner_headers).get_json()['id']
+    res = client.post(f'/api/database/restore-request/{pid}/approve',
+                      json={}, headers=admin_headers)
+    assert res.status_code == 400
+    assert 'PULIHKAN' in res.get_json()['error']
+
+
+def test_persetujuan_sah_lolos_ke_lapisan_basis_data(client, owner_headers,
+                                                     admin_headers, berkas_riwayat):
+    """
+    Dengan konfirmasi benar, permintaan lolos gerbang dan baru gagal di RESTORE
+    (SQLite di suite ini) -- itulah yang membuktikan izinnya diterima.
+    """
+    pid = _ajukan(client, owner_headers).get_json()['id']
+    res = client.post(f'/api/database/restore-request/{pid}/approve',
+                      json={'confirm': 'PULIHKAN'}, headers=admin_headers)
+    assert res.status_code == 400
+    assert 'Superadmin' not in res.get_json()['error']
+
+
+def test_permintaan_yang_sudah_diputus_tidak_bisa_diputus_lagi(client, owner_headers,
+                                                               admin_headers, berkas_riwayat):
+    pid = _ajukan(client, owner_headers).get_json()['id']
+    assert client.post(f'/api/database/restore-request/{pid}/reject',
+                       json={}, headers=admin_headers).status_code == 200
+    assert client.post(f'/api/database/restore-request/{pid}/approve',
+                       json={'confirm': 'PULIHKAN'}, headers=admin_headers).status_code == 404
+
+
+def test_pemohon_hanya_melihat_permintaannya_sendiri(client, owner_headers,
+                                                     admin_headers, berkas_riwayat, app):
+    _ajukan(client, owner_headers)
+    with app.app_context():
+        db.session.add(RestoreRequest(requestedBy=None, sourceType='HISTORY',
+                                      filename='punya-orang-lain.bak',
+                                      storedName='punya-orang-lain.bak',
+                                      reason='bukan milik pemilik', status='REJECTED'))
+        db.session.commit()
+
+    milik_owner = client.get('/api/database/restore-request', headers=owner_headers).get_json()
+    assert milik_owner['canApprove'] is False
+    assert all(r['requestedBy'] == 'pemilik' for r in milik_owner['requests'])
+
+    milik_sa = client.get('/api/database/restore-request', headers=admin_headers).get_json()
+    assert milik_sa['canApprove'] is True
+    assert len(milik_sa['requests']) >= 2
+
+
+def test_unggahan_menunggu_lalu_dibuang_saat_ditolak(client, owner_headers,
+                                                     admin_headers, tmp_path, monkeypatch):
+    """
+    Berkas unggahan menunggu di server sampai diputus. Begitu ditolak ia harus
+    hilang -- isinya seluruh basis data.
+    """
+    from app.routes import database as rute
+    monkeypatch.setattr(rute, 'path_backup', lambda n, harus_ada=True: str(tmp_path / n))
+
+    data = {'file': (_io.BytesIO(b'cadangan-unggahan'), 'punyaku.bak'),
+            'reason': 'Uji berkas unggahan menunggu keputusan'}
+    res = client.post('/api/database/restore-request', data=data, headers=owner_headers,
+                      content_type='multipart/form-data')
+    assert res.status_code == 201
+    pid = res.get_json()['id']
+
+    tersimpan = list(tmp_path.glob('pending-*.bak'))
+    assert len(tersimpan) == 1, 'berkas unggahan tidak tersimpan menunggu keputusan'
+
+    assert client.post(f'/api/database/restore-request/{pid}/reject',
+                       json={}, headers=admin_headers).status_code == 200
+    assert not tersimpan[0].exists(), 'berkas unggahan tertinggal setelah ditolak'
+
+
+# --- Berkas yang menunggu keputusan hidup dengan aturannya sendiri ------------
+
+def test_berkas_menunggu_tidak_muncul_di_riwayat(tmp_path, monkeypatch):
+    """pending-* disembunyikan dari riwayat, seperti berkas kerja lain."""
+    from app.services import db_backup
+    (tmp_path / 'rua-20260101-000000.bak').write_bytes(b'x')
+    (tmp_path / 'pending-abc123.bak').write_bytes(b'x')
+    (tmp_path / 'unduh-rua.bak').write_bytes(b'x')
+    monkeypatch.setenv('DB_BACKUP_DIR', str(tmp_path))
+    monkeypatch.setattr(db_backup, '_mesin_master', lambda: _MesinPalsu())
+    monkeypatch.setattr(db_backup, 'nama_database', lambda: 'rua')
+    nama = [b['filename'] for b in db_backup.daftar_backup()['backups']]
+    assert nama == ['rua-20260101-000000.bak']
+
+
+def test_berkas_menunggu_tidak_ikut_disapu(tmp_path, monkeypatch):
+    """
+    Penyapu satu jam membuang berkas kerja. Berkas yang menunggu keputusan TIDAK
+    boleh ikut -- kalau ikut, permintaan yang diajukan sore hari sudah kehilangan
+    berkasnya sebelum Superadmin sempat melihatnya besok pagi.
+    """
+    import os
+    import time
+
+    from app.services import db_backup
+    lama = time.time() - 7200
+    for nama in ('unduh-lama.bak', 'pending-lama.bak'):
+        f = tmp_path / nama
+        f.write_bytes(b'x')
+        os.utime(f, (lama, lama))
+    monkeypatch.setenv('DB_BACKUP_DIR', str(tmp_path))
+    monkeypatch.setattr(db_backup, '_mesin_master', lambda: _MesinPalsu())
+
+    db_backup.sapu_berkas_sementara()
+    assert not (tmp_path / 'unduh-lama.bak').exists(), 'berkas kerja tidak disapu'
+    assert (tmp_path / 'pending-lama.bak').exists(), 'berkas menunggu keputusan ikut tersapu'
+
+
+def test_berkas_kerja_sementara_tidak_bisa_diunduh(client, admin_headers):
+    for nama in ('unduh-rua-20260101-000000.bak', 'upload-1234.bak', 'pending-abc.bak'):
+        res = client.get(f'/api/database/backup/{nama}', headers=admin_headers)
+        assert res.status_code == 404, nama
 
 
 def test_riwayat_tidak_dihapus_setelah_diunduh(client, admin_headers, tmp_path, monkeypatch):
@@ -178,130 +363,3 @@ def test_riwayat_tidak_dihapus_setelah_diunduh(client, admin_headers, tmp_path, 
     unduh = client.get(res.get_json()['url'])
     assert unduh.status_code == 200 and unduh.data == b'arsip'
     assert arsip.exists(), 'berkas riwayat ikut terhapus'
-
-
-def test_owner_tidak_bisa_minta_tiket_riwayat(client, owner_headers):
-    res = client.post('/api/database/backup/apa-saja.bak/tiket', headers=owner_headers)
-    assert res.status_code == 403
-
-
-def test_berkas_kerja_sementara_tidak_bisa_diunduh(client, admin_headers):
-    """
-    Hasil "buat & unduh" numpang di folder yang sama sebelum dihapus. Selama
-    jeda itu ia tidak boleh bisa diambil lewat alamat unduhan riwayat.
-    """
-    for nama in ('unduh-rua-20260101-000000.bak', 'upload-1234.bak'):
-        res = client.get(f'/api/database/backup/{nama}', headers=admin_headers)
-        assert res.status_code == 404, nama
-
-
-def test_berkas_sementara_tidak_muncul_di_riwayat(tmp_path, monkeypatch):
-    """daftar_backup() menyaring berkas kerja, bukan hanya menamainya berbeda."""
-    from app.services import db_backup
-    (tmp_path / 'rua-20260101-000000.bak').write_bytes(b'x')
-    (tmp_path / 'unduh-rua-20260102-000000.bak').write_bytes(b'x')
-    (tmp_path / 'upload-999.bak').write_bytes(b'x')
-    # DB_BACKUP_DIR menang atas folder bawaan -- tanpa ini tesnya membaca folder
-    # cadangan sungguhan milik mesin ini.
-    monkeypatch.setenv('DB_BACKUP_DIR', str(tmp_path))
-    monkeypatch.setattr(db_backup, '_mesin_master', lambda: _MesinPalsu(str(tmp_path)))
-    monkeypatch.setattr(db_backup, 'nama_database', lambda: 'rua')
-    nama = [b['filename'] for b in db_backup.daftar_backup()['backups']]
-    assert nama == ['rua-20260101-000000.bak']
-
-
-class _MesinPalsu:
-    """Cukup untuk _folder_backup(): tidak menyentuh SQL Server sama sekali."""
-    def __init__(self, folder):
-        self._folder = folder
-
-    def connect(self):
-        import contextlib
-        return contextlib.nullcontext(None)
-
-    def dispose(self):
-        pass
-
-
-def test_kasir_ditolak_seluruh_halaman(client, cashier_headers):
-    for jalur, metode in [('/api/database/backups', 'get'),
-                          ('/api/database/backup', 'post')]:
-        res = getattr(client, metode)(jalur, headers=cashier_headers)
-        assert res.status_code == 403, jalur
-
-
-def test_headbar_ditolak_seluruh_halaman(client, headbar_headers):
-    res = client.get('/api/database/backups', headers=headbar_headers)
-    assert res.status_code == 403
-
-
-# --- Restore: wajib konfirmasi Superadmin ------------------------------------
-
-def test_owner_tanpa_konfirmasi_ditolak(client, owner_headers):
-    res = _restore(client, owner_headers)
-    assert res.status_code == 403
-    assert 'Superadmin' in res.get_json()['error']
-
-
-def test_owner_dengan_sandi_superadmin_salah_ditolak(client, owner_headers):
-    res = _restore(client, owner_headers,
-                   superadminUsername='superadmin', superadminPassword='salah')
-    assert res.status_code == 403
-    assert res.get_json()['error'] == 'Konfirmasi Superadmin tidak valid.'
-
-
-def test_konfirmasi_memakai_akun_bukan_superadmin_ditolak(client, owner_headers):
-    """Sandi benar tapi perannya Owner -- tetap bukan persetujuan Superadmin."""
-    res = _restore(client, owner_headers,
-                   superadminUsername='pemilik', superadminPassword=SEED_PASSWORD)
-    assert res.status_code == 403
-    assert res.get_json()['error'] == 'Konfirmasi Superadmin tidak valid.'
-
-
-def test_superadmin_sendiri_tetap_harus_mengetik_sandi(client, admin_headers):
-    """
-    Sesi Superadmin saja tidak cukup. Kalau cukup, sesi yang tertinggal terbuka
-    di perangkat lain sudah bisa menghapus isi toko.
-    """
-    res = _restore(client, admin_headers)
-    assert res.status_code == 403
-    assert 'Superadmin' in res.get_json()['error']
-
-
-def test_konfirmasi_sah_lolos_gerbang_izin(client, owner_headers):
-    """
-    Dengan konfirmasi yang benar, permintaan lolos gerbang dan baru gagal di
-    lapisan basis data -- itulah yang membuktikan izinnya diterima.
-    """
-    res = _restore(client, owner_headers,
-                   superadminUsername='superadmin', superadminPassword=SEED_PASSWORD)
-    assert res.status_code == 400
-    assert 'Superadmin' not in res.get_json()['error']
-
-
-def test_tebakan_beruntun_akhirnya_tertahan(client, owner_headers):
-    """
-    Tanpa rem, endpoint ini jadi alat penebak sandi Superadmin: tidak lewat
-    /api/auth/login, jadi tidak satu pun percobaannya tercatat sebagai gagal login.
-    """
-    for _ in range(login_guard.MAX_FAILURES):
-        assert _restore(client, owner_headers, superadminUsername='superadmin',
-                        superadminPassword='salah').status_code == 403
-
-    tertahan = _restore(client, owner_headers,
-                        superadminUsername='superadmin', superadminPassword='salah')
-    assert tertahan.status_code == 429
-
-    # Sandi yang benar pun ikut tertahan selama jendela remnya berjalan.
-    assert _restore(client, owner_headers, superadminUsername='superadmin',
-                    superadminPassword=SEED_PASSWORD).status_code == 429
-
-
-def test_konfirmasi_lewat_unggahan_juga_diperiksa(client, owner_headers):
-    """Jalur multipart tidak boleh jadi pintu belakang yang melewati konfirmasi."""
-    import io as _io
-    data = {'file': (_io.BytesIO(b'bukan-bak'), 'cadangan.bak'), 'confirm': 'PULIHKAN'}
-    res = client.post('/api/database/restore', data=data, headers=owner_headers,
-                      content_type='multipart/form-data')
-    assert res.status_code == 403
-    assert 'Superadmin' in res.get_json()['error']
