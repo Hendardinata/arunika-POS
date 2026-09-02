@@ -160,10 +160,14 @@
     }
 
     /**
-     * Buat cadangan lalu langsung unduh.
+     * Buat cadangan, lalu serahkan unduhannya ke pengunduh bawaan perangkat.
      *
-     * Responsnya berkas, bukan JSON, jadi apiFetch() tidak dipakai di sini --
-     * ia selalu memanggil res.json() dan akan tersedak byte .bak.
+     * Dua langkah, dan langkah keduanya sengaja NAVIGASI biasa, bukan blob: di
+     * WebView Android, DownloadListener -- satu-satunya jalan menyerahkan berkas
+     * ke sistem -- tidak pernah menyala untuk URL `blob:`, jadi tombolnya diam
+     * saja di aplikasi kasir. Sebagai GET biasa, setiap platform sudah tahu cara
+     * menanganinya: DownloadManager di Android, pengelola unduhan Safari di iOS,
+     * dan unduhan bawaan di browser desktop.
      */
     async function buatBackupDb() {
         const btn = document.getElementById('btn-backup-db');
@@ -171,16 +175,9 @@
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Membuat cadangan...';
         try {
-            const res = await fetch('/api/database/backup-download', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${getToken()}` }
-            });
-            if (!res.ok) {
-                const pesan = await res.json().catch(() => ({}));
-                throw new Error(pesan.error || `Gagal membuat cadangan (HTTP ${res.status})`);
-            }
-            simpanBlob(await res.blob(), namaDariHeader(res) || 'cadangan.bak');
-            showToast('Cadangan terunduh. Berkas ini tidak disimpan di server.', 'success');
+            const hasil = await apiFetch('/database/backup-download', { method: 'POST' });
+            mulaiUnduhan(hasil.url);
+            showToast(`Cadangan ${hasil.filename} sedang diunduh. Tidak disimpan di server.`, 'success');
             const user = getUser();
             if ((user && user.role || '').toUpperCase() === 'SUPERADMIN') await muatManajemenDb();
         } catch (err) {
@@ -191,38 +188,30 @@
         }
     }
 
-    /** Nama berkas dari Content-Disposition, kalau ada. */
-    function namaDariHeader(res) {
-        const cd = res.headers.get('Content-Disposition') || '';
-        const m = /filename="?([^";]+)"?/.exec(cd);
-        return m ? m[1] : null;
-    }
-
-    function simpanBlob(blob, namaBerkas) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = namaBerkas;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        // Dilepas belakangan: mencabut URL terlalu cepat membatalkan unduhan
-        // yang baru saja dimulai.
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
+    /**
+     * Jalankan unduhan lewat navigasi.
+     *
+     * <iframe> tersembunyi, bukan window.location: mengarahkan halaman utama ke
+     * berkas unduhan membuat sebagian WebView menampilkan halaman kosong ketika
+     * navigasinya dibatalkan dan diserahkan ke pengunduh. Iframe menyerap
+     * navigasi itu, dan halaman POS tetap utuh di belakangnya.
+     */
+    function mulaiUnduhan(url) {
+        const bingkai = document.createElement('iframe');
+        bingkai.style.display = 'none';
+        bingkai.src = url;
+        document.body.appendChild(bingkai);
+        setTimeout(() => bingkai.remove(), 120000);
     }
 
     async function unduhBackupDb(filename) {
-        // Tidak bisa <a href> biasa: endpointnya menuntut header Authorization,
-        // dan navigasi browser tidak membawa token dari localStorage.
+        // Lewat tiket juga, dengan alasan yang sama seperti "buat & unduh":
+        // navigasi tidak bisa membawa header Authorization, dan blob tidak
+        // pernah sampai ke pengunduh sistem di WebView Android.
         try {
-            const res = await fetch(`/api/database/backup/${encodeURIComponent(filename)}`, {
-                headers: { 'Authorization': `Bearer ${getToken()}` }
-            });
-            if (!res.ok) {
-                const pesan = await res.json().catch(() => ({}));
-                throw new Error(pesan.error || `Gagal mengunduh (HTTP ${res.status})`);
-            }
-            simpanBlob(await res.blob(), filename);
+            const hasil = await apiFetch(
+                `/database/backup/${encodeURIComponent(filename)}/tiket`, { method: 'POST' });
+            mulaiUnduhan(hasil.url);
         } catch (err) {
             showToast(err.message, 'error');
         }

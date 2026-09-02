@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
+import android.app.DownloadManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -13,6 +14,8 @@ import android.os.Bundle
 import android.util.Base64
 import android.util.Log
 import android.webkit.ConsoleMessage
+import android.webkit.CookieManager
+import android.webkit.URLUtil
 import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -212,6 +215,10 @@ class MainActivity : AppCompatActivity() {
                 return super.onConsoleMessage(pesan)
             }
         }
+        webView.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+            unduhLewatSistem(url, userAgent, contentDisposition, mimeType)
+        }
+
         webView.addJavascriptInterface(PrinterBridge(), "AndroidPrinter")
         cariServerLaluMuat()
 
@@ -223,6 +230,56 @@ class MainActivity : AppCompatActivity() {
         if (webView.canGoBack()) webView.goBack() else super.onBackPressed()
     }
 
+
+    // ------------------------------------------------------------------
+    // Unduhan
+    // ------------------------------------------------------------------
+
+    /**
+     * Serahkan unduhan ke DownloadManager Android.
+     *
+     * WebView tidak punya pengunduh sendiri: tanpa DownloadListener, tautan
+     * unduhan tidak melakukan APA PUN -- tidak ada berkas, tidak ada pesan.
+     * Itu yang terjadi pada tombol cadangan basis data sebelum ini ada.
+     *
+     * Halaman POS sengaja tidak memakai URL `blob:` untuk unduhan, karena
+     * DownloadListener tidak pernah menyala untuknya. Yang datang ke sini selalu
+     * http/https biasa, jadi DownloadManager bisa menanganinya langsung.
+     */
+    private fun unduhLewatSistem(
+        url: String,
+        userAgent: String?,
+        contentDisposition: String?,
+        mimeType: String?
+    ) {
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            toast("Jenis tautan unduhan ini tidak didukung")
+            return
+        }
+        try {
+            val nama = URLUtil.guessFileName(url, contentDisposition, mimeType)
+            val permintaan = DownloadManager.Request(Uri.parse(url)).apply {
+                setTitle(nama)
+                setDescription("Mengunduh dari ARUNIKA POS")
+                setMimeType(mimeType)
+                // Cookie sesi ikut dibawa. Unduhan cadangan memakai tiket sekali
+                // pakai di URL sehingga tidak membutuhkannya, tapi unduhan lain
+                // di kemudian hari mungkin iya -- dan DownloadManager berjalan di
+                // luar WebView, jadi ia tidak mewarisi apa pun dengan sendirinya.
+                addRequestHeader("cookie", CookieManager.getInstance().getCookie(url))
+                addRequestHeader("User-Agent", userAgent)
+                setNotificationVisibility(
+                    DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                setDestinationInExternalPublicDir(
+                    android.os.Environment.DIRECTORY_DOWNLOADS, nama)
+            }
+            val pengelola = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            pengelola.enqueue(permintaan)
+            toast("Mengunduh $nama ke folder Download")
+        } catch (e: Throwable) {
+            recordError("Gagal memulai unduhan", e)
+        }
+    }
 
     // ------------------------------------------------------------------
     // Pemilihan server
@@ -470,6 +527,7 @@ class MainActivity : AppCompatActivity() {
                     // tampilan yang berbeda memang wajar.
                     appendLine("Mesin WebView : ${webViewInfo()}")
                     appendLine("Skala font    : ${resources.configuration.fontScale}")
+                    appendLine("Pengunduh     : ${if (getSystemService(Context.DOWNLOAD_SERVICE) != null) "siap" else "TIDAK ADA"}")
                     appendLine("Izin Bluetooth: ${if (hasBtPermission()) "diberikan" else "BELUM"}")
                     appendLine("Bluetooth     : ${if (adapter == null) "tidak ada" else if (adapter.isEnabled) "aktif" else "mati"}")
                     appendLine("Perangkat pair: $bonded")

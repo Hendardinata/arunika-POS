@@ -11,7 +11,7 @@ import pytest
 
 from app.extensions import db
 from app.models.user import User
-from app.services import login_guard
+from app.services import login_guard, tiket_unduh
 
 SEED_PASSWORD = '12qwaszx'
 
@@ -19,8 +19,10 @@ SEED_PASSWORD = '12qwaszx'
 @pytest.fixture(autouse=True)
 def bersihkan_rem():
     login_guard.reset_all()
+    tiket_unduh.reset_all()
     yield
     login_guard.reset_all()
+    tiket_unduh.reset_all()
 
 
 def _login(client, username, password=SEED_PASSWORD):
@@ -103,10 +105,84 @@ def test_buat_dan_unduh_tidak_meninggalkan_berkas(client, owner_headers, tmp_pat
     monkeypatch.setattr(rute, 'sapu_berkas_sementara', lambda: None)
 
     res = client.post('/api/database/backup-download', headers=owner_headers)
-    assert res.status_code == 200
-    assert res.data == b'isi-cadangan-palsu'
-    assert 'unduh-' not in res.headers.get('Content-Disposition', '')
+    assert res.status_code == 201
+    unduh = client.get(res.get_json()['url'])
+    assert unduh.status_code == 200
+    assert unduh.data == b'isi-cadangan-palsu'
+    assert 'unduh-' not in unduh.headers.get('Content-Disposition', '')
     assert not palsu.exists(), 'berkas cadangan tertinggal di server'
+
+
+# --- Tiket unduhan -----------------------------------------------------------
+#
+# Unduhan dijalankan lewat navigasi GET biasa, bukan blob: di WebView Android
+# DownloadListener tidak pernah menyala untuk `blob:`, jadi tombolnya diam saja.
+# Navigasi tidak bisa membawa header Authorization, maka tiket sekali pakai ini.
+
+def test_tiket_sekali_pakai(client, owner_headers, tmp_path, monkeypatch):
+    from app.routes import database as rute
+    palsu = tmp_path / 'unduh-uji.bak'
+    palsu.write_bytes(b'isi-cadangan')
+    monkeypatch.setattr(rute, 'buat_backup', lambda sementara=False: {'filename': 'unduh-uji.bak'})
+    monkeypatch.setattr(rute, 'path_backup', lambda n, harus_ada=True: str(palsu))
+    monkeypatch.setattr(rute, 'sapu_berkas_sementara', lambda: None)
+
+    res = client.post('/api/database/backup-download', headers=owner_headers)
+    assert res.status_code == 201
+    url = res.get_json()['url']
+    assert url.startswith('/unduh-cadangan/')
+
+    # Tanpa header Authorization sama sekali -- persis seperti navigasi.
+    unduh = client.get(url)
+    assert unduh.status_code == 200
+    assert unduh.data == b'isi-cadangan'
+    assert 'unduh-' not in unduh.headers.get('Content-Disposition', '')
+    assert not palsu.exists(), 'salinan sekali pakai tertinggal di server'
+
+    # Tiket yang sama tidak bisa dipakai dua kali.
+    assert client.get(url).status_code == 404
+
+
+def test_tiket_ngawur_ditolak(client):
+    assert client.get('/unduh-cadangan/bukan-tiket').status_code == 404
+
+
+def test_tiket_kedaluwarsa_ikut_menghapus_berkas(tmp_path, monkeypatch):
+    """
+    Kasus "tombol ditekan, unduhan tidak pernah dimulai". Tanpa ini berkas 12 MB
+    berisi seluruh basis data menunggu di server sampai penyapu satu jam lewat.
+    """
+    berkas = tmp_path / 'unduh-nganggur.bak'
+    berkas.write_bytes(b'x')
+    token = tiket_unduh.terbitkan(str(berkas), 'nganggur.bak', hapus_setelah=True)
+
+    # Jam asli ditangkap dulu; menyebut time.time() di dalam pengganti berarti
+    # memanggil dirinya sendiri.
+    asli = tiket_unduh.time.time
+    monkeypatch.setattr(tiket_unduh.time, 'time',
+                        lambda: asli() + tiket_unduh.UMUR_DETIK + 1)
+    assert tiket_unduh.tukar(token) is None
+    assert not berkas.exists(), 'berkas tertinggal setelah tiketnya kedaluwarsa'
+
+
+def test_riwayat_tidak_dihapus_setelah_diunduh(client, admin_headers, tmp_path, monkeypatch):
+    """Riwayat itu arsip: mengunduhnya tidak boleh menghapusnya."""
+    from app.routes import database as rute
+    arsip = tmp_path / 'rua-20260101-000000.bak'
+    arsip.write_bytes(b'arsip')
+    monkeypatch.setattr(rute, 'path_backup', lambda n, harus_ada=True: str(arsip))
+
+    res = client.post('/api/database/backup/rua-20260101-000000.bak/tiket',
+                      headers=admin_headers)
+    assert res.status_code == 201
+    unduh = client.get(res.get_json()['url'])
+    assert unduh.status_code == 200 and unduh.data == b'arsip'
+    assert arsip.exists(), 'berkas riwayat ikut terhapus'
+
+
+def test_owner_tidak_bisa_minta_tiket_riwayat(client, owner_headers):
+    res = client.post('/api/database/backup/apa-saja.bak/tiket', headers=owner_headers)
+    assert res.status_code == 403
 
 
 def test_berkas_kerja_sementara_tidak_bisa_diunduh(client, admin_headers):

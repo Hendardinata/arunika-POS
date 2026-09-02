@@ -88,6 +88,36 @@ di manifest.
 4. Periksa penggaris kolom di struk uji. Kalau terpotong, ubah format kertas di
    Pengaturan (58mm = 32 kolom, 80mm = 48 kolom).
 
+## Unduhan berkas
+
+WebView tidak punya pengunduh sendiri. Tanpa `DownloadListener`, tautan unduhan
+tidak melakukan apa pun — tidak ada berkas, tidak ada pesan. `MainActivity`
+sekarang menyerahkannya ke `DownloadManager` Android, dan berkasnya masuk ke
+folder **Download** dengan notifikasi seperti unduhan biasa.
+
+Halaman POS sengaja **tidak** memakai URL `blob:` untuk unduhan, karena
+`DownloadListener` tidak pernah menyala untuknya. Cadangan basis data diambil
+lewat tautan `https://.../unduh-cadangan/<tiket>` — GET biasa sekali pakai — jadi
+`DownloadManager` bisa menanganinya langsung. Kesiapan pengunduh terlihat di
+**Pengaturan → Diagnostik**.
+
+## Bagaimana dengan iOS?
+
+**Belum ada aplikasi iOS di repo ini, dan ada satu penghalang yang tidak bisa
+dilewati kode:** printer thermal 58mm memakai Bluetooth Classic (SPP), dan iOS
+tidak mengizinkan aplikasi pihak ketiga bicara dengan perangkat SPP tanpa
+sertifikasi MFi dari Apple. Jadi cangkang iOS tidak akan bisa mencetak struk —
+padahal itu satu-satunya alasan cangkang Android ini ada.
+
+Untuk semua hal lain, **iOS tidak membutuhkan aplikasi**: buka alamat POS di
+Safari lalu *Bagikan → Tambahkan ke Layar Utama*. Unduhan cadangan bekerja apa
+adanya karena tautannya GET biasa (lihat di atas).
+
+Kalau nanti cangkang iOS tetap diinginkan — misalnya untuk mode kios tanpa bilah
+alamat — yang dibutuhkan adalah `WKWebView` plus `WKDownloadDelegate` (iOS 14.5+)
+sebagai padanan `DownloadListener` di sini. Perlu Mac dengan Xcode untuk
+membangunnya.
+
 ## Kalau bermasalah
 
 | Gejala | Kemungkinan sebab |

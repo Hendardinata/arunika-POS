@@ -216,6 +216,24 @@ basis data, termasuk hash sandi setiap akun. Dengan "buat & unduh", Owner hanya
 pernah memegang salinan yang ia buat sendiri saat itu juga, dan server tidak
 menyimpan apa pun untuknya.
 
+### Bagaimana unduhannya sampai ke perangkat
+
+Unduhan berjalan **dua langkah**: `POST` membuat cadangan dan mengembalikan
+tautan sekali pakai, lalu tautan itu dibuka sebagai **GET biasa**.
+
+Terdengar berputar, tapi ini yang membuatnya bekerja di luar browser desktop.
+Cara sebelumnya (`fetch` -> blob -> `<a download>`) mati di WebView Android:
+`DownloadListener` — satu-satunya jalan menyerahkan berkas ke pengunduh sistem —
+**tidak pernah menyala untuk URL `blob:`**, jadi tombolnya diam saja di aplikasi
+kasir. Sebagai GET biasa, tiap platform menanganinya dengan mesinnya sendiri:
+`DownloadManager` di Android, pengelola unduhan Safari di iOS, unduhan bawaan di
+desktop.
+
+Navigasi tidak bisa membawa header `Authorization`, maka tiketnya: token acak
+32 byte, **sekali pakai**, umur 2 menit, di luar `/api/` sehingga middleware auth
+tidak perlu dilubangi. Tiket yang kedaluwarsa tanpa pernah ditukar ikut menghapus
+berkasnya — itu menutup kasus "tombol ditekan, unduhan tidak pernah dimulai".
+
 Berkas jalur "buat & unduh" **dihapus sebelum responsnya dikirim**, bukan
 sesudah. Versi pertama memakai `send_file` + `call_on_close` dan berkasnya
 tertinggal — terbukti tiga `.bak` 12 MB menumpuk setelah tiga permintaan. Untuk
