@@ -207,10 +207,17 @@ dan siapa yang cuma boleh mengambil salinan untuk dirinya sendiri.
 | Tindakan | Admin/Owner | Superadmin |
 |---|---|---|
 | Buat & unduh cadangan (tidak disimpan di server) | ya | ya |
-| Lihat riwayat, simpan, unduh ulang, hapus | **tidak** | ya |
+| Lihat **cadangan terakhir** (nama, ukuran, tanggal) | ya | ya |
+| Lihat riwayat penuh, simpan, unduh ulang, hapus | **tidak** | ya |
 | Pulihkan (restore) | **mengajukan** | **memutuskan** (setujui / tolak) |
 
-**Kenapa Owner tidak boleh membaca riwayat.** Kalau boleh, ia juga bisa mengunduh
+Admin/Owner melihat **satu baris** di halamannya: cadangan terbaru yang tersimpan
+di server. Itu menjawab "kapan toko ini terakhir dicadangkan" — pertanyaan yang
+berhak diketahui pemiliknya — tanpa membuka daftarnya dan tanpa tautan unduhan.
+Cadangan "buat & unduh" milik Admin/Owner sendiri tidak disimpan di server, jadi
+memang tidak akan pernah muncul di baris itu.
+
+**Kenapa Owner tidak boleh membaca riwayat penuh.** Kalau boleh, ia juga bisa mengunduh
 cadangan yang dibuat Superadmin kapan saja — dan tiap `.bak` berisi seluruh isi
 basis data, termasuk hash sandi setiap akun. Dengan "buat & unduh", Owner hanya
 pernah memegang salinan yang ia buat sendiri saat itu juga, dan server tidak

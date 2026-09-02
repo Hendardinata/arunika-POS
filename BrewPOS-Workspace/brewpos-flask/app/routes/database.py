@@ -130,6 +130,30 @@ def list_backups():
         return jsonify({'error': str(e)}), 400
 
 
+@database_bp.route('/backup-latest', methods=['GET'])
+def cadangan_terakhir():
+    """
+    Satu baris: cadangan terbaru yang tersimpan di server. Admin/Owner ke atas.
+
+    Riwayat lengkapnya tetap tertutup -- yang dijawab di sini cuma "kapan toko
+    ini terakhir dicadangkan", dan itu pertanyaan yang berhak diketahui
+    pemiliknya. Hanya keterangannya: nama, ukuran, tanggal. Tidak ada tautan
+    unduhan, jadi Owner tetap tidak bisa mengambil cadangan buatan Superadmin.
+
+    Berbeda dari "buat & unduh" milik Owner sendiri, yang memang tidak disimpan
+    dan karena itu tidak pernah muncul di sini.
+    """
+    try:
+        data = daftar_backup()
+    except DbBackupError as e:
+        return jsonify({'error': str(e)}), 400
+    daftar = data['backups']
+    return jsonify({
+        'database': data['database'],
+        'latest': daftar[0] if daftar else None,
+    })
+
+
 @database_bp.route('/backup', methods=['POST'])
 def create_backup():
     """Buat cadangan dan SIMPAN di riwayat server."""

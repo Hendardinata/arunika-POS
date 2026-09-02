@@ -97,6 +97,77 @@ def test_owner_tidak_bisa_menyentuh_riwayat(client, owner_headers, metode, jalur
     assert 'Superadmin' in res.get_json()['error']
 
 
+# --- Cadangan terakhir: Owner boleh tahu kapan, bukan apa saja ---------------
+
+def test_owner_boleh_lihat_cadangan_terakhir(client, owner_headers, tmp_path, monkeypatch):
+    """
+    Owner berhak tahu kapan tokonya terakhir dicadangkan. Yang dibuka cuma
+    keterangan satu baris -- nama, ukuran, tanggal -- bukan daftarnya.
+    """
+    import os
+    import time
+
+    from app.services import db_backup
+    # Waktu ubah disetel eksplisit: urutannya ditentukan mtime berkas, BUKAN
+    # tanggal yang kebetulan tertulis di namanya. Tanpa ini keduanya lahir pada
+    # detik yang sama dan urutannya jadi kebetulan.
+    for nama, umur in (('rua-20260101-000000.bak', 7200), ('rua-20260305-101500.bak', 60)):
+        f = tmp_path / nama
+        f.write_bytes(b'x' * 10)
+        saat = time.time() - umur
+        os.utime(f, (saat, saat))
+    monkeypatch.setenv('DB_BACKUP_DIR', str(tmp_path))
+    monkeypatch.setattr(db_backup, '_mesin_master', lambda: _MesinPalsu())
+    monkeypatch.setattr(db_backup, 'nama_database', lambda: 'rua')
+
+    res = client.get('/api/database/backup-latest', headers=owner_headers)
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data['latest']['filename'] == 'rua-20260305-101500.bak'
+    assert data['latest']['size'] == 10
+    # Satu baris saja -- daftar lengkapnya tidak ikut terbawa.
+    assert 'backups' not in data
+
+
+def test_cadangan_terakhir_kosong_saat_belum_ada(client, owner_headers, tmp_path, monkeypatch):
+    from app.services import db_backup
+    monkeypatch.setenv('DB_BACKUP_DIR', str(tmp_path))
+    monkeypatch.setattr(db_backup, '_mesin_master', lambda: _MesinPalsu())
+    monkeypatch.setattr(db_backup, 'nama_database', lambda: 'rua')
+
+    res = client.get('/api/database/backup-latest', headers=owner_headers)
+    assert res.status_code == 200
+    assert res.get_json()['latest'] is None
+
+
+def test_cadangan_terakhir_tidak_membawa_tautan_unduhan(client, owner_headers,
+                                                        tmp_path, monkeypatch):
+    """
+    Inti pemisahannya: Owner tahu KAPAN, tapi tetap tidak bisa MENGAMBIL. Kalau
+    keterangan ini sampai membawa tautan, celah yang ditutup sebelumnya terbuka
+    lagi lewat pintu lain.
+    """
+    from app.services import db_backup
+    (tmp_path / 'rua-20260101-000000.bak').write_bytes(b'x')
+    monkeypatch.setenv('DB_BACKUP_DIR', str(tmp_path))
+    monkeypatch.setattr(db_backup, '_mesin_master', lambda: _MesinPalsu())
+    monkeypatch.setattr(db_backup, 'nama_database', lambda: 'rua')
+
+    data = client.get('/api/database/backup-latest', headers=owner_headers).get_json()
+    assert 'url' not in data['latest'] and 'path' not in data['latest']
+    # Dan namanya pun tidak bisa dipakai untuk mengunduh.
+    nama = data['latest']['filename']
+    assert client.get(f'/api/database/backup/{nama}',
+                      headers=owner_headers).status_code == 403
+    assert client.post(f'/api/database/backup/{nama}/tiket',
+                       headers=owner_headers).status_code == 403
+
+
+def test_kasir_tidak_boleh_lihat_cadangan_terakhir(client, cashier_headers):
+    assert client.get('/api/database/backup-latest',
+                      headers=cashier_headers).status_code == 403
+
+
 def test_superadmin_tetap_pegang_riwayat(client, admin_headers):
     res = client.get('/api/database/backups', headers=admin_headers)
     # 400 = gagal di SQL Server (SQLite di suite ini), BUKAN ditolak izin.

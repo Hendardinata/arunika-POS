@@ -22,6 +22,18 @@
         </button>
     </div>
 
+    <!-- Untuk Admin/Owner: satu baris saja, sebagai ganti riwayat penuh.
+         Menjawab "kapan toko ini terakhir dicadangkan" tanpa membuka daftar
+         cadangan Superadmin -- dan tanpa tautan unduhan. -->
+    <div id="db-terakhir" style="display: none; border: 1px solid var(--border-color);
+         border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 16px;">
+        <div style="font-size: 0.625rem; text-transform: uppercase; letter-spacing: 0.08em;
+                    color: var(--text-muted); font-weight: 600; margin-bottom: 4px;">
+            Cadangan Terakhir di Server
+        </div>
+        <div id="db-terakhir-isi" style="font-size: 0.8125rem;">Memuat...</div>
+    </div>
+
     <div id="db-riwayat">
     <div id="db-info" style="font-size: 0.75rem; color: var(--text-muted); padding: 0 4px 12px;"></div>
 
@@ -120,6 +132,8 @@
         // ada daftar untuk ditampilkan.
         const superadmin = peran === 'SUPERADMIN';
         document.getElementById('db-riwayat').style.display = superadmin ? '' : 'none';
+        document.getElementById('db-terakhir').style.display = superadmin ? 'none' : '';
+        if (!superadmin) muatCadanganTerakhir();
         // Superadmin memutuskan; yang lain mengajukan. Kata-katanya ikut berubah
         // supaya tombolnya tidak menjanjikan sesuatu yang tidak terjadi.
         document.getElementById('judul-pulihkan').textContent =
@@ -177,6 +191,32 @@
      * menanganinya: DownloadManager di Android, pengelola unduhan Safari di iOS,
      * dan unduhan bawaan di browser desktop.
      */
+    /**
+     * Cadangan terbaru yang tersimpan di server, sebagai satu baris keterangan.
+     *
+     * Sengaja tanpa tombol apa pun: yang dijawab cuma "kapan terakhir
+     * dicadangkan". Cadangan "buat & unduh" milik Owner sendiri tidak disimpan
+     * di server, jadi memang tidak akan pernah muncul di sini.
+     */
+    async function muatCadanganTerakhir() {
+        const isi = document.getElementById('db-terakhir-isi');
+        try {
+            const data = await apiFetch('/database/backup-latest');
+            if (!data.latest) {
+                isi.innerHTML = '<span style="color: var(--text-muted);">'
+                    + 'Belum ada cadangan tersimpan di server.</span>';
+                return;
+            }
+            const b = data.latest;
+            isi.innerHTML = `<strong style="font-family: monospace; font-size: 0.75rem;">`
+                + `${escHtml(b.filename)}</strong>`
+                + `<div style="font-size: 0.6875rem; color: var(--text-muted); margin-top: 3px;">`
+                + `${ukuranBerkas(b.size)} &middot; ${b.createdAt.replace('T', ' ')}</div>`;
+        } catch (err) {
+            isi.innerHTML = `<span style="color: var(--color-danger);">${escHtml(err.message)}</span>`;
+        }
+    }
+
     async function buatBackupDb() {
         const btn = document.getElementById('btn-backup-db');
         const semula = btn.innerHTML;
@@ -186,6 +226,9 @@
             const hasil = await apiFetch('/database/backup-download', { method: 'POST' });
             mulaiUnduhan(hasil.url);
             showToast(`Cadangan ${hasil.filename} sedang diunduh. Tidak disimpan di server.`, 'success');
+            // Riwayat hanya berubah untuk Superadmin; cadangan "buat & unduh"
+            // milik Admin/Owner memang tidak disimpan, jadi baris "cadangan
+            // terakhir" mereka sengaja tidak ikut diperbarui.
             const user = getUser();
             if ((user && user.role || '').toUpperCase() === 'SUPERADMIN') await muatManajemenDb();
         } catch (err) {
