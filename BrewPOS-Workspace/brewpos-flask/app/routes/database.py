@@ -4,17 +4,19 @@ Manajemen basis data: unduh backup dan pulihkan dari backup.
 Izinnya dibagi menurut satu garis: siapa yang boleh menyentuh PENYIMPANAN
 cadangan, dan siapa yang cuma boleh mengambil salinan untuk dirinya sendiri.
 
-- Admin/Owner: satu kemampuan saja -- "buat & unduh". Berkasnya dibuat, dikirim
-  ke pengunduh, lalu dihapus dari server. Tidak masuk riwayat, tidak bisa
-  diambil lagi nanti.
-- Superadmin: pemilik penuh riwayat cadangan -- melihat daftar, menyimpan,
-  mengunduh ulang, menghapus.
+- Admin/Owner: satu kemampuan saja -- "buat & unduh". Cadangannya TETAP
+  DISIMPAN di server seperti cadangan lain, dan salinannya ikut terunduh ke
+  perangkat pemintanya. Yang tidak bisa ia lakukan adalah MELIHAT isi
+  penyimpanan itu; ia hanya melihat baris "cadangan terakhir".
+- Superadmin: pemilik penuh riwayat cadangan -- melihat daftar, mengunduh ulang,
+  menghapus.
 
-Pemisahan itu yang menutup celahnya. Kalau Owner boleh membaca daftar cadangan,
-ia juga bisa mengunduh cadangan yang dibuat Superadmin kapan saja -- dan tiap
-berkas .bak berisi SELURUH isi basis data, termasuk hash sandi setiap akun.
-Dengan "buat & unduh", Owner hanya pernah memegang salinan yang ia buat sendiri
-saat itu juga, dan server tidak menyimpan apa pun untuknya.
+Pemisahannya ada di MELIHAT, bukan di menyimpan. Kalau Owner boleh membaca
+daftar cadangan, ia juga bisa mengunduh cadangan yang dibuat Superadmin kapan
+saja -- dan tiap berkas .bak berisi SELURUH isi basis data, termasuk hash sandi
+setiap akun. Tapi cadangannya sendiri harus tetap ada di server: menghapusnya
+setelah terkirim berarti satu-satunya salinan yang tersisa ada di perangkat
+pemintanya, dan itu justru membuat toko lebih rapuh, bukan lebih aman.
 
 Memulihkan dipecah jadi dua tindakan oleh dua orang: Admin/Owner MENGAJUKAN,
 Superadmin MEMUTUSKAN dari halamannya sendiri. Restore menimpa seluruh isi toko
@@ -30,7 +32,6 @@ jejaknya menyebut dua nama yang berbeda.
 import os
 import secrets
 from datetime import datetime, timedelta
-from io import BytesIO
 
 from flask import Blueprint, jsonify, request, send_file
 
@@ -191,8 +192,8 @@ def tiket_unduh_riwayat(filename):
     """
     Tiket unduhan untuk satu berkas di riwayat (Superadmin).
 
-    Berkasnya TIDAK dihapus setelah diunduh -- ini riwayat, bukan salinan sekali
-    pakai. Yang sekali pakai hanya tiketnya.
+    Berkasnya TIDAK dihapus setelah diunduh -- ini riwayat. Yang sekali pakai
+    hanya tiketnya.
     """
     galat = _wajib_superadmin()
     if galat:
@@ -206,7 +207,7 @@ def tiket_unduh_riwayat(filename):
 
     log_activity('DB_BACKUP_DOWNLOAD', get_current_user_id(),
                  f"Mengunduh backup {filename}", 'Database', None)
-    token = tiket_unduh.terbitkan(penuh, filename, get_current_user_id(), hapus_setelah=False)
+    token = tiket_unduh.terbitkan(penuh, filename, get_current_user_id())
     return jsonify({'url': f'/unduh-cadangan/{token}', 'filename': filename}), 201
 
 
@@ -227,36 +228,37 @@ def delete_backup(filename):
 @database_bp.route('/backup-download', methods=['POST'])
 def backup_and_download():
     """
-    Buat cadangan, kirim ke pengunduh, lalu hapus dari server.
+    Buat cadangan, simpan di server, lalu kirim salinannya ke pengunduh.
 
-    Ini satu-satunya jalur cadangan untuk Admin/Owner. Berkasnya tidak masuk
-    riwayat dan tidak bisa diambil lagi nanti -- server tidak menyimpan apa pun
-    untuk peran ini.
+    Ini satu-satunya jalur cadangan untuk Admin/Owner, dan hasilnya MASUK riwayat
+    seperti cadangan lain -- yang membedakan hanya siapa yang boleh melihat
+    riwayat itu.
+
+    Versi sebelumnya menghapus berkasnya begitu terkirim. Itu keliru: kalau
+    berkas unduhan si peminta hilang, tidak ada satu pun salinan tersisa. Server
+    justru tempat yang paling layak menyimpannya.
 
     Alamatnya sengaja /backup-download, bukan /backup/download: rute tetangganya
     memakai <path:filename> yang rakus, dan alamat terpisah menghilangkan
     pertanyaan mana yang cocok lebih dulu.
     """
-    # Sisa berkas dari permintaan yang mati di tengah pengiriman dibersihkan di
-    # sini. Isinya seluruh basis data; tidak boleh menumpuk diam-diam.
+    # Membersihkan sisa berkas kerja, termasuk berkas "unduh-" peninggalan versi
+    # lama yang menghapus-setelah-kirim.
     sapu_berkas_sementara()
 
     try:
-        info = buat_backup(sementara=True)
+        info = buat_backup()
         penuh = path_backup(info['filename'])
     except DbBackupError as e:
         return jsonify({'error': str(e)}), 400
 
-    # Nama yang dilihat pengunduh tidak membawa awalan kerja "unduh-".
-    nama_unduh = info['filename'][len('unduh-'):]
-
     log_activity('DB_BACKUP_DOWNLOAD', get_current_user_id(),
-                 f"Membuat & mengunduh cadangan {nama_unduh} (tidak disimpan di server)",
+                 f"Membuat & mengunduh cadangan {info['filename']} (tersimpan di server)",
                  'Database', None)
 
-    token = tiket_unduh.terbitkan(penuh, nama_unduh, get_current_user_id(),
-                                  hapus_setelah=True)
-    return jsonify({'url': f'/unduh-cadangan/{token}', 'filename': nama_unduh}), 201
+    token = tiket_unduh.terbitkan(penuh, info['filename'], get_current_user_id())
+    return jsonify({'url': f'/unduh-cadangan/{token}',
+                    'filename': info['filename'], 'size': info['size']}), 201
 
 
 @unduh_bp.route('/unduh-cadangan/<token>', methods=['GET'])
@@ -275,33 +277,15 @@ def ambil_cadangan(token):
             'error': 'Tautan unduhan sudah dipakai atau kedaluwarsa. Buat cadangan lagi.'
         }), 404
 
-    penuh, nama_unduh, hapus_setelah = hasil
+    penuh, nama_unduh = hasil
 
-    # Dibaca ke memori lalu berkasnya DIHAPUS SEKARANG, sebelum respons dikirim.
-    #
-    # Percobaan sebelumnya memakai send_file + call_on_close supaya berkasnya
-    # mengalir tanpa singgah di memori. Hasilnya: berkasnya TERTINGGAL -- terbukti
-    # tiga .bak 12 MB menumpuk setelah tiga permintaan. Untuk berkas berisi
-    # seluruh basis data, "biasanya terhapus" bukan jaminan yang cukup. Menghapus
-    # lebih dulu membuat kegagalan itu mustahil.
-    #
-    # ponytail: seluruh .bak masuk memori (12 MB untuk basis data ini). Kalau
-    # nanti tumbuh ke ratusan MB, kembali ke aliran -- tapi dengan penghapus yang
-    # benar-benar diuji, bukan diasumsikan.
+    # Berkasnya TIDAK dihapus di sini. Semua cadangan kini tinggal di riwayat --
+    # yang dikirim lewat tiket cuma salinannya. Yang sekali pakai hanya tiketnya.
     try:
-        with open(penuh, 'rb') as f:
-            isi = f.read()
+        return send_file(penuh, as_attachment=True, download_name=nama_unduh,
+                         mimetype='application/octet-stream')
     except OSError as e:
         return jsonify({'error': f'Berkas cadangan tidak bisa dibaca: {e}'}), 404
-    finally:
-        if hapus_setelah:
-            try:
-                os.remove(penuh)
-            except OSError:
-                pass   # terkunci di Windows; disapu permintaan berikutnya
-
-    return send_file(BytesIO(isi), as_attachment=True, download_name=nama_unduh,
-                     mimetype='application/octet-stream')
 
 
 # ==============================================================================

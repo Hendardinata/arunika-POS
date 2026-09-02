@@ -206,16 +206,18 @@ dan siapa yang cuma boleh mengambil salinan untuk dirinya sendiri.
 
 | Tindakan | Admin/Owner | Superadmin |
 |---|---|---|
-| Buat & unduh cadangan (tidak disimpan di server) | ya | ya |
+| Buat cadangan (tersimpan di server) & unduh salinannya | ya | ya |
 | Lihat **cadangan terakhir** (nama, ukuran, tanggal) | ya | ya |
-| Lihat riwayat penuh, simpan, unduh ulang, hapus | **tidak** | ya |
+| Lihat riwayat penuh, unduh ulang, hapus | **tidak** | ya |
 | Pulihkan (restore) | **mengajukan** | **memutuskan** (setujui / tolak) |
 
-Admin/Owner melihat **satu baris** di halamannya: cadangan terbaru yang tersimpan
-di server. Itu menjawab "kapan toko ini terakhir dicadangkan" — pertanyaan yang
-berhak diketahui pemiliknya — tanpa membuka daftarnya dan tanpa tautan unduhan.
-Cadangan "buat & unduh" milik Admin/Owner sendiri tidak disimpan di server, jadi
-memang tidak akan pernah muncul di baris itu.
+**Semua cadangan tersimpan di server**, termasuk yang dibuat Admin/Owner lewat
+"Buat & Unduh". Yang membedakan peran bukan apa yang disimpan, melainkan siapa
+yang boleh **melihat** simpanan itu.
+
+Admin/Owner melihat **satu baris**: cadangan terbaru di server — nama, ukuran,
+tanggal. Itu menjawab "kapan toko ini terakhir dicadangkan" tanpa membuka
+daftarnya dan tanpa tautan unduhan.
 
 **Kenapa Owner tidak boleh membaca riwayat penuh.** Kalau boleh, ia juga bisa mengunduh
 cadangan yang dibuat Superadmin kapan saja — dan tiap `.bak` berisi seluruh isi
@@ -241,12 +243,16 @@ Navigasi tidak bisa membawa header `Authorization`, maka tiketnya: token acak
 tidak perlu dilubangi. Tiket yang kedaluwarsa tanpa pernah ditukar ikut menghapus
 berkasnya — itu menutup kasus "tombol ditekan, unduhan tidak pernah dimulai".
 
-Berkas jalur "buat & unduh" **dihapus sebelum responsnya dikirim**, bukan
-sesudah. Versi pertama memakai `send_file` + `call_on_close` dan berkasnya
-tertinggal — terbukti tiga `.bak` 12 MB menumpuk setelah tiga permintaan. Untuk
-berkas seukuran itu yang isinya seluruh basis data, "biasanya terhapus" bukan
-jaminan yang cukup. Konsekuensinya berkasnya masuk memori dulu; kalau basis data
-tumbuh ke ratusan MB, kembali ke aliran — tapi dengan penghapus yang diuji.
+Cadangan **tidak pernah dihapus otomatis**. Versi awal menghapus cadangan
+Admin/Owner begitu terkirim; itu keliru — kalau berkas unduhan si peminta hilang,
+tidak ada satu pun salinan yang tersisa, dan justru server tempat paling layak
+menyimpannya.
+
+Konsekuensinya folder `backups/` tumbuh: satu cadangan basis data ini ~12 MB, jadi
+mencadangkan tiap hari berarti sekitar 4 GB setahun. **Superadmin yang membersihkan
+lewat tombol hapus di riwayat** — sengaja tidak ada pemangkasan otomatis, karena
+menghapus cadangan tanpa diminta adalah hal terakhir yang boleh dilakukan sistem
+ini sendiri.
 
 - **Pulihkan** menimpa seluruh basis data dengan isi cadangan. Semua sesi kasir
   yang sedang berjalan terputus, dan langkah ini tidak bisa dibatalkan. Bisa dari

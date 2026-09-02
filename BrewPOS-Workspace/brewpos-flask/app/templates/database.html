@@ -152,8 +152,8 @@
 
         document.getElementById('db-catatan-peran').innerHTML = superadmin
             ? 'Cadangan yang Anda buat tersimpan di server dan bisa diunduh ulang kapan saja.'
-            : 'Cadangan langsung terunduh ke perangkat Anda dan <strong>tidak disimpan di server</strong>. '
-              + 'Simpan berkasnya baik-baik &mdash; isinya seluruh data toko.';
+            : 'Cadangan tersimpan di server <strong>dan</strong> terunduh ke perangkat Anda. '
+              + 'Daftar lengkapnya hanya bisa dibuka Superadmin; di sini Anda melihat yang terakhir.';
         if (!superadmin) return;
         const tbody = document.getElementById('db-backup-body');
         const info = document.getElementById('db-info');
@@ -195,8 +195,8 @@
      * Cadangan terbaru yang tersimpan di server, sebagai satu baris keterangan.
      *
      * Sengaja tanpa tombol apa pun: yang dijawab cuma "kapan terakhir
-     * dicadangkan". Cadangan "buat & unduh" milik Owner sendiri tidak disimpan
-     * di server, jadi memang tidak akan pernah muncul di sini.
+     * dicadangkan", bukan "cadangan apa saja yang ada". Daftar lengkapnya tetap
+     * milik Superadmin.
      */
     async function muatCadanganTerakhir() {
         const isi = document.getElementById('db-terakhir-isi');
@@ -225,12 +225,16 @@
         try {
             const hasil = await apiFetch('/database/backup-download', { method: 'POST' });
             mulaiUnduhan(hasil.url);
-            showToast(`Cadangan ${hasil.filename} sedang diunduh. Tidak disimpan di server.`, 'success');
-            // Riwayat hanya berubah untuk Superadmin; cadangan "buat & unduh"
-            // milik Admin/Owner memang tidak disimpan, jadi baris "cadangan
-            // terakhir" mereka sengaja tidak ikut diperbarui.
+            showToast(`Cadangan ${hasil.filename} tersimpan di server dan sedang diunduh.`, 'success');
+            // Cadangannya masuk riwayat, jadi kedua tampilan ikut menyegarkan:
+            // Superadmin melihat baris baru di daftar, Admin/Owner melihat
+            // "cadangan terakhir" berubah jadi yang barusan dibuat.
             const user = getUser();
-            if ((user && user.role || '').toUpperCase() === 'SUPERADMIN') await muatManajemenDb();
+            if ((user && user.role || '').toUpperCase() === 'SUPERADMIN') {
+                await muatManajemenDb();
+            } else {
+                await muatCadanganTerakhir();
+            }
         } catch (err) {
             showToast(err.message, 'error');
         } finally {

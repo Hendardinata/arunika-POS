@@ -99,6 +99,34 @@ def test_owner_tidak_bisa_menyentuh_riwayat(client, owner_headers, metode, jalur
 
 # --- Cadangan terakhir: Owner boleh tahu kapan, bukan apa saja ---------------
 
+def test_cadangan_owner_masuk_riwayat_superadmin(client, owner_headers, admin_headers,
+                                                 tmp_path, monkeypatch):
+    """
+    Cadangan yang dibuat Owner tersimpan seperti cadangan lain, dan Superadmin
+    melihatnya di riwayat. Owner sendiri tetap tidak bisa membuka daftar itu --
+    pemisahannya ada di MELIHAT, bukan di menyimpan.
+    """
+    from app.routes import database as rute
+    from app.services import db_backup
+    berkas = tmp_path / 'rua-20260401-120000.bak'
+    berkas.write_bytes(b'cadangan-owner')
+    monkeypatch.setattr(rute, 'buat_backup',
+                        lambda: {'filename': 'rua-20260401-120000.bak', 'size': 14})
+    monkeypatch.setattr(rute, 'path_backup', lambda n, harus_ada=True: str(berkas))
+    monkeypatch.setattr(rute, 'sapu_berkas_sementara', lambda: None)
+
+    assert client.post('/api/database/backup-download',
+                       headers=owner_headers).status_code == 201
+
+    monkeypatch.setenv('DB_BACKUP_DIR', str(tmp_path))
+    monkeypatch.setattr(db_backup, '_mesin_master', lambda: _MesinPalsu())
+    monkeypatch.setattr(db_backup, 'nama_database', lambda: 'rua')
+
+    riwayat = client.get('/api/database/backups', headers=admin_headers).get_json()
+    assert [b['filename'] for b in riwayat['backups']] == ['rua-20260401-120000.bak']
+    assert client.get('/api/database/backups', headers=owner_headers).status_code == 403
+
+
 def test_owner_boleh_lihat_cadangan_terakhir(client, owner_headers, tmp_path, monkeypatch):
     """
     Owner berhak tahu kapan tokonya terakhir dicadangkan. Yang dibuka cuma
@@ -193,31 +221,36 @@ def test_owner_boleh_buat_dan_unduh(client, owner_headers):
     assert res.status_code != 403
 
 
-def test_buat_dan_unduh_tidak_meninggalkan_berkas(client, owner_headers, tmp_path, monkeypatch):
+def test_buat_dan_unduh_tetap_tersimpan_di_server(client, owner_headers, tmp_path, monkeypatch):
     """
-    Regresi. Versi pertama memakai send_file + call_on_close dan berkasnya
-    TERTINGGAL: tiga .bak 12 MB menumpuk setelah tiga permintaan.
+    Cadangan Admin/Owner TETAP tinggal di server setelah diunduh.
+
+    Versi sebelumnya menghapusnya begitu terkirim. Itu keliru: kalau berkas
+    unduhan si peminta hilang, tidak ada satu pun salinan yang tersisa.
     """
     from app.routes import database as rute
-    palsu = tmp_path / 'unduh-uji.bak'
-    palsu.write_bytes(b'isi-cadangan-palsu')
-    monkeypatch.setattr(rute, 'buat_backup', lambda sementara=False: {'filename': 'unduh-uji.bak'})
-    monkeypatch.setattr(rute, 'path_backup', lambda n, harus_ada=True: str(palsu))
+    berkas = tmp_path / 'rua-20260401-120000.bak'
+    berkas.write_bytes(b'isi-cadangan-palsu')
+    monkeypatch.setattr(rute, 'buat_backup',
+                        lambda: {'filename': 'rua-20260401-120000.bak', 'size': 18})
+    monkeypatch.setattr(rute, 'path_backup', lambda n, harus_ada=True: str(berkas))
     monkeypatch.setattr(rute, 'sapu_berkas_sementara', lambda: None)
 
     res = client.post('/api/database/backup-download', headers=owner_headers)
     assert res.status_code == 201
+    assert res.get_json()['filename'] == 'rua-20260401-120000.bak'
     unduh = client.get(res.get_json()['url'])
     assert unduh.status_code == 200
     assert unduh.data == b'isi-cadangan-palsu'
-    assert not palsu.exists(), 'berkas cadangan tertinggal di server'
+    assert berkas.exists(), 'cadangan terhapus dari server setelah diunduh'
 
 
 def test_tiket_sekali_pakai(client, owner_headers, tmp_path, monkeypatch):
     from app.routes import database as rute
-    palsu = tmp_path / 'unduh-uji.bak'
+    palsu = tmp_path / 'rua-20260401-120000.bak'
     palsu.write_bytes(b'isi-cadangan')
-    monkeypatch.setattr(rute, 'buat_backup', lambda sementara=False: {'filename': 'unduh-uji.bak'})
+    monkeypatch.setattr(rute, 'buat_backup',
+                        lambda: {'filename': 'rua-20260401-120000.bak', 'size': 12})
     monkeypatch.setattr(rute, 'path_backup', lambda n, harus_ada=True: str(palsu))
     monkeypatch.setattr(rute, 'sapu_berkas_sementara', lambda: None)
 
@@ -227,16 +260,20 @@ def test_tiket_sekali_pakai(client, owner_headers, tmp_path, monkeypatch):
     assert client.get(url).status_code == 404
 
 
-def test_tiket_kedaluwarsa_ikut_menghapus_berkas(tmp_path, monkeypatch):
-    berkas = tmp_path / 'unduh-nganggur.bak'
+def test_tiket_kedaluwarsa_tidak_menghapus_cadangan(tmp_path, monkeypatch):
+    """
+    Tiket batal berarti UNDUHANNYA batal, bukan cadangannya harus hilang.
+    Semua cadangan tinggal di riwayat; tiket cuma izin mengambil salinannya.
+    """
+    berkas = tmp_path / 'rua-20260401-120000.bak'
     berkas.write_bytes(b'x')
-    token = tiket_unduh.terbitkan(str(berkas), 'nganggur.bak', hapus_setelah=True)
+    token = tiket_unduh.terbitkan(str(berkas), 'rua-20260401-120000.bak')
 
     asli = tiket_unduh.time.time
     monkeypatch.setattr(tiket_unduh.time, 'time',
                         lambda: asli() + tiket_unduh.UMUR_DETIK + 1)
     assert tiket_unduh.tukar(token) is None
-    assert not berkas.exists(), 'berkas tertinggal setelah tiketnya kedaluwarsa'
+    assert berkas.exists(), 'cadangan ikut terhapus saat tiketnya kedaluwarsa'
 
 
 def test_tiket_ngawur_ditolak(client):

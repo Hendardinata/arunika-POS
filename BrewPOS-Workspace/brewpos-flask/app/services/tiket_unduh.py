@@ -21,7 +21,6 @@ sama: server ini satu proses tunggal, dan tiket yang hilang saat restart justru
 aman -- yang batal cuma satu unduhan. Kalau nanti jalan multi-worker, pindahkan
 ke Redis.
 """
-import os
 import secrets
 import threading
 import time
@@ -36,34 +35,18 @@ _lock = threading.Lock()
 
 def _buang_kedaluwarsa(sekarang):
     """
-    Hapus tiket lewat waktu, beserta berkasnya bila itu salinan sekali pakai.
+    Buang tiket yang lewat waktu.
 
-    Ini yang menutup kasus "tombol ditekan, unduhan tidak pernah dimulai":
-    tanpa langkah ini berkas 12 MB berisi seluruh basis data akan menunggu di
-    server sampai penyapu satu jam lewat.
+    Berkasnya tidak ikut disentuh: semua cadangan tinggal di riwayat, dan tiket
+    hanya izin mengunduh salinannya. Tiket yang tidak pernah ditukar berarti
+    unduhannya batal -- bukan berarti cadangannya harus hilang.
     """
     for token in [t for t, d in _tiket.items() if d['kedaluwarsa'] < sekarang]:
-        data = _tiket.pop(token, None)
-        if data and data.get('hapusSetelah'):
-            _hapus_berkas(data['path'])
+        _tiket.pop(token, None)
 
 
-def _hapus_berkas(path):
-    try:
-        os.remove(path)
-    except OSError:
-        pass
-
-
-def terbitkan(path, nama_unduh, user_id=None, hapus_setelah=False):
-    """
-    Tiket baru untuk satu berkas. Mengembalikan tokennya.
-
-    hapus_setelah=True untuk salinan sekali pakai (jalur "buat & unduh"):
-    berkasnya dihapus begitu terkirim, dan juga bila tiketnya keburu lewat waktu
-    tanpa pernah ditukar. Riwayat cadangan memakai False -- berkasnya memang
-    harus tetap ada.
-    """
+def terbitkan(path, nama_unduh, user_id=None):
+    """Tiket baru untuk satu berkas. Mengembalikan tokennya."""
     sekarang = time.time()
     token = secrets.token_urlsafe(32)
     with _lock:
@@ -72,7 +55,6 @@ def terbitkan(path, nama_unduh, user_id=None, hapus_setelah=False):
             'path': path,
             'nama': nama_unduh,
             'userId': user_id,
-            'hapusSetelah': hapus_setelah,
             'kedaluwarsa': sekarang + UMUR_DETIK,
         }
     return token
@@ -80,8 +62,8 @@ def terbitkan(path, nama_unduh, user_id=None, hapus_setelah=False):
 
 def tukar(token):
     """
-    Tukar tiket dengan (path, nama, hapus_setelah). SEKALI PAKAI: tiket langsung
-    dicabut, berhasil atau tidak berkasnya nanti terbaca.
+    Tukar tiket dengan (path, nama). SEKALI PAKAI: tiket langsung dicabut,
+    berhasil atau tidak berkasnya nanti terbaca.
 
     Mengembalikan None bila tiket tidak dikenal atau sudah lewat waktu.
     """
@@ -91,7 +73,7 @@ def tukar(token):
         data = _tiket.pop(token or '', None)
     if not data:
         return None
-    return data['path'], data['nama'], data['hapusSetelah']
+    return data['path'], data['nama']
 
 
 def reset_all():
