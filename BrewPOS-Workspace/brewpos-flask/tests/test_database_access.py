@@ -50,13 +50,101 @@ def _restore(client, headers, **extra):
     return client.post('/api/database/restore', json=body, headers=headers)
 
 
-# --- Membuat & melihat cadangan: Admin/Owner ke atas -------------------------
+# --- Riwayat cadangan: Superadmin saja ---------------------------------------
+#
+# Inilah celah yang ditutup: kalau Owner boleh membaca daftar, ia juga bisa
+# mengunduh cadangan yang dibuat Superadmin -- dan tiap .bak berisi hash sandi
+# SEMUA akun, termasuk Superadmin sendiri.
 
-def test_owner_boleh_melihat_daftar_cadangan(client, owner_headers):
-    """Owner memegang datanya sendiri; melihat daftar cadangan bukan hak istimewa."""
-    res = client.get('/api/database/backups', headers=owner_headers)
+@pytest.mark.parametrize('metode, jalur', [
+    ('get', '/api/database/backups'),
+    ('post', '/api/database/backup'),
+    ('get', '/api/database/backup/rua-20260101-000000.bak'),
+    ('delete', '/api/database/backup/rua-20260101-000000.bak'),
+])
+def test_owner_tidak_bisa_menyentuh_riwayat(client, owner_headers, metode, jalur):
+    res = getattr(client, metode)(jalur, headers=owner_headers)
+    assert res.status_code == 403, jalur
+    assert 'Superadmin' in res.get_json()['error']
+
+
+def test_superadmin_tetap_pegang_riwayat(client, admin_headers):
+    res = client.get('/api/database/backups', headers=admin_headers)
     # 400 = gagal di SQL Server (SQLite di suite ini), BUKAN ditolak izin.
     assert res.status_code != 403
+
+
+# --- Buat & unduh: satu-satunya jalur cadangan untuk Owner -------------------
+
+def test_owner_boleh_buat_dan_unduh(client, owner_headers):
+    """Lolos gerbang izin; gagal berikutnya di SQL Server, bukan di izin."""
+    res = client.post('/api/database/backup-download', headers=owner_headers)
+    assert res.status_code != 403
+
+
+def test_kasir_tidak_boleh_buat_dan_unduh(client, cashier_headers):
+    res = client.post('/api/database/backup-download', headers=cashier_headers)
+    assert res.status_code == 403
+
+
+def test_buat_dan_unduh_tidak_meninggalkan_berkas(client, owner_headers, tmp_path, monkeypatch):
+    """
+    Regresi. Versi pertama memakai send_file + call_on_close dan berkasnya
+    TERTINGGAL: tiga .bak 12 MB menumpuk setelah tiga permintaan, masing-masing
+    berisi seluruh basis data termasuk hash sandi. Sekarang berkasnya dihapus
+    sebelum respons dikirim, jadi tidak ada urutan kejadian yang menyisakannya.
+    """
+    from app.routes import database as rute
+
+    palsu = tmp_path / 'unduh-uji.bak'
+    palsu.write_bytes(b'isi-cadangan-palsu')
+    monkeypatch.setattr(rute, 'buat_backup', lambda sementara=False: {'filename': 'unduh-uji.bak'})
+    monkeypatch.setattr(rute, 'path_backup', lambda n, harus_ada=True: str(palsu))
+    monkeypatch.setattr(rute, 'sapu_berkas_sementara', lambda: None)
+
+    res = client.post('/api/database/backup-download', headers=owner_headers)
+    assert res.status_code == 200
+    assert res.data == b'isi-cadangan-palsu'
+    assert 'unduh-' not in res.headers.get('Content-Disposition', '')
+    assert not palsu.exists(), 'berkas cadangan tertinggal di server'
+
+
+def test_berkas_kerja_sementara_tidak_bisa_diunduh(client, admin_headers):
+    """
+    Hasil "buat & unduh" numpang di folder yang sama sebelum dihapus. Selama
+    jeda itu ia tidak boleh bisa diambil lewat alamat unduhan riwayat.
+    """
+    for nama in ('unduh-rua-20260101-000000.bak', 'upload-1234.bak'):
+        res = client.get(f'/api/database/backup/{nama}', headers=admin_headers)
+        assert res.status_code == 404, nama
+
+
+def test_berkas_sementara_tidak_muncul_di_riwayat(tmp_path, monkeypatch):
+    """daftar_backup() menyaring berkas kerja, bukan hanya menamainya berbeda."""
+    from app.services import db_backup
+    (tmp_path / 'rua-20260101-000000.bak').write_bytes(b'x')
+    (tmp_path / 'unduh-rua-20260102-000000.bak').write_bytes(b'x')
+    (tmp_path / 'upload-999.bak').write_bytes(b'x')
+    # DB_BACKUP_DIR menang atas folder bawaan -- tanpa ini tesnya membaca folder
+    # cadangan sungguhan milik mesin ini.
+    monkeypatch.setenv('DB_BACKUP_DIR', str(tmp_path))
+    monkeypatch.setattr(db_backup, '_mesin_master', lambda: _MesinPalsu(str(tmp_path)))
+    monkeypatch.setattr(db_backup, 'nama_database', lambda: 'rua')
+    nama = [b['filename'] for b in db_backup.daftar_backup()['backups']]
+    assert nama == ['rua-20260101-000000.bak']
+
+
+class _MesinPalsu:
+    """Cukup untuk _folder_backup(): tidak menyentuh SQL Server sama sekali."""
+    def __init__(self, folder):
+        self._folder = folder
+
+    def connect(self):
+        import contextlib
+        return contextlib.nullcontext(None)
+
+    def dispose(self):
+        pass
 
 
 def test_kasir_ditolak_seluruh_halaman(client, cashier_headers):

@@ -190,7 +190,7 @@ tiap bagian punya alamat sendiri dan izinnya bisa diatur satu per satu:
 |---|---|---|
 | Pengaturan Sistem | `/settings` | Profil toko, parameter struk, tutup buku, tes printer |
 | Akun & Hak Akses | `/users` | Akun login, izin per-user, matriks hak akses role |
-| Manajemen Basis Data | `/database` | Backup (Admin/Owner) & restore (konfirmasi Superadmin) |
+| Manajemen Basis Data | `/database` | Buat & unduh cadangan (Admin/Owner); riwayat & restore (Superadmin) |
 
 Untuk basis data yang sudah jalan, `/users` dan `/database` didaftarkan otomatis
 saat server start (`db_migrator`). `/users` **mewarisi izin `/settings` apa
@@ -201,18 +201,32 @@ lewat halaman Akun & Hak Akses tidak disentuh.
 ## Backup & Restore Basis Data
 
 Halamannya sendiri di **Sistem -> Manajemen Basis Data** (`/database`). Izinnya
-dua tingkat, karena bobot kedua tindakan ini jauh berbeda:
+dibagi menurut satu garis: siapa yang boleh menyentuh **penyimpanan** cadangan,
+dan siapa yang cuma boleh mengambil salinan untuk dirinya sendiri.
 
-| Tindakan | Siapa |
-|---|---|
-| Buat, unduh, hapus cadangan | **Admin/Owner** ke atas |
-| Pulihkan (restore) | Admin/Owner boleh menekan, tapi **wajib disetujui Superadmin** dengan sandi yang diketik saat itu juga |
+| Tindakan | Admin/Owner | Superadmin |
+|---|---|---|
+| Buat & unduh cadangan (tidak disimpan di server) | ya | ya |
+| Lihat riwayat, simpan, unduh ulang, hapus | **tidak** | ya |
+| Pulihkan (restore) | boleh menekan | **wajib menyetujui dengan sandi** |
 
-- **Buat Backup Sekarang** menjalankan `BACKUP DATABASE` penuh. Hasilnya satu
-  berkas `.bak` di folder `backups/`, bisa diunduh lewat tombol **Unduh**.
+**Kenapa Owner tidak boleh membaca riwayat.** Kalau boleh, ia juga bisa mengunduh
+cadangan yang dibuat Superadmin kapan saja — dan tiap `.bak` berisi seluruh isi
+basis data, termasuk hash sandi setiap akun. Dengan "buat & unduh", Owner hanya
+pernah memegang salinan yang ia buat sendiri saat itu juga, dan server tidak
+menyimpan apa pun untuknya.
+
+Berkas jalur "buat & unduh" **dihapus sebelum responsnya dikirim**, bukan
+sesudah. Versi pertama memakai `send_file` + `call_on_close` dan berkasnya
+tertinggal — terbukti tiga `.bak` 12 MB menumpuk setelah tiga permintaan. Untuk
+berkas seukuran itu yang isinya seluruh basis data, "biasanya terhapus" bukan
+jaminan yang cukup. Konsekuensinya berkasnya masuk memori dulu; kalau basis data
+tumbuh ke ratusan MB, kembali ke aliran — tapi dengan penghapus yang diuji.
+
 - **Pulihkan** menimpa seluruh basis data dengan isi cadangan. Semua sesi kasir
   yang sedang berjalan terputus, dan langkah ini tidak bisa dibatalkan. Bisa dari
-  cadangan yang sudah ada di server, atau dari berkas `.bak` yang diunggah.
+  cadangan yang sudah ada di server (Superadmin), atau dari berkas `.bak` yang
+  diunggah.
 
 Konfirmasi Superadmin diminta untuk **setiap** pemulihan, termasuk saat yang
 login memang Superadmin. Sesi yang tertinggal terbuka di perangkat lain tidak
@@ -226,7 +240,7 @@ saat server start -- **sekali saja**, ditandai di `SystemSettings`. Kalau nanti
 ditutup lagi lewat Matriks Hak Akses, pilihan itu tidak akan ditimpa restart.
 
 Berkas `.bak` berisi seluruh isi basis data, **termasuk hash sandi setiap akun**.
-Itu sebabnya mengunduhnya berhenti di Admin/Owner dan tidak turun lebih jauh.
+Itu sebabnya jalur cadangan berhenti di Admin/Owner dan tidak turun lebih jauh.
 
 Berkas `.bak` **ditulis oleh SQL Server**, bukan oleh Flask. Karena itu foldernya
 harus bisa ditulis akun layanan SQL Server sekaligus dibaca proses Flask:

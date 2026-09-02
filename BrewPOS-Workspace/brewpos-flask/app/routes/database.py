@@ -1,21 +1,31 @@
 """
 Manajemen basis data: unduh backup dan pulihkan dari backup.
 
-Dua tingkat izin, karena bobot kedua tindakan ini jauh berbeda:
+Izinnya dibagi menurut satu garis: siapa yang boleh menyentuh PENYIMPANAN
+cadangan, dan siapa yang cuma boleh mengambil salinan untuk dirinya sendiri.
 
-- Membuat, mengunduh, dan menghapus cadangan: Admin/Owner ke atas. Ini data
-  tokonya sendiri, dan pemiliknya berhak memegang salinannya.
-- Memulihkan: WAJIB disetujui Superadmin, siapa pun yang menekan tombolnya --
-  Owner sekalipun, dan Superadmin sendiri pun tetap harus mengetik ulang
-  sandinya. Restore menimpa seluruh basis data dan tidak bisa dibatalkan, jadi
-  tidak cukup bersandar pada "yang sedang login siapa": sesi yang tertinggal
-  terbuka di perangkat lain tidak boleh cukup untuk menghapus isi toko.
+- Admin/Owner: satu kemampuan saja -- "buat & unduh". Berkasnya dibuat, dikirim
+  ke pengunduh, lalu dihapus dari server. Tidak masuk riwayat, tidak bisa
+  diambil lagi nanti.
+- Superadmin: pemilik penuh riwayat cadangan -- melihat daftar, menyimpan,
+  mengunduh ulang, menghapus.
 
-Yang perlu diketahui pemberi izin: berkas .bak berisi SELURUH isi basis data,
-termasuk hash sandi setiap akun.
+Pemisahan itu yang menutup celahnya. Kalau Owner boleh membaca daftar cadangan,
+ia juga bisa mengunduh cadangan yang dibuat Superadmin kapan saja -- dan tiap
+berkas .bak berisi SELURUH isi basis data, termasuk hash sandi setiap akun.
+Dengan "buat & unduh", Owner hanya pernah memegang salinan yang ia buat sendiri
+saat itu juga, dan server tidak menyimpan apa pun untuknya.
+
+Memulihkan berdiri sendiri: Admin/Owner boleh menekan tombolnya, tapi WAJIB
+disetujui Superadmin dengan sandi yang diketik saat itu juga -- Superadmin
+sendiri pun tetap harus mengetiknya. Restore menimpa seluruh basis data dan
+tidak bisa dibatalkan, jadi tidak cukup bersandar pada "yang sedang login
+siapa": sesi yang tertinggal terbuka di perangkat lain tidak boleh cukup untuk
+menghapus isi toko.
 """
 
 import os
+from io import BytesIO
 
 import bcrypt
 from flask import Blueprint, jsonify, request, send_file
@@ -25,8 +35,10 @@ from app.middleware.auth import (ROLE_LEVELS, get_current_user_id,
                                  has_role_level)
 from app.models.user import User
 from app.services import login_guard
-from app.services.db_backup import (DbBackupError, buat_backup, daftar_backup,
-                                    hapus_backup, path_backup, pulihkan_backup)
+from app.services.db_backup import (AWALAN_SEMENTARA, DbBackupError,
+                                    buat_backup, daftar_backup, hapus_backup,
+                                    path_backup, pulihkan_backup,
+                                    sapu_berkas_sementara)
 from app.services.system_logger import log_activity
 
 database_bp = Blueprint('database', __name__, url_prefix='/api/database')
@@ -42,6 +54,16 @@ def _gerbang():
     if not has_role_level(ROLE_LEVELS['ADMIN']):
         return jsonify({
             'error': 'Manajemen basis data memerlukan otorisasi Admin/Owner'
+        }), 403
+    return None
+
+
+def _wajib_superadmin():
+    """Gerbang untuk endpoint yang menyentuh penyimpanan cadangan."""
+    if not has_role_level(ROLE_LEVELS['SUPERADMIN']):
+        return jsonify({
+            'error': 'Riwayat cadangan hanya untuk Superadmin. '
+                     'Pakai "Buat & Unduh Cadangan" untuk mengambil salinan sendiri.'
         }), 403
     return None
 
@@ -97,6 +119,9 @@ def _izin_superadmin(data):
 
 @database_bp.route('/backups', methods=['GET'])
 def list_backups():
+    galat = _wajib_superadmin()
+    if galat:
+        return galat
     try:
         return jsonify(daftar_backup())
     except DbBackupError as e:
@@ -105,6 +130,10 @@ def list_backups():
 
 @database_bp.route('/backup', methods=['POST'])
 def create_backup():
+    """Buat cadangan dan SIMPAN di riwayat server."""
+    galat = _wajib_superadmin()
+    if galat:
+        return galat
     try:
         info = buat_backup()
     except DbBackupError as e:
@@ -116,6 +145,11 @@ def create_backup():
 
 @database_bp.route('/backup/<path:filename>', methods=['GET'])
 def download_backup(filename):
+    galat = _wajib_superadmin()
+    if galat:
+        return galat
+    if (filename or '').startswith(AWALAN_SEMENTARA):
+        return jsonify({'error': 'Berkas kerja sementara tidak bisa diunduh.'}), 404
     try:
         penuh = path_backup(filename)
     except DbBackupError as e:
@@ -128,6 +162,9 @@ def download_backup(filename):
 
 @database_bp.route('/backup/<path:filename>', methods=['DELETE'])
 def delete_backup(filename):
+    galat = _wajib_superadmin()
+    if galat:
+        return galat
     try:
         hapus_backup(filename)
     except DbBackupError as e:
@@ -135,6 +172,67 @@ def delete_backup(filename):
     log_activity('DB_BACKUP_DELETE', get_current_user_id(),
                  f"Menghapus backup {filename}", 'Database', None)
     return jsonify({'deleted': filename})
+
+
+@database_bp.route('/backup-download', methods=['POST'])
+def backup_and_download():
+    """
+    Buat cadangan, kirim ke pengunduh, lalu hapus dari server.
+
+    Ini satu-satunya jalur cadangan untuk Admin/Owner. Berkasnya tidak masuk
+    riwayat dan tidak bisa diambil lagi nanti -- server tidak menyimpan apa pun
+    untuk peran ini.
+
+    Alamatnya sengaja /backup-download, bukan /backup/download: rute tetangganya
+    memakai <path:filename> yang rakus, dan alamat terpisah menghilangkan
+    pertanyaan mana yang cocok lebih dulu.
+    """
+    # Sisa berkas dari permintaan yang mati di tengah pengiriman dibersihkan di
+    # sini. Isinya seluruh basis data; tidak boleh menumpuk diam-diam.
+    sapu_berkas_sementara()
+
+    try:
+        info = buat_backup(sementara=True)
+        penuh = path_backup(info['filename'])
+    except DbBackupError as e:
+        return jsonify({'error': str(e)}), 400
+
+    # Nama yang dilihat pengunduh tidak membawa awalan kerja "unduh-".
+    nama_unduh = info['filename'][len('unduh-'):]
+
+    # Dibaca ke memori lalu berkasnya DIHAPUS SEKARANG, sebelum respons dikirim.
+    #
+    # Percobaan pertama memakai send_file + call_on_close supaya berkasnya
+    # mengalir tanpa singgah di memori. Hasilnya: berkasnya tertinggal di server
+    # -- terbukti tiga .bak 12 MB menumpuk setelah tiga permintaan. Untuk berkas
+    # berisi seluruh basis data, "biasanya terhapus" bukan jaminan yang cukup.
+    # Menghapus lebih dulu membuat kegagalan itu mustahil: tidak ada urutan
+    # kejadian apa pun yang menyisakannya.
+    #
+    # ponytail: seluruh .bak masuk memori (12 MB untuk basis data ini). Kalau
+    # nanti tumbuh ke ratusan MB, kembali ke aliran -- tapi dengan penghapus yang
+    # benar-benar diuji, bukan diasumsikan.
+    try:
+        with open(penuh, 'rb') as f:
+            isi = f.read()
+    except OSError as e:
+        try:
+            os.remove(penuh)
+        except OSError:
+            pass
+        return jsonify({'error': f'Cadangan dibuat tapi tidak bisa dibaca: {e}'}), 400
+    finally:
+        try:
+            os.remove(penuh)
+        except OSError:
+            pass   # terkunci di Windows; disapu permintaan berikutnya
+
+    log_activity('DB_BACKUP_DOWNLOAD', get_current_user_id(),
+                 f"Membuat & mengunduh cadangan {nama_unduh} (tidak disimpan di server)",
+                 'Database', None)
+
+    return send_file(BytesIO(isi), as_attachment=True, download_name=nama_unduh,
+                     mimetype='application/octet-stream')
 
 
 @database_bp.route('/restore', methods=['POST'])

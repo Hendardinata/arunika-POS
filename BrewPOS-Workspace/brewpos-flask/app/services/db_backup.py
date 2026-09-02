@@ -29,6 +29,12 @@ from app.extensions import db
 
 NAMA_BERKAS = re.compile(r'^[A-Za-z0-9._-]+\.bak$')
 
+# Berkas kerja yang tidak pernah jadi bagian dari riwayat cadangan: hasil "buat
+# & unduh" milik Admin/Owner (dihapus begitu terkirim) dan berkas unggahan yang
+# sedang menunggu dipulihkan. Keduanya numpang di folder yang sama karena SQL
+# Server hanya bisa membaca-tulis di sana.
+AWALAN_SEMENTARA = ('unduh-', 'upload-')
+
 
 class DbBackupError(Exception):
     """Kegagalan yang pesannya memang untuk dibaca pengguna."""
@@ -146,7 +152,7 @@ def daftar_backup():
     hasil = []
     try:
         for nama in os.listdir(folder):
-            if not NAMA_BERKAS.match(nama):
+            if not NAMA_BERKAS.match(nama) or nama.startswith(AWALAN_SEMENTARA):
                 continue
             try:
                 stat = os.stat(os.path.join(folder, nama))
@@ -186,11 +192,47 @@ def path_backup(nama_berkas, harus_ada=True):
     return penuh
 
 
-def buat_backup():
-    """BACKUP DATABASE penuh. Mengembalikan metadata berkas yang dihasilkan."""
+def sapu_berkas_sementara():
+    """
+    Buang sisa berkas kerja yang lebih tua dari satu jam.
+
+    Berkas "buat & unduh" dihapus begitu terkirim, tapi kalau proses mati di
+    tengah pengiriman berkas itu tertinggal -- dan isinya seluruh basis data.
+    Disapu di awal tiap permintaan sejenis supaya sisa itu tidak menumpuk diam-
+    diam di server. Ambang satu jam supaya tidak menghapus berkas milik
+    permintaan lain yang sedang berjalan saat ini.
+    """
+    try:
+        folder = _folder()
+    except DbBackupError:
+        return
+    batas = datetime.now().timestamp() - 3600
+    try:
+        for nama in os.listdir(folder):
+            if not nama.startswith(AWALAN_SEMENTARA):
+                continue
+            penuh = os.path.join(folder, nama)
+            try:
+                if os.path.getmtime(penuh) < batas:
+                    os.remove(penuh)
+            except OSError:
+                pass          # dipakai proses lain, atau sudah hilang duluan
+    except OSError:
+        pass
+
+
+def buat_backup(sementara=False):
+    """
+    BACKUP DATABASE penuh. Mengembalikan metadata berkas yang dihasilkan.
+
+    sementara=True menamainya dengan awalan yang membuatnya TIDAK muncul di
+    riwayat cadangan. Dipakai jalur "buat & unduh": berkasnya hanya numpang
+    lewat, dikirim ke pengunduh lalu dihapus.
+    """
     dbname = nama_database()
     aman = re.sub(r'[^A-Za-z0-9_-]', '_', dbname)
-    berkas = f"{aman}-{datetime.now():%Y%m%d-%H%M%S}.bak"
+    awalan = 'unduh-' if sementara else ''
+    berkas = f"{awalan}{aman}-{datetime.now():%Y%m%d-%H%M%S}.bak"
 
     mesin = _mesin_master()
     try:

@@ -12,15 +12,17 @@
             <h3 class="card-title"><i class="fas fa-database text-primary"></i> Manajemen Basis Data</h3>
             <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
                 Cadangkan seluruh isi basis data ke satu berkas <code>.bak</code>, atau pulihkan
-                dari cadangan. Membuat &amp; mengunduh cadangan: <strong>Admin/Owner</strong>.
-                Memulihkan: <strong>wajib disetujui Superadmin</strong>.
+                dari cadangan.
+            </p>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px;" id="db-catatan-peran">
             </p>
         </div>
         <button class="btn btn-primary btn-sm" onclick="buatBackupDb()" id="btn-backup-db">
-            <i class="fas fa-download"></i> Buat Backup Sekarang
+            <i class="fas fa-download"></i> Buat &amp; Unduh Cadangan
         </button>
     </div>
 
+    <div id="db-riwayat">
     <div id="db-info" style="font-size: 0.75rem; color: var(--text-muted); padding: 0 4px 12px;"></div>
 
     <div class="table-responsive">
@@ -37,6 +39,7 @@
                 <tr><td colspan="4" class="text-center text-muted" style="padding: 30px;">Memuat daftar cadangan...</td></tr>
             </tbody>
         </table>
+    </div>
     </div>
 
     <div style="background: var(--color-danger-bg); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px 14px; margin-top: 16px;">
@@ -112,13 +115,24 @@
 
     async function muatManajemenDb() {
         const user = getUser();
-        const bolehKelola = ['SUPERADMIN', 'ADMIN', 'OWNER'];
-        if (!user || !bolehKelola.includes((user.role || '').toUpperCase())) {
+        const peran = (user && user.role || '').toUpperCase();
+        if (!['SUPERADMIN', 'ADMIN', 'OWNER'].includes(peran)) {
             document.getElementById('db-tanpa-izin').style.display = '';
             return;
         }
 
         document.getElementById('card-database').style.display = '';
+
+        // Riwayat cadangan milik Superadmin. Untuk Admin/Owner tombolnya
+        // membuat cadangan, mengunduhnya, lalu server melupakannya -- jadi tidak
+        // ada daftar untuk ditampilkan.
+        const superadmin = peran === 'SUPERADMIN';
+        document.getElementById('db-riwayat').style.display = superadmin ? '' : 'none';
+        document.getElementById('db-catatan-peran').innerHTML = superadmin
+            ? 'Cadangan yang Anda buat tersimpan di server dan bisa diunduh ulang kapan saja.'
+            : 'Cadangan langsung terunduh ke perangkat Anda dan <strong>tidak disimpan di server</strong>. '
+              + 'Simpan berkasnya baik-baik &mdash; isinya seluruh data toko.';
+        if (!superadmin) return;
         const tbody = document.getElementById('db-backup-body');
         const info = document.getElementById('db-info');
         try {
@@ -145,20 +159,56 @@
         }
     }
 
+    /**
+     * Buat cadangan lalu langsung unduh.
+     *
+     * Responsnya berkas, bukan JSON, jadi apiFetch() tidak dipakai di sini --
+     * ia selalu memanggil res.json() dan akan tersedak byte .bak.
+     */
     async function buatBackupDb() {
         const btn = document.getElementById('btn-backup-db');
+        const semula = btn.innerHTML;
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Membuat cadangan...';
         try {
-            const hasil = await apiFetch('/database/backup', { method: 'POST' });
-            showToast(`Cadangan dibuat: ${hasil.filename}`, 'success');
-            await muatManajemenDb();
+            const res = await fetch('/api/database/backup-download', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${getToken()}` }
+            });
+            if (!res.ok) {
+                const pesan = await res.json().catch(() => ({}));
+                throw new Error(pesan.error || `Gagal membuat cadangan (HTTP ${res.status})`);
+            }
+            simpanBlob(await res.blob(), namaDariHeader(res) || 'cadangan.bak');
+            showToast('Cadangan terunduh. Berkas ini tidak disimpan di server.', 'success');
+            const user = getUser();
+            if ((user && user.role || '').toUpperCase() === 'SUPERADMIN') await muatManajemenDb();
         } catch (err) {
             showToast(err.message, 'error');
         } finally {
             btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-download"></i> Buat Backup Sekarang';
+            btn.innerHTML = semula;
         }
+    }
+
+    /** Nama berkas dari Content-Disposition, kalau ada. */
+    function namaDariHeader(res) {
+        const cd = res.headers.get('Content-Disposition') || '';
+        const m = /filename="?([^";]+)"?/.exec(cd);
+        return m ? m[1] : null;
+    }
+
+    function simpanBlob(blob, namaBerkas) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = namaBerkas;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        // Dilepas belakangan: mencabut URL terlalu cepat membatalkan unduhan
+        // yang baru saja dimulai.
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
     }
 
     async function unduhBackupDb(filename) {
@@ -172,17 +222,7 @@
                 const pesan = await res.json().catch(() => ({}));
                 throw new Error(pesan.error || `Gagal mengunduh (HTTP ${res.status})`);
             }
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            // Dilepas belakangan: mencabut URL terlalu cepat membatalkan unduhan
-            // yang baru saja dimulai.
-            setTimeout(() => URL.revokeObjectURL(url), 60000);
+            simpanBlob(await res.blob(), filename);
         } catch (err) {
             showToast(err.message, 'error');
         }
