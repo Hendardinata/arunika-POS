@@ -35,7 +35,8 @@ Workflow `.github/workflows/android-apk.yml` membangun APK di server GitHub.
 1. Buka repo di GitHub → tab **Actions** → **Build APK Kasir** → **Run workflow**.
 2. Isi **posUrl** dengan alamat server POS Anda (mis. `https://pos.contoh.com`).
    Boleh diisi beberapa alamat dipisah koma. Kalau dikosongkan, dipakai bawaannya:
-   `https://caffee.rhino-aldebaran.ts.net,https://phrolova.echidna-carob.ts.net`.
+   `caffee.rhino-aldebaran.ts.net`, `phrolova.echidna-carob.ts.net`, lalu
+   `imperator.echidna-carob.ts.net` (semuanya `https://`).
 3. Tunggu build selesai (~3–5 menit), lalu unduh **arunika-pos-apk** di bagian
    *Artifacts* pada halaman run tersebut.
 4. Kirim APK-nya ke HP kasir dan pasang (perlu izin "Install unknown apps").
