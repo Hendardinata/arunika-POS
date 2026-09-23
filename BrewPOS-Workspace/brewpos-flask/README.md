@@ -62,6 +62,26 @@ sudo systemctl status brewpos-flask.service
 
 ---
 
+### Docker + Tailscale
+
+App jalan di container yang ikut tailnet sebagai node `caffe` (lihat `hostname` di docker-compose.yml). SQL Server tetap
+di host (harus terima TCP 1433 dan login SQL, bukan Windows auth).
+
+1. Tambahkan `TS_AUTHKEY` dan `DOCKER_DATABASE_URL` ke `.env` (contoh di `.env.example`).
+2. Hentikan server Flask yang jalan langsung di host (port 3001 bakal bentrok).
+3. Jalankan:
+```bash
+docker compose up -d --build
+docker compose logs -f app
+```
+Buka `http://caffe:3001` dari perangkat di tailnet, atau `http://localhost:3001` dari host.
+
+Tailscale Funnel menyala lewat `tailscale/serve.json`: aplikasi terbuka ke internet di
+`https://caffe.<nama-tailnet>.ts.net`. Untuk HTTPS khusus tailnet, hapus blok
+`AllowFunnel` di file itu lalu `docker compose restart tailscale`.
+
+---
+
 ### Windows (PowerShell / CMD)
 
 #### 1. Aktifkan Virtual Environment (VENV)

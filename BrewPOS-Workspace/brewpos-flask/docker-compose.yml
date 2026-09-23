@@ -1,0 +1,44 @@
+# Nilai ${...} dibaca otomatis dari .env di folder ini.
+services:
+  tailscale:
+    image: tailscale/tailscale:latest
+    hostname: caffe # nama node di tailnet -> http://caffe:3001
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:?isi TS_AUTHKEY di .env}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "false"
+      # HTTPS 443 -> app:3001, dibuka ke internet lewat Funnel.
+      # Hapus blok AllowFunnel di serve.json untuk HTTPS khusus tailnet.
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      - ./tailscale:/config # mount folder, bukan file, supaya perubahan terbaca
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+    extra_hosts:
+      - host.docker.internal:host-gateway # SQL Server di host
+    ports:
+      - "3001:3001" # tetap bisa dibuka lewat localhost/LAN
+    restart: unless-stopped
+
+  app:
+    build: .
+    # Berbagi jaringan dengan container tailscale: gunicorn di :3001 langsung
+    # terjangkau dari tailnet tanpa port forward.
+    network_mode: service:tailscale
+    depends_on:
+      - tailscale
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?isi SECRET_KEY di .env}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?isi JWT_SECRET_KEY di .env}
+      DATABASE_URL: ${DOCKER_DATABASE_URL:?isi DOCKER_DATABASE_URL di .env}
+      TZ: Asia/Makassar # cron reset harian & nama berkas backup pakai jam lokal
+    volumes:
+      - uploads:/app/app/static/uploads
+    restart: unless-stopped
+
+volumes:
+  tailscale-state:
+  uploads:
