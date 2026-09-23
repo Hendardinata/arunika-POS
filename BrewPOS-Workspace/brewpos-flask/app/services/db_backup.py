@@ -13,6 +13,10 @@ folder backup bawaan SQL Server tidak memenuhi syarat kedua: ia berada di dalam
 Program Files dan proses Flask biasa ditolak membacanya. Maka dipakai folder
 `backups/` milik aplikasi ini, lalu akun layanan SQL Server diberi izin tulis ke
 sana sekali di awal. DB_BACKUP_DIR di .env menimpa pilihan folder ini.
+
+Kalau Flask dan SQL Server tidak berbagi sistem berkas (Flask di Docker, SQL
+Server di host Windows), folder yang sama punya dua nama: /backups bagi Flask,
+E:\\...\\backups bagi SQL Server. DB_BACKUP_DIR_SQL memberi tahu nama yang kedua.
 """
 
 import os
@@ -146,6 +150,18 @@ def _gabung(folder, berkas):
     return folder.rstrip('\\/') + pemisah + berkas
 
 
+def _path_sql(path_lokal):
+    """
+    Path berkas backup seperti dilihat SQL Server. Semua path di modul ini milik
+    Flask (dipakai os.*, send_file, save); hanya yang masuk ke perintah
+    BACKUP/RESTORE yang diterjemahkan lewat sini.
+    """
+    folder_sql = os.getenv('DB_BACKUP_DIR_SQL')
+    if not folder_sql:
+        return path_lokal
+    return _gabung(folder_sql, os.path.basename(path_lokal))
+
+
 def daftar_backup():
     """Berkas .bak yang ada di folder backup, terbaru dulu."""
     mesin = _mesin_master()
@@ -250,7 +266,7 @@ def buat_backup(sementara=False):
                 conn,
                 f"BACKUP DATABASE {_kurung(dbname)} TO DISK = ? "
                 f"WITH INIT, FORMAT, NAME = ?, DESCRIPTION = ?",
-                (_gabung(folder, berkas), f'{dbname} full backup',
+                (_path_sql(_gabung(folder, berkas)), f'{dbname} full backup',
                  f'ARUNIKA POS {datetime.now():%d/%m/%Y %H:%M}'),
             )
     except DbBackupError:
@@ -323,6 +339,7 @@ def pulihkan_backup(sumber):
     `sumber` harus path yang bisa dibaca SQL Server (bukan berkas sementara milik
     Flask), karena SQL Server yang membacanya, bukan proses ini.
     """
+    sumber = _path_sql(sumber)
     dbname = nama_database()
     mesin = _mesin_master()
     single_user = False

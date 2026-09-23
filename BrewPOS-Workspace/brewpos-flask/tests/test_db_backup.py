@@ -50,3 +50,11 @@ def test_path_digabung_dengan_pemisah_milik_sql_server():
     assert db_backup._gabung(r'E:\pos\backups', 'a.bak') == r'E:\pos\backups\a.bak'
     assert db_backup._gabung('/var/opt/mssql/data', 'a.bak') == '/var/opt/mssql/data/a.bak'
     assert db_backup._gabung('/var/opt/mssql/data/', 'a.bak') == '/var/opt/mssql/data/a.bak'
+
+
+def test_path_diterjemahkan_ke_folder_milik_sql_server(monkeypatch):
+    """Flask di Docker (/backups), SQL Server di host Windows (E:\\pos\\backups)."""
+    monkeypatch.delenv('DB_BACKUP_DIR_SQL', raising=False)
+    assert db_backup._path_sql('/backups/a.bak') == '/backups/a.bak'
+    monkeypatch.setenv('DB_BACKUP_DIR_SQL', r'E:\pos\backups')
+    assert db_backup._path_sql('/backups/a.bak') == r'E:\pos\backups\a.bak'

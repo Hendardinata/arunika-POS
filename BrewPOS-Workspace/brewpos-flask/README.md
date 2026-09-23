@@ -67,7 +67,9 @@ sudo systemctl status brewpos-flask.service
 App jalan di container yang ikut tailnet sebagai node `caffe` (lihat `hostname` di docker-compose.yml). SQL Server tetap
 di host (harus terima TCP 1433 dan login SQL, bukan Windows auth).
 
-1. Tambahkan `TS_AUTHKEY` dan `DOCKER_DATABASE_URL` ke `.env` (contoh di `.env.example`).
+1. Tambahkan `TS_AUTHKEY`, `DOCKER_DATABASE_URL`, dan `DOCKER_BACKUP_DIR_SQL` ke `.env`
+   (contoh di `.env.example`). Yang terakhir adalah path Windows folder `backups/`: SQL
+   Server menulis `.bak` ke sana, container membacanya sebagai `/backups`.
 2. Hentikan server Flask yang jalan langsung di host (port 3001 bakal bentrok).
 3. Jalankan:
 ```bash

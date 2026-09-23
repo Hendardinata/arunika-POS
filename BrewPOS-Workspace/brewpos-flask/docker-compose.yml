@@ -35,8 +35,12 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?isi JWT_SECRET_KEY di .env}
       DATABASE_URL: ${DOCKER_DATABASE_URL:?isi DOCKER_DATABASE_URL di .env}
       TZ: Asia/Makassar # cron reset harian & nama berkas backup pakai jam lokal
+      # .bak ditulis SQL Server di host, dibaca Flask di sini: satu folder, dua nama.
+      DB_BACKUP_DIR: /backups
+      DB_BACKUP_DIR_SQL: ${DOCKER_BACKUP_DIR_SQL:?isi DOCKER_BACKUP_DIR_SQL di .env}
     volumes:
       - uploads:/app/app/static/uploads
+      - ./backups:/backups
     restart: unless-stopped
 
 volumes:
