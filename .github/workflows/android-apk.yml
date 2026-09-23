@@ -34,6 +34,11 @@ jobs:
 
       - name: Siapkan Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # Bawaannya 'tools platform-tools'; paket 'tools' sudah dicabut dari
+          # repo SDK dan membuat langkah ini gagal. Platform & build-tools
+          # diunduh sendiri oleh Gradle.
+          packages: 'platform-tools'
 
       - name: Siapkan Gradle
         uses: gradle/actions/setup-gradle@v4
